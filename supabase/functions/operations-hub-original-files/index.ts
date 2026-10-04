@@ -22,6 +22,7 @@ const adminClient = createClient(SUPABASE_URL, SERVICE_KEY, {
 function allowedOrigin(origin: string): boolean {
   if (!origin) return true;
   if (origin === "https://kimhyein0214-dot.github.io") return true;
+  if (origin === "https://w-works-official.github.io") return true;
   return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 }
 
