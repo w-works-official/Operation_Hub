@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+await import('../mockups/operations-hub/ably-combinations.js');
+await import('../mockups/operations-hub/ably-combination-lab.js');
+const {initialState,calculate}=globalThis.AblyCombinationLabModel;
+const state=initialState();
+assert.deepEqual(state.combinations.map(row=>calculate(row.memo,state.stocks).value),[12,8,0,7]);
+state.stocks['1000-2']='5';
+assert.equal(calculate(state.combinations[0].memo,state.stocks).value,5);
+state.combinations[0].stock='2000';
+assert.equal(calculate(state.combinations[0].memo,state.stocks).value,5);
+assert.equal(calculate('[1000-2],[1000-2]',state.stocks).value,5);
+for(const memo of ['1000-unknown','1000-1//1000-2',''])assert.equal(calculate(memo,state.stocks).value,null);
+for(const raw of ['',null,'-1','1.5','1e2','9007199254740992'])assert.ok(calculate('1000-1',{'1000-1':raw}).error);
+assert.equal(calculate('1000-1',{'1000-1':'0'}).value,0);
+assert.equal(initialState().stocks['1000-2'],'12');
+console.log('PASS virtual stock minimum, zero, missing/invalid data, exact Q mapping and reset');

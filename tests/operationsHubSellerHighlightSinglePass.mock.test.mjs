@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import '../mockups/operations-hub/seller-export-adapter.js';
+const apply=globalThis.SystemV3SellerExport.applyChangeHighlights;
+const styles='<styleSheet><fonts count="2"><font><name val="Arial"/><sz val="10"/></font><font><b/><name val="Arial"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="2"><border/><border><left style="thin"/></border></borders><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="4" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="right"/></xf></cellXfs></styleSheet>';
+const untouched='<c r="C2" s="1"><f>A2*2</f><v>240</v></c>',tail='<mergeCells count="1"><mergeCell ref="D4:E4"/></mergeCells>';
+const sheet='<worksheet><sheetData><row r="2" ht="21"><c r="A2" s="1"><v>120</v></c><c r="B2" t="inlineStr"><is><t xml:space="preserve">첫째 &amp; 값&#xa;둘째&#xa;셋째</t></is></c>'+untouched+'<c r="D2" s="1"/><c r="E2"/><c r="F2" t="s"><v>4</v></c></row></sheetData>'+tail+'</worksheet>';
+const result=apply(sheet,styles,[{reference:'B2',lineIndex:1},{reference:'B2',lineIndex:2},'A2','D2','F2','Z999']);
+assert.ok(result.sheetXml.includes(untouched),'untouched formula/value/style byte-preserved');assert.ok(result.sheetXml.includes(tail),'noncell workbook structure untouched');assert.ok(result.sheetXml.includes('<c r="E2"/>'),'unselected empty cell untouched');assert.match(result.sheetXml,/<c r="D2" s="\d+"\/>/,'selected selfclosing cell remains valid and does not consume its neighbor');assert.match(result.sheetXml,/<c r="F2" t="s" s="\d+"><v>4<\/v><\/c>/,'shared string index preserved');
+assert.match(result.sheetXml,/<r><t xml:space="preserve">첫째 &amp; 값\n<\/t><\/r>/,'unselected inlineStr line remains unbold');assert.equal((result.sheetXml.match(/<rPr><b\/><\/rPr>/g)||[]).length,2,'duplicate partial references merge selected line indexes');assert.match(result.stylesXml,/<xf (?=[^>]*numFmtId="4")(?=[^>]*borderId="1")(?=[^>]*applyAlignment="1")(?=[^>]*applyFont="1")(?=[^>]*applyFill="1")[^>]*><alignment horizontal="right"\/><\/xf>/,'numeric format/border/alignment preserved in derived bold style');assert.equal((result.stylesXml.match(/fgColor rgb="FFFFFF00"/g)||[]).length,1);
+const full=apply(sheet,styles,[{reference:'B2',lineIndex:1},'B2']);assert.equal((full.sheetXml.match(/<rPr><b\/><\/rPr>/g)||[]).length,3,'full highlight overrides partial selections');assert.deepEqual(apply(sheet,styles,[]),{sheetXml:sheet,stylesXml:styles});
+// Bounded regression: at most1,000 highlights. Count full-document regex scans
+// instead of imposing a timing threshold sensitive to CI/desktop contention.
+const count=1000,large='<worksheet><sheetData>'+Array.from({length:count},(_,i)=>{const n=i+2;return '<row r="'+n+'">'+['A','B','C','D','E','F','G','H','I','J'].map(c=>'<c r="'+c+n+'" s="0"><v>9000</v></c>').join('')+'</row>';}).join('')+'</sheetData></worksheet>';
+const originalReplace=String.prototype.replace,originalMatch=String.prototype.match;let scans=0,measured;const start=performance.now();
+try{
+ String.prototype.replace=function(...args){if(this.length>=large.length)scans++;return originalReplace.apply(this,args);};
+ String.prototype.match=function(...args){if(this.length>=large.length)scans++;return originalMatch.apply(this,args);};
+ measured=apply(large,styles,Array.from({length:count},(_,i)=>({reference:'F'+(i+2)})));
+}finally{String.prototype.replace=originalReplace;String.prototype.match=originalMatch;}
+const elapsed=Math.round(performance.now()-start);assert.ok(scans<=5,'highlighting must not rescan the full document per cell; scans='+scans);assert.equal((measured.sheetXml.match(/<c r="F\d+" s="[2-9]\d*">/g)||[]).length,count);assert.equal((measured.sheetXml.match(/<c r="A\d+" s="0">/g)||[]).length,count);assert.match(measured.stylesXml,/<cellXfs count="3">/,'same original style reused across all numeric highlights');
+console.log('PASS single-pass highlights: numeric/style/formula preservation; partial/full inlineStr bold; duplicate refs; selected/unselected empty cells; sharedstring unchanged;1000 highlights '+elapsed+'ms, full-document scans='+scans+'.');

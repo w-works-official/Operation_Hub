@@ -1,0 +1,2 @@
+create index hub_calculated_results_generation_idx
+ on operations_private.hub_calculated_results(generation_id);

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+await import('../mockups/operations-hub/ably-combinations.js');
+const parse=globalThis.AblyCombinationModel.parseSkuMemo;
+assert.deepEqual(parse('00115-1/00115-2').skus,['00115-1','00115-2']);
+assert.deepEqual(parse('[00115-1], [00115-2]').skus,['00115-1','00115-2']);
+assert.deepEqual(parse('11502-1+2').skus,['11502-1+2']);
+assert.deepEqual(parse(' A / A / B ').skus,['A','B']);
+for(const value of ['', 'A//B','/A','A/', '[A],[]','[A/B]','A,B','[A],B','[A]/[B]'])assert.ok(parse(value).error,value);
+assert.deepEqual(parse('[A] , [B]').skus,['A','B']);
+console.log('PASS Q memo slash/bracket syntax, exact SKU preservation, missing and malformed values');
+const group=globalThis.AblyCombinationModel.groupProducts;
+const items=[{row:['에이블리','a','P1','같은 상품명']},{row:['에이블리','a','P1','같은 상품명']},{row:['에이블리','a','P2','같은 상품명']}];
+assert.deepEqual(group(items).map(product=>[product.title,product.items.length]),[['같은 상품명',2],['같은 상품명',1]]);
+console.log('PASS product grouping preserves D title and separates different product codes');

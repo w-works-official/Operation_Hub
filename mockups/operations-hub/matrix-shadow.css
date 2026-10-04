@@ -1,0 +1,15 @@
+.matrix-shadow{display:flex;flex-wrap:wrap;gap:3px;padding:4px 3px;max-width:220px;font-size:10px;white-space:normal}.shadow-chip{display:inline-block;border:1px solid #cbd5e1;border-radius:4px;padding:2px 4px;color:#334155;background:#f8fafc}.shadow-chip.warn{color:#92400e;background:#fffbeb}.shadow-chip.bad{color:#991b1b;background:#fef2f2}.matrix-shadow small{flex-basis:100%;color:#64748b}.shadow-lineage{padding:14px;background:#f8fafc;border:1px solid #cbd5e1;margin-top:12px;font-size:12px;overflow-wrap:anywhere}.shadow-lineage details{border-top:1px solid #cbd5e1;padding:10px 0}.shadow-lineage dl{display:grid;grid-template-columns:135px 1fr;gap:5px}.shadow-lineage dd{margin:0}.shadow-lineage-field{padding:8px 0}.shadow-diagnostic-scroll{max-height:240px;overflow:auto}
+
+/* Operational Matrix: diagnostics are opt-in; drawer details remain visible. */
+#matrix-body .matrix-shadow,#matrix-body [data-dual-read]{display:none}
+#matrix-body td:has(>.shadow-markers){position:relative}
+#matrix-body .shadow-markers{position:absolute;right:2px;top:2px;display:inline-flex;align-items:center;gap:1px;white-space:nowrap;z-index:1}
+#matrix-body .shadow-marker{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:12px;min-height:0;width:auto;height:14px;margin:0;padding:0 1px;border:0;border-radius:2px;line-height:14px;font-size:10px;font-weight:600;background:#fff;color:#64748b;cursor:pointer}
+#matrix-body .shadow-marker.formula{color:#475569}
+#matrix-body .shadow-marker.pending{color:#a16207}
+#matrix-body .shadow-marker.warning{color:#b45309}
+#matrix-body .shadow-marker:focus-visible{outline:2px solid #2563eb;outline-offset:1px}
+html[data-shadow-diagnostics="on"] #matrix-body .matrix-shadow{display:flex}
+html[data-shadow-diagnostics="on"] #matrix-body [data-dual-read]{display:block}
+html[data-shadow-diagnostics="on"] #matrix-body .shadow-markers{display:none}
+[data-shadow-preview-release]{padding:5px 8px;margin:6px 0;font-size:11px;color:#64748b;background:transparent;border:0}

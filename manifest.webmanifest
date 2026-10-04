@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "System V3 피킹",
+  "short_name": "System V3",
+  "description": "System V3 피킹 및 검품 작업 화면",
+  "start_url": "./?source=pwa&write=1&events=1",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#f4f7fb",
+  "icons": [
+    {
+      "src": "assets/system-v3-icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/system-v3-icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

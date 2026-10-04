@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f3f6fb">
+    <title>System V3 · 상품 운영 허브</title>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/static/pretendard.css">
+    <link rel="stylesheet" href="./style.css?v=20261001-matrix-multilisting-v1">
+    <link rel="stylesheet" href="./ably-combinations.css?v=20260910-rule-destination-v111">
+    <link rel="stylesheet" href="./workspaces-v91.css?v=20260910-rule-destination-v111">
+    <link rel="stylesheet" href="./price-rule-lab.css?v=20260910-rule-destination-v111">
+    <link rel="stylesheet" href="./ui-scale-base.css?v=20260910-rule-destination-v111">
+    <link rel="stylesheet" href="./ui-scale-matrix.css?v=20260922-bulk-source-saved-state-v1">
+    <link rel="stylesheet" href="./ui-scale-workspaces.css?v=20260910-rule-destination-v111">
+    <link rel="stylesheet" href="./channels-page.css?v=20260910-rule-destination-v111">
+    <link rel="stylesheet" href="./attributes-page.css?v=20260914-formula-tags-v1">
+    <link rel="stylesheet" href="./operations-auth.css?v=20260910-rule-destination-v111">
+    <link rel="stylesheet" href="./rule-workspace.css?v=20260914-legacy-formulas-v2">
+      <link rel="stylesheet" href="./ui-cleanup-v1.css?v=20260912-queue-count-clarity-v1">
+      <link rel="stylesheet" href="./tag-management-v2.css?v=20260929-ably-carrier-policy-v1">
+      <link rel="stylesheet" href="./seller-file-workflow-v2.css?v=20261001-stock-field-presets-v1">
+  </head>
+  <body class="operations-auth-locked">
+    <section id="operations-auth-gate" class="operations-auth-gate" aria-labelledby="operations-auth-title">
+      <div class="operations-auth-card">
+        <div class="operations-auth-brand" aria-hidden="true">SV</div>
+        <p class="operations-auth-eyebrow">System V3 · 운영자 전용</p>
+        <h1 id="operations-auth-title">상품 운영 허브 로그인</h1>
+        <p class="operations-auth-intro">공용 운영 계정으로 로그인한 뒤 상품·재고·가격 데이터를 조회하고 수정할 수 있습니다.</p>
+        <form id="operations-auth-form" autocomplete="on" novalidate>
+          <label for="operations-auth-username">아이디<input id="operations-auth-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+          <label for="operations-auth-password">비밀번호<input id="operations-auth-password" name="password" type="password" autocomplete="current-password" required></label>
+          <p id="operations-auth-error" class="operations-auth-error" role="alert" hidden></p>
+          <button id="operations-auth-submit" class="btn primary" type="submit">로그인</button>
+        </form>
+        <div id="operations-auth-status" class="operations-auth-status" role="status" aria-live="polite">로그인이 필요합니다.</div>
+        <p class="operations-auth-notice">로그인에 여러 차례 실패하면 계정이 잠시 잠길 수 있습니다. 세션이 만료되거나 회수되면 다시 로그인해야 합니다.</p>
+      </div>
+    </section>
+    <div id="operations-app-shell" class="app-shell" aria-hidden="true" inert>
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-controls="primary-sidebar" aria-expanded="true" title="좌측 메뉴 접기"><span aria-hidden="true">‹</span><em>메뉴 접기</em></button>
+          <div class="brand">
+            <span class="brand-icon" aria-hidden="true">SV</span>
+            <div>
+              <h1>System V3</h1>
+              <p>상품 매칭 · 재고 운영 허브</p>
+            </div>
+          </div>
+        </div>
+        <div class="top-actions">
+          <label class="ui-density-control" for="ui-density-select"><span>화면 밀도</span><select id="ui-density-select" aria-label="화면 밀도"><option value="comfortable">기본</option><option value="compact">촘촘히</option></select></label>
+          <div id="system-health-pill" class="live-pill" data-state="loading" role="status" aria-live="polite"><span aria-hidden="true"></span><b id="system-health-text">시스템 확인 중</b></div>
+          <button id="top-refresh-btn" class="btn top-refresh-btn" type="button" aria-label="운영 데이터 새로고침"><span aria-hidden="true">↻</span><b>새로고침</b></button>
+          <button class="btn primary" type="button" data-page="upload">원본 업로드</button>
+          <span id="operations-auth-user-label" class="user-chip" aria-label="현재 로그인 계정">공용 운영 계정 <b>운영자</b></span>
+          <button id="operations-auth-logout" class="btn operations-auth-logout" type="button">로그아웃</button>
+        </div>
+      </header>
+
+      <main class="main-grid">
+        <aside id="primary-sidebar" class="sidebar">
+          <nav class="nav-list" aria-label="주요 메뉴">
+            <button class="nav-item active" data-page="dashboard"><i>01</i><span>운영 현황</span></button>
+            <button class="nav-item" data-page="upload"><i>02</i><span>원본 업로드</span><b>4</b></button>
+            <button class="nav-item" data-page="matching"><i>03</i><span>통합 매트릭스</span><b class="warn-badge" id="matrix-unmatched-badge">-</b></button>
+            <button class="nav-item" data-page="multi-links"><i>04</i><span>다중·조합 연결</span><b id="multi-link-badge">-</b></button>
+            <button class="nav-item" data-page="ably-combinations"><i>05</i><span>에이블리 조합관리</span></button>
+            <button class="nav-item" data-page="attributes"><i>08</i><span>상품 태그</span></button>
+            <button class="nav-item" data-page="price-rules"><i>09</i><span>가격 수식</span></button>
+            <button class="nav-item" data-page="jobs"><i>10</i><span>내보내기·로그</span><b id="jobs-error-badge">-</b></button>
+          </nav>
+
+          <div class="side-section">
+            <p class="side-title">판매처 연결 상태</p>
+            <div class="channel-mini"><span class="dot smart"></span><b>스마트스토어</b><em>연결됨</em></div>
+            <div class="channel-mini"><span class="dot make"></span><b>메이크샵</b><em>연결됨</em></div>
+            <div class="channel-mini"><span class="dot ably"></span><b>에이블리</b><em>연결됨</em></div>
+          </div>
+
+          <section class="side-metrics" aria-label="오늘의 운영 요약">
+            <p class="side-title">운영 요약</p>
+            <div class="side-metrics-grid">
+              <article class="side-metric"><span>전체 SKU</span><strong id="live-total-sku">-</strong><em id="live-catalog-state">조회 중</em></article>
+              <article class="side-metric good"><span>판매처 연결</span><strong id="live-connected-sku">-</strong><em id="live-connected-rate">조회 중</em></article>
+              <article class="side-metric danger"><span>재고 불일치</span><strong id="live-inventory-mismatch">-</strong><em id="live-inventory-mismatch-detail">조회 중</em></article>
+              <article class="side-metric warn"><span>판매처 미연결</span><strong id="live-unmatched-sku">-</strong><em id="live-unmatched-detail">플랫폼별 집계 중</em></article>
+              <article class="side-metric blue"><span>오늘 피킹</span><strong id="live-today-picked">-</strong><em id="live-shortage-drawer">조회 중</em></article>
+              <article class="side-metric muted"><span>최근 동기화</span><strong id="live-latest-sync">-</strong><em id="live-latest-sync-detail">조회 중</em></article>
+            </div>
+          </section>
+
+          <div class="side-foot">
+            <span>운영 프로토타입</span>
+            <small>Supabase 실데이터 연결</small>
+          </div>
+        </aside>
+
+        <section class="content-area">
+          <div id="dashboard" class="page active-page">
+            <div class="page-head">
+              <div><h2>운영 현황</h2><p>오늘 처리해야 할 상품 작업과 판매처 상태를 한눈에 확인합니다.</p></div>
+              <div class="head-actions"><button class="btn" data-page="jobs">전체 작업 보기</button><button class="btn primary" data-page="upload">새 원본 등록</button></div>
+            </div>
+
+            <div class="dashboard-grid">
+              <section class="panel quick-panel">
+                <div class="panel-title"><div><h3>빠른 작업</h3><p>자주 사용하는 업무를 바로 시작합니다.</p></div></div>
+                <div class="quick-grid">
+                  <button data-page="upload"><span class="quick-icon upload">↑</span><b>원본 파일 업로드</b><em>판매처를 선택해 새 원본 등록</em></button>
+                  <button data-page="matching"><span class="quick-icon match">↔</span><b>통합 매트릭스</b><em>상품 연결·재고·가격 통합 관리</em></button>
+                  <button data-page="dashboard"><span class="quick-icon sync">↻</span><b>판매처 상태 확인</b><em>원본·내보내기 준비 현황 조회</em></button>
+                </div>
+              </section>
+
+              <section class="panel sync-panel">
+                <div class="panel-title"><div><h3>판매처 동기화 상태</h3><p>마지막 정상 반영 시각을 표시합니다.</p></div><button class="text-btn" data-page="dashboard">상세 보기</button></div>
+                <div class="sync-list">
+                  <div><span class="channel-logo smart">N</span><p><b>스마트스토어</b><em>DB 확인 중</em></p><time>-</time><strong class="status wait">조회 중</strong></div>
+                  <div><span class="channel-logo make">M</span><p><b>메이크샵</b><em>DB 확인 중</em></p><time>-</time><strong class="status wait">조회 중</strong></div>
+                  <div><span class="channel-logo ably">A</span><p><b>에이블리</b><em>DB 확인 중</em></p><time>-</time><strong class="status wait">조회 중</strong></div>
+                </div>
+              </section>
+
+              <section class="panel task-panel">
+                <div class="panel-title"><div><h3>진행 중인 작업</h3><p>서버에서 처리 중인 작업을 실시간으로 확인합니다.</p></div><button class="text-btn" data-page="jobs">작업 로그</button></div>
+                <div class="task-list" id="dashboard-task-list"><article><div class="task-row"><b>DB 작업 확인 중</b><span>-</span></div><p>최근 실행 상태를 불러오고 있습니다.</p></article></div>
+              </section>
+
+              <section class="panel alert-panel">
+                <div class="panel-title"><div><h3>확인할 항목</h3><p>업무 우선순위가 높은 항목입니다.</p></div></div>
+                <div class="alert-list">
+                  <button data-page="matching"><span class="alert-dot red">!</span><p><b id="dashboard-unmatched-alert">미매칭 집계 중</b><em id="dashboard-unmatched-detail">판매처별 셀피아 SKU 연결 없음</em></p><strong>검토</strong></button>
+                  <button data-page="matching"><span class="alert-dot amber">!</span><p><b id="dashboard-inventory-alert">재고 차이 집계 중</b><em>셀피아와 판매처 수량 불일치</em></p><strong>확인</strong></button>
+                  <button data-page="jobs"><span class="alert-dot blue">i</span><p><b id="dashboard-failed-alert">실패 작업 확인 중</b><em>최근 30일 실행 로그 기준</em></p><strong>보기</strong></button>
+                </div>
+              </section>
+            </div>
+          <section id="channels" class="channels-page"></section></div>
+
+          <div id="upload" class="page">
+            <div class="page-head">
+              <div><h2>원본 업로드</h2><p>업로드는 비교용 원본 스냅샷만 갱신하며 시스템 기준가격·기준재고는 덮어쓰지 않습니다.</p></div>
+              <div class="mock-badge" id="upload-capability-badge">셀피아 실데이터 업로드 연결</div>
+            </div>
+            <div class="upload-layout">
+              <section class="panel upload-card">
+                <div class="step-head"><span>1</span><div><h3>원본 종류 선택</h3><p>등록하려는 판매처 또는 기준 원본을 선택하세요.</p></div></div>
+                <label class="select-label" for="source-select">원본 종류</label>
+                <div class="select-wrap"><select id="source-select"><option value="sellpia">셀피아 전체 원본 갱신</option><option value="inventory_count">재고조사 결과 반영</option><option value="smartstore">스마트스토어 상품 원본</option><option value="makeshop">메이크샵 상품 원본</option><option value="ably">에이블리 상품 원본</option></select></div>
+                <div id="source-info" class="source-info"><span class="channel-logo sellpia">S</span><div><b>셀피아 기준 원본</b><p>분할된 파일 3개 · XLSX 또는 CSV</p></div><em>필수</em></div>
+
+                <div id="seller-upload-mode" class="seller-upload-mode">
+                  <p><b>원본 반영 방식</b><small>일부 행만 수정했다면 부분 갱신, 상품 목록 자체가 바뀌었다면 전체 교체를 사용하세요.</small></p>
+                  <label><input type="radio" name="seller-upload-mode" value="patch" checked><span><b>부분 갱신 <em>권장</em></b><small>파일에 있는 상품·옵션만 바꾸고 나머지는 유지</small></span></label>
+                  <label><input type="radio" name="seller-upload-mode" value="full"><span><b>전체 교체</b><small>파일에 없는 상품·옵션은 최신 원본에서 제외</small></span></label>
+                </div>
+
+                <div class="step-head second"><span>2</span><div><h3>파일 등록</h3><p id="file-guide">행번호가 이어지는 셀피아 파일 3개를 올려주세요.</p></div></div>
+                <div id="drop-zone" class="drop-zone" tabindex="0" role="button" aria-label="파일 선택 영역">
+                  <span class="drop-icon">↑</span><h4>파일을 여기에 끌어놓으세요</h4><p>또는 클릭하여 내 컴퓨터에서 선택</p><small>XLSX · XLS · CSV / 파일당 최대 50MB</small>
+                  <input id="mock-file" type="file" multiple hidden>
+                </div>
+                <div id="file-slots" class="file-slots"></div>
+                <section id="sellpia-preflight-panel" class="sellpia-preflight-panel" aria-live="polite" hidden></section>
+                <section id="inventory-count-preview" class="sellpia-preflight-panel inventory-count-preview" aria-live="polite" hidden></section>
+                <div class="upload-options">
+                  <p><b>부분 갱신할 항목</b><small>필요한 데이터만 선택하면 처리시간을 줄일 수 있습니다.</small></p>
+                  <label><input id="upload-field-inventory" type="checkbox" checked> 재고</label><label><input id="upload-field-price" type="checkbox" checked> <span id="upload-price-label">기준가격</span></label><label id="upload-purchase-label"><input id="upload-field-purchase" type="checkbox" checked> 매입가</label><label><input id="upload-field-discount" type="checkbox" checked> 할인정보</label><label><input id="upload-field-basic" type="checkbox"> 상품 기본정보</label><label><input id="upload-field-status" type="checkbox"> 판매상태</label>
+                </div>
+                <div class="upload-footer"><p><span>✓</span> 원본 파일은 보관·비교용으로 갱신하고 시스템 기준값은 그대로 유지합니다.</p><button id="mock-upload-btn" class="btn primary large" type="button">업로드 작업 시작</button></div>
+                <div id="upload-progress" class="upload-progress" hidden><div><b id="upload-progress-title">파일 확인 중</b><span id="upload-progress-percent">0%</span></div><div class="progress"><i id="upload-progress-bar" style="width:0%"></i></div><p id="upload-progress-detail">원본 헤더와 행번호를 검사합니다.</p></div>
+              </section>
+
+              <aside class="panel upload-history">
+                <div class="panel-title"><div><h3>최근 업로드</h3><p>최근 등록한 원본과 처리 상태입니다.</p></div></div>
+                <div class="history-list">
+                  <article><div><span class="channel-logo sellpia">S</span><p><b>셀피아 원본</b><em>파일 3개 · 27,223행</em></p><strong class="status done">완료</strong></div><time>오늘 11:39 · 45초</time></article>
+                  <article><div><span class="channel-logo smart">N</span><p><b>스마트스토어</b><em>파일 2개 · 14,940행</em></p><strong class="status done">완료</strong></div><time>오늘 11:34 · 56초</time></article>
+                  <article><div><span class="channel-logo make">M</span><p><b>메이크샵</b><em>파일 1개 · 28,125행</em></p><strong class="status wait">진행 중</strong></div><time>오늘 12:26 · 34%</time></article>
+                  <article><div><span class="channel-logo ably">A</span><p><b>에이블리</b><em>파일 1개 · 6,610행</em></p><strong class="status done">완료</strong></div><time>어제 17:42 · 18초</time></article>
+                </div>
+                <button class="btn full" data-page="jobs">전체 업로드 이력 보기</button>
+              </aside>
+            </div>
+          </div>
+
+          <div id="matching" class="page matrix-page">
+            <div class="page-head matrix-page-head">
+              <div><h2>통합 매트릭스</h2><p>셀피아 SKU를 기준으로 판매처 연결, 재고, 가격과 운영정보를 한 화면에서 관리합니다.</p></div>
+            </div>
+
+            <aside class="matrix-action-panel" aria-label="매트릭스 작업 도구">
+              <div class="matrix-action-panel-head"><span>작업 도구</span><span id="matrix-live-status" class="live-data-badge loading">DB 연결 중</span></div>
+              <section id="matrix-mapping-sync" class="matrix-mapping-sync checking" aria-live="polite">
+                <div><span>매핑 동기화</span><strong id="matrix-mapping-sync-state">확인 중</strong></div>
+                <p id="matrix-mapping-sync-detail">DB 저장과 현재 화면 반영 상태를 확인합니다.</p>
+                <time id="matrix-mapping-sync-time">-</time>
+              </section>
+              <button class="matrix-panel-action" id="matrix-refresh-btn"><span>↻</span><b>DB 새로고침</b></button>
+              <div class="matrix-action-divider"></div>
+              <button class="matrix-panel-action" id="matrix-match-stock-btn"><span>⇄</span><b>셀피아→판매처<br>재고 맞추기</b></button>
+              <button class="matrix-panel-action" id="matrix-export-btn"><span>⇩</span><b>현재 데이터<br>내보내기</b></button>
+              <button class="matrix-panel-action" id="matrix-csv-btn"><span>CSV</span><b>현재 결과<br>CSV 저장</b></button>
+              <button class="matrix-panel-action primary" id="matrix-bulk-btn"><span>ƒx</span><b>선택 행<br>가격조합 배정</b></button>
+              <div class="matrix-action-divider"></div>
+              <label class="custom-preset-picker">내 프리셋<select id="custom-preset-select" aria-label="내 프리셋 선택"><option value="">선택</option></select></label>
+              <button id="code-list-open" class="matrix-panel-action code-list-tab" type="button"><span>▦</span><b>엑셀 코드목록</b></button>
+              <button id="mapping-import-open" class="matrix-panel-action" type="button"><span>⇧</span><b>매칭값 일괄 업로드</b></button>
+              <button id="price-rule-lab-open" class="matrix-panel-action" type="button"><span>ƒx</span><b>가격 수식<br>태그 관리</b></button>
+            </aside>
+
+            <div class="matrix-view-tabs">
+              <button class="active" data-preset-id="all">전체 현황</button><button data-preset-id="matching">미매칭 확인</button><button data-preset-id="inventory">재고 작업</button><button data-preset-id="price">가격 작업</button><button data-preset-id="attributes">속성·태그</button>
+            </div>
+            <div class="matrix-toolbar">
+              <div class="matrix-search-group" role="search" aria-label="상품 및 판매처 검색">
+                <div class="matrix-search"><select id="matrix-search-type" aria-label="검색 유형"><option value="name">상품/옵션명</option><option value="own_code">자사코드</option><option value="sku">Sellpia SKU</option><option value="all">전체 · 기존 검색</option></select><span>⌕</span><input id="matrix-search" placeholder="상품명 / 옵션명 · 포함 검색"></div>
+                <fieldset id="matrix-search-sources" class="matrix-search-sources" aria-label="검색 대상 판매처">
+                  <legend>검색 대상</legend>
+                  <label><input type="checkbox" value="sellpia" checked><span>셀피아</span></label>
+                  <label><input type="checkbox" value="smartstore" checked><span>스스</span></label>
+                  <label><input type="checkbox" value="makeshop" checked><span>메이크샵</span></label>
+                  <label><input type="checkbox" value="ably" checked><span>에이블리</span></label>
+                </fieldset>
+              </div>
+              <button id="code-list-filter-pill" class="code-list-filter-pill" type="button" hidden><b>엑셀 목록</b><span id="code-list-filter-count">0개 SKU</span><i>×</i></button>
+              <select id="matrix-status-filter"><option value="all">전체 연결상태</option><option value="connected">연결 완료</option><option value="unmatched">미매칭</option></select>
+              <select disabled title="판매처별 정규화 행이 DB에 적재되면 활성화됩니다."><option>판매처 · 적재 대기</option><option>스마트스토어</option><option>메이크샵</option><option>에이블리</option></select>
+              <button class="filter-toggle" disabled>재고 차이 <b>-</b></button>
+              <button class="filter-toggle" disabled>가격 차이 <b>-</b></button>
+              <button class="btn compact advanced-filter-trigger" id="advanced-filter-btn" type="button">상세 필터 <b id="advanced-filter-count">0</b></button>
+              <button class="btn compact" id="view-settings-btn">보기 설정</button>
+              <button class="btn compact" id="shadow-diagnostics-toggle" type="button" aria-pressed="false" title="기준본·목표값·계산 상태의 상세 표시를 켭니다.">Shadow 진단 보기 OFF</button>
+              <button class="btn compact matrix-bulk-source-refresh-trigger" id="matrix-bulk-source-refresh-btn" type="button" title="선택한 시스템 기준 컬럼 전체를 셀피아 최신 원본값으로 갱신합니다.">컬럼 원본 갱신</button>
+              <button class="btn compact matrix-column-reset" id="matrix-column-reset" type="button" title="직접 조절한 모든 열 너비를 기본값으로 되돌립니다.">열 너비 초기화</button>
+              <button class="matrix-freeze-toggle active" id="matrix-freeze-toggle" type="button" aria-pressed="true" title="셀피아 기준 영역을 화면 왼쪽에 고정합니다.">셀피아 고정 ON</button>
+              <div class="matrix-zoom-control" aria-label="매트릭스 확대 축소">
+                <button type="button" id="matrix-zoom-out" aria-label="매트릭스 축소">−</button>
+                <button type="button" id="matrix-zoom-value" title="100%로 초기화">100%</button>
+                <button type="button" id="matrix-zoom-in" aria-label="매트릭스 확대">＋</button>
+              </div>
+              <label class="matrix-page-size">표시 행<select id="matrix-page-size"><option value="50">50개</option><option value="100">100개</option><option value="200">200개</option></select></label>
+              <div class="matrix-result"><b id="matrix-total-count">-</b>개 직접 SKU <span id="matrix-related-count" class="matrix-related-count" hidden>· 관계 SKU <strong id="matrix-related-count-value">0</strong>행</span><span>·</span> 선택 SKU <strong id="selected-count">0</strong></div>
+            </div>
+
+            <div id="advanced-filter-bar" class="advanced-filter-bar" hidden>
+              <span id="advanced-filter-logic-label">모두 만족</span>
+              <div id="advanced-filter-chips" class="advanced-filter-chips"></div>
+              <button id="advanced-filter-clear" type="button">전체 해제</button>
+            </div>
+
+            <div class="matrix-legend">
+              <span><i class="legend-selection"></i> 선택 범위</span><span><i class="legend-diff"></i> 원본·판매처와 차이</span><span><i class="legend-pending"></i> 내보내기 준비</span><em>한 번 클릭은 셀 선택 · 드래그/Shift 범위 선택 · Ctrl+클릭/드래그로 떨어진 셀 추가·제거 · Ctrl+C / Ctrl+V · 헤더 경계 드래그: 파란 세로선을 옮겨 열 너비 조절 · 경계 더블클릭: 기본 너비 · 셀 더블클릭: 수정 또는 상세 열기</em>
+            </div>
+
+            <div class="matrix-shell">
+              <table class="matrix-table" aria-label="통합 상품 매트릭스">
+                <thead>
+                  <tr class="group-row">
+                    <th class="sticky-col select-col" rowspan="2" aria-hidden="true"></th>
+                    <th class="sticky-col image-col" rowspan="2">이미지</th>
+                    <th class="sticky-col sellpia-group" colspan="10">시스템 기준 · 셀피아 원본 비교</th>
+                    <th class="smart-group" colspan="9">스마트스토어</th>
+                    <th class="make-group" colspan="9">메이크샵</th>
+                    <th class="ably-group" colspan="9">에이블리</th>
+                    <th class="ops-group" colspan="4">운영정보</th>
+                  </tr>
+                  <tr class="column-row">
+                    <th class="sticky-col sellpia-sku-col">SKU</th><th class="sticky-col sellpia-name-col">상품명</th><th class="sticky-col sellpia-option-name-col">옵션명</th><th class="sticky-col own-code-col">자사코드</th><th class="sticky-col sellpia-stock-col">기준재고</th><th class="sticky-col sellpia-price-col">기준가격</th><th>매입가</th><th>발주단위</th><th>최소발주단위</th><th>실입고가</th>
+                    <th>연결상태</th><th>상품코드</th><th>상품명</th><th>옵션코드 / 옵션명</th><th>판매처재고</th><th>판매가</th><th>할인정보</th><th>옵션가</th><th>최종구매가</th>
+                    <th>연결상태</th><th>상품코드</th><th>상품명</th><th>옵션코드 / 옵션명</th><th>판매처재고</th><th>판매가</th><th>할인정보</th><th>옵션가</th><th>최종구매가</th>
+                    <th>연결상태</th><th>상품코드</th><th>상품명</th><th>옵션코드 / 옵션명</th><th>판매처재고</th><th>판매가</th><th>할인정보</th><th>옵션가</th><th>최종구매가</th>
+                    <th>소재</th><th>상품군</th><th>태그</th><th>최근 동기화</th>
+                  </tr>
+                </thead>
+                <tbody id="matrix-body"><tr class="matrix-empty-row"><td colspan="43"><b>데이터를 불러오는 중입니다.</b><span>시스템 기준값과 원본 비교값을 함께 조회합니다.</span></td></tr></tbody>
+              </table>
+            </div>
+            <div class="matrix-footer"><span id="matrix-range">데이터를 불러오는 중입니다.</span><p>실제 SKU·이미지·작업상태는 Supabase에서 조회합니다.</p><div class="matrix-pagination" hidden><button id="matrix-prev" type="button" aria-label="이전 페이지" disabled>‹</button><label class="matrix-page-jump" title="페이지 번호를 입력하고 Enter를 누르세요"><input id="matrix-page" type="number" min="1" step="1" value="1" inputmode="numeric" aria-label="이동할 페이지"><span id="matrix-total-pages">/ 1</span></label><button id="matrix-next" type="button" aria-label="다음 페이지">›</button></div></div>
+
+            <div id="change-bar" class="change-bar" hidden><div><span>↻</span><p><b>DB 자동 저장 <strong id="pending-count">0</strong>건</b><em>연속 입력을 잠깐 묶은 뒤 Supabase에 자동 저장합니다.</em></p></div><button class="btn" id="discard-changes">저장 전 취소</button><button class="btn primary" id="preview-changes">변경 미리보기</button></div>
+          </div>
+          <div id="multi-links" class="page multi-link-page">
+            <div class="page-head">
+              <div><h2>다중·조합 관리</h2><p>보기 분류별로 상위·하위 관계를 간단히 관리하고, 필요할 때 전체 소속을 추적합니다.</p></div>
+              <div class="multi-link-head-note"><b>계산과 분리된 관리 구조</b><span>이번 단계의 폴더·종속관계는 재고와 가격 계산을 바꾸지 않습니다.</span></div>
+            </div>
+            <div class="multi-link-layout">
+              <aside class="relation-folder-panel" aria-label="조합 관리 폴더">
+                <div class="relation-folder-head"><div><span>사용자 폴더</span><b>폴더 구조</b></div><button id="relation-folder-new" type="button" title="새 최상위 폴더">＋</button></div>
+                <div id="relation-folder-list" class="relation-folder-list"><button class="active" data-relation-folder="all"><span>전체 연결</span><b>-</b></button><button data-relation-folder="unorganized"><span>미분류</span><b>-</b></button></div>
+                <form id="relation-folder-form" class="relation-folder-form" hidden>
+                  <input id="relation-folder-id" type="hidden">
+                  <b id="relation-folder-form-title">새 최상위 폴더</b>
+                  <label>폴더 이름<input id="relation-folder-name" maxlength="60" required placeholder="예: 모음전 관리"></label>
+                  <label>상위 폴더<select id="relation-folder-parent"><option value="">최상위 폴더</option></select></label>
+                  <label>폴더 유형<select id="relation-folder-kind"><option value="collection">모음전</option><option value="one_plus_one">1+1</option><option value="set">세트</option><option value="custom">직접 분류</option></select></label>
+                  <div><button id="relation-folder-cancel" class="btn" type="button">취소</button><button class="btn primary" type="submit">저장</button></div>
+                </form>
+                <p class="relation-folder-note">폴더와 하위 폴더는 원하는 단계까지 직접 만들고 이동할 수 있습니다. 상품 상위·하위 관계와는 별도로 관리됩니다.</p>
+              </aside>
+              <section class="relation-workspace" aria-label="상품 관계 관리">
+                <nav id="multi-link-workspace-tabs" class="multi-link-workspace-tabs" role="tablist" aria-label="다중·조합 관리 보기">
+                  <button class="active" type="button" role="tab" aria-selected="true" data-multi-link-tab="all">전체 연결</button>
+                  <button type="button" role="tab" aria-selected="false" data-multi-link-tab="relation">관계</button>
+                  <button type="button" role="tab" aria-selected="false" data-multi-link-tab="bundle">세트·번들</button>
+                </nav>
+                <div class="relation-purpose-guide" aria-label="관계 기능 구분">
+                  <span><b>상품 관계</b>분류·화면 표시만</span>
+                  <span><b>세트·번들</b>구성수량으로 재고 계산</span>
+                  <span><b>판매처 구성</b>판매처 옵션의 구성 SKU</span>
+                </div>
+                <section id="multi-link-tab-all" class="multi-link-tab-panel active" data-multi-link-panel="all" aria-label="전체 연결 매트릭스"></section>
+                <section id="multi-link-tab-relation" class="multi-link-tab-panel" data-multi-link-panel="relation" aria-label="상품 관계 매트릭스" hidden></section>
+                <section id="multi-link-tab-bundle" class="multi-link-tab-panel" data-multi-link-panel="bundle" aria-label="세트·번들 매트릭스" hidden></section>
+                <header class="relation-workspace-head">
+                  <div><span>선택한 보기</span><h3 id="relation-workspace-scope">전체 연결</h3><p>셀을 클릭·드래그해 선택하고, 우클릭하면 해당 관계 수정 패널이 열립니다.</p></div>
+                  <div class="relation-workspace-actions">
+                    <label class="relation-workspace-search"><span>⌕</span><input id="relation-workspace-search" autocomplete="off" placeholder="여러 분류에 속한 SKU 검색"></label>
+                    <div class="relation-view-switch"><button id="relation-view-list" class="active" type="button">선택 분류</button><button id="relation-view-graph" type="button">전체 관계 보기</button></div>
+                    <button id="relation-add-toggle" class="btn primary" type="button">＋ 관계 편집</button>
+                  </div>
+                </header>
+                <div class="relation-edge-summary"><b id="relation-edge-summary">관계를 불러오는 중입니다.</b><span>Ctrl/Shift로 범위를 추가 선택할 수 있습니다.</span></div>
+                <div id="relation-edge-list" class="relation-edge-list"><div class="relation-workspace-empty">등록된 관계를 불러오는 중입니다.</div></div>
+                <section id="relation-graph-board" class="relation-graph-board" hidden>
+                  <div class="relation-tree-head"><div><b>전체 관계 보기</b><span id="relation-graph-copy">검색하거나 ‘다른 관계’ 배지를 누르면 연결된 모든 위치를 표시합니다.</span></div><button id="relation-tree-refresh" type="button">새로고침</button></div>
+                  <div id="relation-tree" class="relation-tree"><span>등록된 관계 노드가 없습니다.</span></div>
+                </section>
+                <details id="bundle-management-panel" class="bundle-management-panel">
+                  <summary><span>SET</span><b>세트 구성 관리</b><em>셀피아 세트 SKU와 실제 구성수량을 관계 관리와 별도로 저장합니다.</em></summary>
+                  <div class="bundle-management-body">
+                    <div class="bundle-target-switch" role="tablist" aria-label="세트 구성 대상 유형">
+                      <button id="bundle-target-canonical" class="active" type="button" role="tab" aria-selected="true">셀피아 공통 세트</button>
+                      <button id="bundle-target-seller" type="button" role="tab" aria-selected="false">판매처 전용 구성</button>
+                    </div>
+                    <section id="bundle-canonical-workspace" class="bundle-target-workspace">
+                    <div class="bundle-management-head">
+                      <div><b>세트 SKU 검색</b><span>세트나 구성품 SKU·상품명으로 찾아 현재 구성을 확인하고 수량을 수정할 수 있습니다.</span></div>
+                      <form id="bundle-search-form" class="bundle-search-form"><input id="bundle-search" autocomplete="off" placeholder="세트 SKU / 구성품 SKU / 상품명"><button class="btn" type="submit">조회</button><button id="bundle-refresh" class="btn" type="button">새로고침</button></form>
+                    </div>
+                    <div id="bundle-graph-list" class="bundle-graph-list"><div class="bundle-empty">세트 구성 관리 패널을 펼치면 DB에서 구성을 조회합니다.</div></div>
+                    <details id="bundle-import-panel" class="relation-import-panel bundle-import-panel">
+                      <summary><span>▦</span><b>엑셀로 세트 구성 일괄 등록</b><em>관계 업로드와 달리 세트 → 구성품 및 구성수량을 저장합니다.</em></summary>
+                      <div class="relation-import-body">
+                        <div class="relation-import-guide">
+                          <div><b>필수 열</b><code>세트 · 구성품 · 구성수량</code><span>상품코드-옵션코드를 정확히 입력하고, 같은 세트 코드를 여러 행에 반복하면 됩니다.</span></div>
+                          <div><b>저장 기준</b><code>모두 구성품</code><span>역할을 따로 입력하지 않습니다. 예전 파일의 역할 열은 무시하고 구성품으로 저장합니다.</span></div>
+                        </div>
+                        <div class="bundle-template-actions"><button id="bundle-import-template" class="btn" type="button">템플릿 다운로드</button><span>첫 시트 ‘세트구성’ · XLSX</span></div>
+                        <input id="bundle-import-file" type="file" accept=".xlsx,.xls,.csv" hidden>
+                        <button id="bundle-import-dropzone" class="relation-import-dropzone" type="button"><strong>세트 구성 엑셀 파일을 놓거나 선택하세요</strong><span>세트 상품코드-옵션코드 · 구성품 상품코드-옵션코드 · 구성수량</span></button>
+                        <div id="bundle-import-result" class="relation-import-result"><span>파일을 선택하면 코드·수량·중복·오류를 먼저 검토합니다.</span></div>
+                        <div class="relation-import-actions"><button id="bundle-import-reset" class="btn" type="button" disabled>파일 비우기</button><button id="bundle-import-save" class="btn primary" type="button" disabled>검토한 세트 구성 저장</button></div>
+                      </div>
+                    </details>
+                    <details class="bundle-manual-panel">
+                      <summary>세트 구성 한 건 직접 추가</summary>
+                      <form id="bundle-component-form" class="bundle-component-form">
+                        <label>세트 SKU<input id="bundle-form-bundle-sku" required autocomplete="off" placeholder="예: 1000-1"></label>
+                        <span>→</span>
+                        <label>구성품 SKU<input id="bundle-form-component-sku" required autocomplete="off" placeholder="예: 2000-1"></label>
+                        <label>구성수량<input id="bundle-form-qty" type="number" min="1" max="2147483647" step="1" value="1" required></label>
+                        <button id="bundle-form-save" class="btn primary" type="submit">구성 저장</button>
+                      </form>
+                    </details>
+                    </section>
+                    <section id="seller-bundle-workspace" class="bundle-target-workspace" hidden>
+                      <div class="seller-bundle-notice"><span>판매처 전용</span><div><b>판매처 상품·옵션에만 적용되는 1+1/세트 구성입니다.</b><em>셀피아 SKU를 새로 만들지 않으며 실제 판매처·가격·재고·주문에는 자동 반영하지 않습니다.</em></div></div>
+                      <form id="seller-bundle-target-form" class="seller-bundle-target-form">
+                        <label>판매처<select id="seller-bundle-source"><option value="smartstore">스마트스토어</option><option value="makeshop">메이크샵</option><option value="ably">에이블리</option></select></label>
+                        <label>상품코드<input id="seller-bundle-product-code" required autocomplete="off"></label>
+                        <label>옵션코드<input id="seller-bundle-option-code" required autocomplete="off" placeholder="원본의 정확한 옵션코드"></label>
+                        <label>구성유형<select id="seller-bundle-type"><option value="one_plus_one">1+1</option><option value="set">세트</option></select></label>
+                        <button id="seller-bundle-load" class="btn" type="submit">대상 조회</button>
+                      </form>
+                      <div id="seller-bundle-target-result" class="seller-bundle-target-result"><div class="bundle-empty">판매처·상품코드·옵션코드를 입력해 대상을 조회해주세요.</div></div>
+                      <details id="seller-bundle-import-panel" class="relation-import-panel bundle-import-panel">
+                        <summary><span>▦</span><b>엑셀로 판매처 전용 구성 일괄 등록</b><em>판매처 상품·옵션별 1+1/세트 구성과 수량을 검토 후 저장합니다.</em></summary>
+                        <div class="relation-import-body">
+                          <div class="relation-import-guide">
+                            <div><b>대상 열</b><code>판매처 · 상품코드 · 옵션코드</code><span>세 열 모두 필수이며 판매처 원본의 정확한 상품·옵션코드를 입력합니다.</span></div>
+                            <div><b>구성 열</b><code>구성품 SKU · 수량 · 유형</code><span>구성품은 셀피아 SKU이며 수량은 1 이상의 정수, 유형은 1+1 또는 세트입니다.</span></div>
+                          </div>
+                          <div class="bundle-template-actions"><button id="seller-bundle-import-template" class="btn" type="button">판매처 전용 템플릿 다운로드</button><span>첫 시트 ‘판매처전용구성’ · XLSX</span></div>
+                          <input id="seller-bundle-import-file" type="file" accept=".xlsx,.xls,.csv" hidden>
+                          <button id="seller-bundle-import-dropzone" class="relation-import-dropzone" type="button"><strong>판매처 전용 구성 엑셀 파일을 놓거나 선택하세요</strong><span>판매처 · 상품코드 · 옵션코드 · 구성품 상품코드-옵션코드 · 구성수량 · 구성유형</span></button>
+                          <div id="seller-bundle-import-result" class="relation-import-result"><span>파일을 선택하면 판매처 대상·구성품·수량·중복·오류를 먼저 검토합니다.</span></div>
+                          <div class="relation-import-actions"><button id="seller-bundle-import-reset" class="btn" type="button" disabled>파일 비우기</button><button id="seller-bundle-import-save" class="btn primary" type="button" disabled>검토한 판매처 구성 저장</button></div>
+                        </div>
+                      </details>
+                    </section>
+                  </div>
+                </details>
+                <section id="multi-link-organization-form" class="multi-link-organization-form relation-compose-panel" hidden>
+                   <div class="multi-link-form-guide"><b>상품 옵션 관계 작업판</b><span>카드를 원하는 단계로 옮긴 뒤, 부모 카드 오른쪽 점에서 자식 카드 왼쪽 점까지 선을 연결하세요. 드래그 중에는 카드가 커서를 따라갑니다.</span></div>
+                   <form id="relation-product-loader" class="relation-product-loader">
+                     <label>상품 출처<select id="relation-board-source"><option value="sellpia">셀피아</option><option value="smartstore">스마트스토어</option><option value="makeshop">메이크샵</option><option value="ably">에이블리</option></select></label>
+                     <label>상품코드<input id="relation-board-product-code" autocomplete="off" required placeholder="옵션코드가 아닌 상품코드만 입력"></label>
+                     <button id="relation-board-load" class="btn primary" type="submit">상품 불러오기</button>
+                   </form>
+                   <details id="relation-import-panel" class="relation-import-panel">
+                     <summary><span>▦</span><b>엑셀로 종속관계 일괄 등록</b><em>A → B → C 순서로 상위·하위를 지정합니다.</em></summary>
+                     <div class="relation-import-body">
+                       <div class="relation-import-guide">
+                         <div><b>셀 입력 형식</b><code>상품코드-옵션코드</code><span>이름이나 판매처는 입력하지 않습니다. 전체 조합키를 원본과 정확히 대조합니다.</span></div>
+                         <div><b>1:N 입력</b><code>같은 A를 여러 행에 반복</code><span>중복 관계는 한 건으로 합치고 기존 관계는 삭제하지 않습니다.</span></div>
+                       </div>
+                       <input id="relation-import-file" type="file" accept=".xlsx,.xls,.csv" hidden>
+                       <button id="relation-import-dropzone" class="relation-import-dropzone" type="button"><strong>엑셀 파일을 놓거나 선택하세요</strong><span>첫 번째 시트 · 헤더 A, B, C… · XLSX/XLS/CSV</span></button>
+                       <div id="relation-import-result" class="relation-import-result"><span>파일을 선택하면 행·코드·관계와 오류를 먼저 검토합니다.</span></div>
+                       <div class="relation-import-actions"><button id="relation-import-reset" class="btn" type="button" disabled>파일 비우기</button><button id="relation-import-save" class="btn primary" type="button" disabled>검토한 관계 저장</button></div>
+                     </div>
+                   </details>
+                   <div id="relation-board-products" class="relation-board-products"><span>아직 불러온 상품이 없습니다.</span></div>
+                   <div class="relation-board-toolbar">
+                     <div><b>옵션 종속관계</b><span id="relation-board-summary">상품을 불러오면 모든 옵션이 미배치 칸에 나타납니다.</span></div>
+                     <div><button id="relation-board-add-level" class="btn" type="button">＋ 하위 단계</button><button id="relation-board-reset" class="btn" type="button">작업 취소</button></div>
+                   </div>
+                   <div id="relation-drag-board" class="relation-drag-board"><div class="relation-board-empty">상품을 먼저 불러와주세요.</div></div>
+                   <div class="relation-board-savebar">
+                     <div><b id="relation-board-change-count">변경 없음</b><span id="relation-board-change-copy">드래그한 관계는 저장 버튼을 누르기 전까지 DB에 반영되지 않습니다.</span></div>
+                     <button id="relation-board-save" class="btn primary" type="button" disabled>관계 변경 저장</button>
+                   </div>
+                   <details class="relation-single-link-fallback">
+                     <summary>기존 방식으로 관계 한 건 직접 추가</summary>
+                     <div class="relation-single-link-inner">
+                   <label>관리 폴더<select id="multi-link-folder"><option value="">미분류</option></select></label>
+                   <label>노드 설명 유형<select id="multi-link-relation-kind"><option value="individual">개별상품</option><option value="collection">모음전·기획전</option><option value="one_plus_one">1+1</option><option value="set">세트</option><option value="custom">직접 분류</option></select></label>
+                   <div class="relation-node-create seller-node-create">
+                     <b>현재 판매처 행</b><span id="relation-current-seller-copy">목록에서 판매처 행을 선택해주세요.</span>
+                     <button id="relation-create-seller-node" class="btn" type="button" disabled>이 행을 관계 노드로 준비</button>
+                   </div>
+                   <div class="relation-node-create sellpia-node-create">
+                     <b>셀피아 상품 노드</b><span>상품코드(prefix)나 상품명으로 찾으면 대표상품명과 하위 옵션을 자동 표시합니다.</span>
+                     <input id="relation-sellpia-search" autocomplete="off" placeholder="예: 1000 또는 베이직 바벨">
+                     <div id="relation-sellpia-results" class="relation-sellpia-results" hidden></div>
+                     <div id="relation-sellpia-preview" class="relation-sellpia-preview"><span>셀피아 상품을 선택해주세요.</span></div>
+                     <button id="relation-create-sellpia-node" class="btn" type="button" disabled>선택 상품을 관계 노드로 준비</button>
+                   </div>
+                   <div class="relation-edge-compose">
+                     <label>상위 노드<select id="relation-parent-node"><option value="">상위를 선택해주세요</option></select></label>
+                     <span>→</span>
+                     <label>하위 노드<select id="relation-child-node"><option value="">하위를 선택해주세요</option></select></label>
+                      <button id="relation-edge-save" class="btn primary" type="button" disabled>상위 → 하위 연결 저장</button>
+                    </div>
+                     </div>
+                   </details>
+                </section>
+                <section class="multi-link-all-workspace">
+                  <summary><span>상품 관계·세트 구성</span><em>저장된 상·하위 관계와 세트 구성품을 한 화면에서 확인합니다.</em></summary>
+                  <div class="multi-link-toolbar">
+                    <div class="multi-link-search"><span>⌕</span><input id="multi-link-search" placeholder="관계·세트 SKU / 상품명 / 옵션명 검색"></div>
+                    <input id="multi-link-source" type="hidden" value="all">
+                    <input id="multi-link-type" type="hidden" value="all">
+                    <button id="multi-link-refresh" class="btn">새로고침</button>
+                    <span class="multi-link-result">관계·구성 <b id="multi-link-count">-</b>건</span>
+                  </div>
+                  <div id="multi-link-workspace-body" class="multi-link-legacy-grid">
+                    <section class="multi-link-table-card">
+                      <table id="multi-link-workspace-matrix" class="multi-link-table unified-connection-matrix">
+                        <thead><tr><th>구분</th><th>상위 사진</th><th>상위·세트 상품</th><th>연결</th><th>하위 사진</th><th>하위·구성 상품</th></tr></thead>
+                        <tbody id="multi-link-body"><tr class="multi-link-empty"><td colspan="6">전체 연결을 불러오는 중입니다.</td></tr></tbody>
+                      </table>
+                      <div class="multi-link-foot"><span id="multi-link-range">-</span><div hidden><button id="multi-link-prev" disabled>‹</button><b id="multi-link-page">1</b><button id="multi-link-next" disabled>›</button></div></div>
+                    </section>
+                    <aside class="multi-link-editor" aria-label="구성품 편집">
+                      <div class="multi-link-editor-head"><span>판매처 옵션 구성</span><h3 id="multi-link-editor-title">연결을 선택해주세요</h3><p id="multi-link-editor-copy">목록의 판매처 옵션을 누르면 현재 구성과 계산 재고를 표시합니다.</p></div>
+                      <div id="multi-link-components" class="multi-link-components"><div class="multi-link-editor-empty">선택된 판매처 옵션이 없습니다.</div></div>
+                      <section id="multi-link-sku-inventory-action" class="multi-link-inventory-action disabled">
+                        <div class="multi-link-inventory-head"><div><span>판매처 재고 수정안</span><b id="multi-link-inventory-state">연결을 선택해주세요</b></div><button id="multi-link-open-queue" class="btn" type="button">내보내기 준비 열기</button></div>
+                        <div class="multi-link-inventory-values"><p><span>판매처 원본</span><b id="multi-link-seller-stock">-</b></p><i>→</i><p><span>조합 계산</span><b id="multi-link-calculated-stock">-</b></p></div>
+                        <p id="multi-link-inventory-copy">명시적으로 저장한 구성만 재고 수정안으로 만들 수 있습니다.</p>
+                        <button id="multi-link-sku-stage-stock" class="btn primary" type="button" disabled>계산재고를 내보내기 준비에 등록</button>
+                      </section>
+                      <form id="multi-link-form" class="multi-link-form">
+                        <div class="multi-link-form-guide"><b>SKU 구성 추가·수정</b><span>기존 1:1 옵션에 두 번째 SKU를 추가하면 현재 SKU도 자동 보존됩니다.</span></div>
+                        <label>판매처<select id="multi-link-form-source" required><option value="smartstore">스마트스토어</option><option value="makeshop">메이크샵</option><option value="ably">에이블리</option></select></label>
+                        <label>상품코드<input id="multi-link-form-product" required autocomplete="off"></label>
+                        <label>옵션코드<input id="multi-link-form-option" autocomplete="off"></label>
+                        <label>셀피아 SKU<input id="multi-link-form-sku" required autocomplete="off"></label>
+                        <div class="multi-link-form-row"><label>구성수량<input id="multi-link-form-qty" type="number" min="1" step="1" value="1" required></label><label>역할<select id="multi-link-form-role"><option value="additional">추가 구성</option><option value="primary">기준 구성</option></select></label></div>
+                        <button id="multi-link-save" class="btn primary" type="submit">구성 저장</button>
+                      </form>
+                    </aside>
+                  </div>
+                </section>
+              </section>
+            </div>
+          </div>
+          <div id="ably-combinations" class="page">
+            <div id="ably-products-home">
+              <div class="page-head"><div><h2>에이블리 조합관리</h2><p>온라인 상품명을 선택하면 해당 상품의 조합 옵션을 확인할 수 있습니다.</p></div></div>
+              <section class="panel ably-combination-panel"><h3>상품 목록</h3><div class="ably-home-toolbar"><div><label>옵션기본 엑셀 <input id="ably-combination-file" type="file" accept=".xlsx" aria-label="에이블리 조합 엑셀 파일"></label><p id="ably-combination-file-status" role="status">D열 온라인 상품명을 목록 제목으로 표시합니다. 불러온 상품은 저장 버튼으로 보관하세요. 전체 재고갱신은 저장된 모든 상품을 대상으로 합니다.</p></div><button id="ably-all-stock-download" class="btn primary" type="button">전체 조합 재고갱신 파일</button><button id="ably-virtual-product-open" class="btn primary" type="button">상품 불러오기 · 조합등록 엑셀 생성</button></div><div id="ably-imported-products"><p>엑셀을 불러오면 상품 목록이 표시됩니다.</p></div></section>
+              <section class="panel ably-combination-panel"><details><summary>재고 계산과 Q열 입력 기준</summary><p>주문수집 → 개별 SKU 재고 갱신 → 연결된 개별 SKU의 최솟값으로 조합 재고 갱신.</p><p>Q열 옵션관리코드: SKU1/SKU2 또는 [SKU1],[SKU2]. R열은 조합 SKU, X열(*판매수량)은 조합 실재고입니다. W열(판매가능재고)은 보존합니다. 기존 조합 재고는 계산에서 제외합니다.</p><p>개별 SKU의 시스템 현재재고를 조회하고 계산한 결과를 플랫폼 엑셀로 받습니다. 시스템 재고 자체는 변경하지 않습니다.</p></details></section>
+            </div>
+            <section id="ably-combination-lab" class="panel ably-combination-panel" hidden></section>
+            <section id="ably-imported-detail" class="panel ably-combination-panel" hidden><button id="ably-product-back" class="btn" type="button">← 상품 목록</button><h2 id="ably-product-title"></h2><p id="ably-product-row-count"></p><p id="ably-stock-export-note"></p><div class="ably-lab-head"><button id="ably-stock-refresh" class="btn" type="button">재고 새로고침</button><button id="ably-stock-download" class="btn primary" type="button">수정 재고 엑셀 다운로드</button></div><p id="ably-stock-status" role="status"></p><details><summary>연결된 개별 SKU · 시스템 현재재고</summary><div id="ably-stock-components" class="ably-lab-stock-grid"></div></details><div class="ably-combination-table"><table class="data-table"><thead><tr><th>엑셀 행</th><th>옵션</th><th>조합 SKU (R)</th><th>연결 메모 (Q)</th><th>개별 SKU 재고</th><th>기존 재고 (W)</th><th>수정 재고 (W)</th><th>확인 결과</th></tr></thead><tbody id="ably-combination-preview"></tbody></table></div><button id="ably-product-more" class="btn" type="button" hidden>다음 200개 더 보기</button></section>
+          </div>
+          <div id="attributes" class="page attributes-page"></div>
+          <div id="price-rules" class="page price-rule-page">
+            <div class="page-head">
+              <div><h2 id="price-rule-lab-title">계산 태그·가격 조합</h2><p>재사용 가능한 계산 태그를 만든 뒤 필요한 순서대로 가격 조합에 담습니다.</p></div>
+              <div class="head-actions"><button id="price-rule-lab-refresh" class="btn" type="button">DB 새로고침</button><button id="price-rule-lab-done" class="btn primary" type="button">매트릭스로 이동</button></div>
+            </div>
+            <section class="panel price-rule-page-shell">
+              <div class="price-rule-lab-body">
+                <div class="price-rule-lab-summary" aria-live="polite">
+                  <div><span>계산 태그</span><b id="price-rule-tag-count">-</b></div>
+                  <div><span>가격 조합</span><b id="price-rule-set-count">-</b></div>
+                </div>
+                <div id="price-rule-lab-error" class="price-rule-lab-error" hidden></div>
+                <div class="price-rule-lab-grid">
+                  <section class="price-rule-lab-panel">
+                    <div class="price-rule-lab-panel-head"><div><b>계산 태그</b><span>판매가 계산과 판매처 할인값을 서로 독립된 태그로 저장합니다.</span></div></div>
+                    <div id="price-rule-tag-list" class="price-rule-tag-list"></div>
+                    <form id="price-rule-tag-form" class="price-rule-editor-form">
+                      <input id="price-rule-tag-id" type="hidden">
+                      <label>태그 이름<input id="price-rule-tag-name" required maxlength="40" placeholder="예: 10% 할인"></label>
+                      <label>태그 역할<select id="price-rule-tag-role"><option value="price">판매가 태그</option><option value="discount">할인 태그</option></select></label>
+                      <label id="price-rule-tag-source-field" hidden>할인 판매처<select id="price-rule-tag-source"><option value="smartstore">스마트스토어</option><option value="makeshop">메이크샵</option><option value="ably">에이블리</option></select></label>
+                      <label>계산 방식<select id="price-rule-tag-mode"><option value="none">기준가 그대로</option><option value="percent_discount">퍼센트 할인</option><option value="percent_markup">퍼센트 인상</option><option value="amount_discount">금액 할인</option><option value="amount_add">금액 추가</option><option value="fixed">최종가 고정</option></select></label>
+                      <label>값<input id="price-rule-tag-value" type="number" min="0" step="1" value="0"></label>
+                      <label>색상<input id="price-rule-tag-color" type="color" value="#2f6fd1"></label>
+                      <details><summary>최저·최고·끝자리 설정</summary><div><label>최저가<input id="price-rule-tag-min" type="number" min="0"></label><label>최고가<input id="price-rule-tag-max" type="number" min="0"></label><label>끝자리 단위<input id="price-rule-tag-round-unit" type="number" min="1" value="1"></label><label>끝자리 방식<select id="price-rule-tag-round-mode"><option value="nearest">반올림</option><option value="up">올림</option><option value="down">내림</option></select></label></div></details>
+                      <div class="price-rule-form-actions"><button id="price-rule-tag-delete" class="btn danger" type="button" hidden>계산 태그 삭제</button><button id="price-rule-tag-reset" class="btn" type="button">새 태그</button><button class="btn primary" type="submit">계산 태그 저장</button></div>
+                    </form>
+                  </section>
+                  <section class="price-rule-lab-panel">
+                    <div class="price-rule-lab-panel-head"><div><b>가격 조합</b><span>여러 계산 태그를 원하는 순서로 묶어 상품에 배정합니다.</span></div></div>
+                    <div id="price-rule-set-list" class="price-rule-set-list"></div>
+                    <form id="price-rule-set-form" class="price-rule-editor-form">
+                      <input id="price-rule-set-id" type="hidden">
+                      <label>가격 조합 이름<input id="price-rule-set-name" required maxlength="50" placeholder="예: 10% 할인 + 고정가 + 배송비"></label>
+                      <label>색상<input id="price-rule-set-color" type="color" value="#1558c0"></label>
+                      <div class="price-rule-set-builder"><b>계산 순서</b><div id="price-rule-set-selected" class="price-rule-set-selected"></div><select id="price-rule-set-add"><option value="">계산 태그 추가…</option></select></div>
+                      <div class="price-rule-form-actions"><button id="price-rule-set-delete" class="btn danger" type="button" hidden>가격 조합 삭제</button><button id="price-rule-set-reset" class="btn" type="button">새 가격 조합</button><button class="btn primary" type="submit">가격 조합 저장</button></div>
+                    </form>
+                  </section>
+                </div>
+                <p class="price-rule-lab-foot">예: 판매가 ‘셀피아 +2,000원’ + 스마트스토어 할인 ‘-2,000원’. 할인 태그가 없으면 기존 판매처 할인정보를 보존합니다. 규칙 저장만으로는 상품값이 바뀌지 않습니다.</p>
+                <section class="inbound-cost-rule-panel">
+                  <div class="price-rule-lab-panel-head"><div><b>실입고가 수식태그</b><span>셀피아 매입가를 기준으로 곱하기·나누기·금액 보정을 순서대로 계산합니다. 예: 쌍입고 개당 = ÷2.</span></div></div>
+                  <div class="inbound-cost-rule-grid">
+                    <div id="inbound-cost-tag-list" class="price-rule-tag-list"></div>
+                    <form id="inbound-cost-tag-form" class="price-rule-editor-form">
+                      <input id="inbound-cost-tag-id" type="hidden">
+                      <label>태그 이름<input id="inbound-cost-tag-name" required maxlength="40" placeholder="예: 쌍입고 개당"></label>
+                      <label>색상<input id="inbound-cost-tag-color" type="color" value="#7c3aed"></label>
+                      <div class="inbound-cost-formula-fields"><label>곱하기<input id="inbound-cost-tag-multiply" type="number" min="0.0001" step="0.0001" value="1"></label><label>나누기<input id="inbound-cost-tag-divide" type="number" min="0.0001" step="0.0001" value="1"></label><label>금액 보정<input id="inbound-cost-tag-add" type="number" step="1" value="0"></label></div>
+                      <div class="inbound-cost-formula-fields"><label>끝자리 단위<input id="inbound-cost-tag-round-unit" type="number" min="1" step="1" value="1"></label><label>끝자리 방식<select id="inbound-cost-tag-round-mode"><option value="nearest">반올림</option><option value="up">올림</option><option value="down">내림</option></select></label></div>
+                      <label>설명<input id="inbound-cost-tag-description" maxlength="120" placeholder="예: 두 개 한 쌍으로 입고되는 상품"></label>
+                      <p id="inbound-cost-tag-preview" class="inbound-cost-tag-preview">매입가 × 1 ÷ 1 + 0</p>
+                      <div class="price-rule-form-actions"><button id="inbound-cost-tag-delete" class="btn danger" type="button" hidden>태그 삭제</button><button id="inbound-cost-tag-reset" class="btn" type="button">새 태그</button><button class="btn primary" type="submit">수식태그 저장</button></div>
+                    </form>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </div>
+          <div id="jobs" class="page queue-page">
+            <div class="page-head"><div><h2>내보내기 준비·감사 로그</h2><p>시스템에 저장된 판매처 내보내기 대상을 검증하고 취소·재시도하며 전체 상태 이력을 확인합니다.</p></div><div id="queue-live-status" class="live-data-badge loading">DB 조회 중</div></div>
+            <section class="queue-batch-workspace" aria-label="변경 배치 중심 현황">
+              <header><div><span>작업 배치</span><b>스마트스토어·에이블리 우선 검토</b><em>메이크샵은 수동 작업 예정이며 데이터는 유지됩니다. 판매처 필터에서 직접 선택할 수 있습니다.</em></div><button id="queue-batch-clear" class="btn" type="button" hidden>전체 배치 보기</button></header>
+              <div id="queue-batch-list" class="queue-batch-list"><span class="queue-batch-empty">최근 작업 배치를 불러오는 중입니다.</span></div>
+              <div id="queue-target-safety" class="queue-target-safety"><b>판매처 대상 안전성 확인 중</b><span>중복 대상과 값 충돌을 배치와 함께 확인합니다.</span></div>
+            </section>
+            <section class="queue-summary" aria-label="내보내기 준비 상태 요약">
+              <article><span>처리 대상 작업</span><b id="queue-active-count">-</b><em>작업건 · 대기+검증+실패</em></article>
+              <article class="blue"><span>검증 완료 작업</span><b id="queue-validated-count">-</b><em>작업건 · 내보내기 가능</em></article>
+              <article class="danger"><span>실패 작업</span><b id="queue-failed-count">-</b><em>작업건 · 원인 확인 필요</em></article>
+              <article class="good"><span>반영 완료 이력</span><b id="queue-applied-count">-</b><em>작업건 · 감사이력 보존</em></article>
+            </section>
+            <section id="queue-context-strip" class="queue-context-strip" aria-label="작업 큐 집계 기준">
+              <article><span>전체 상품</span><b id="queue-context-total-sku">-</b><em>System V3 SKU 기준</em></article>
+              <article><span>현재 목록</span><b id="queue-context-current-count">-</b><em id="queue-context-status">선택 필터 · 작업건 기준</em></article>
+              <article><span>판매처 범위</span><b id="queue-context-source">-</b><em>현재 작업 큐 조회 범위</em></article>
+              <article class="unit-note"><span>집계 단위</span><b>작업건 ≠ SKU</b><em>같은 SKU가 판매처·필드별로 여러 건 존재할 수 있음</em></article>
+            </section>
+            <div class="queue-toolbar">
+              <select id="queue-status-filter" aria-label="변경 상태 필터"><option value="active">처리 대상 전체</option><option value="pending">검증 대기</option><option value="validated">검증 완료</option><option value="failed">실패</option><option value="applied">반영 완료</option><option value="saved">DB 내부 저장</option><option value="cancelled">취소</option><option value="all">전체 이력</option></select>
+              <select id="queue-source-filter" aria-label="판매처 필터"><option value="operational">스마트스토어·에이블리</option><option value="all">전체 판매처 (메이크샵 포함)</option><option value="smartstore">스마트스토어</option><option value="makeshop">메이크샵 · 수동</option><option value="ably">에이블리</option></select>
+              <span class="queue-selected">선택 <b id="queue-selected-count">0</b>건</span>
+              <button class="btn" id="queue-refresh">새로고침</button>
+              <button class="btn" id="queue-retry" disabled>실패 재시도</button>
+              <button class="btn danger" id="queue-cancel" disabled>선택 취소</button>
+              <button class="btn primary" id="queue-validate" disabled>선택 검증</button>
+              <button class="btn primary" id="queue-export">원본 내보내기</button>
+              <button class="btn" id="queue-confirm-applied" disabled>업로드 완료 확인</button>
+            </div>
+            <div class="queue-table-shell">
+              <table class="queue-table">
+                <thead><tr><th><input id="queue-select-all" type="checkbox" aria-label="내보내기 준비 전체 선택"></th><th>ID</th><th>셀피아 SKU</th><th>대상</th><th>필드</th><th>변경값</th><th>상태</th><th>재시도</th><th>요청시각</th><th>메시지</th></tr></thead>
+                <tbody id="queue-body"><tr class="queue-empty"><td colspan="10">내보내기 준비 목록을 불러오는 중입니다.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="queue-foot"><span id="queue-result-count">0건</span><p>행을 누르면 해당 변경의 생성·검증·취소·재시도·완료 이력을 확인할 수 있습니다.</p></div>
+            <section id="queue-event-panel" class="queue-event-panel" hidden><div><h3 id="queue-event-title">변경 이력</h3><button id="queue-event-close" aria-label="변경 이력 닫기">×</button></div><div id="queue-event-list"></div></section>
+          </div>
+        </section>
+      </main>
+    </div>
+    <aside id="product-drawer" class="product-drawer" aria-hidden="true">
+      <div class="drawer-head"><div><span>상품 상세 편집</span><h3 id="drawer-sku">1014-1</h3></div><div class="drawer-head-actions"><button id="drawer-prev" aria-label="이전 SKU">‹</button><button id="drawer-next" aria-label="다음 SKU">›</button><button id="close-drawer" aria-label="상세창 닫기">×</button></div></div>
+      <div class="drawer-product"><span class="product-thumb blue">★</span><p><b id="drawer-name">NEW 컬러 큐빅 별 피어싱</b><em id="drawer-option">크리스탈 [PC-7-01]</em></p></div>
+      <div class="drawer-tabs" role="tablist" aria-label="상품 상세 메뉴"><button class="active" data-drawer-tab="connections" role="tab" aria-selected="true">판매처 연결</button><button data-drawer-tab="inventory" role="tab" aria-selected="false">재고·가격</button><button data-drawer-tab="attributes" role="tab" aria-selected="false">속성·태그</button><button data-drawer-tab="history" role="tab" aria-selected="false">변경이력</button></div>
+      <div class="drawer-body">
+        <div class="drawer-summary"><div><span>셀피아 재고</span><b id="drawer-stock">-</b></div><div><span>판매가</span><b id="drawer-price">-</b></div><div><span>연결 판매처</span><b id="drawer-channel-count">-</b></div></div>
+        <div class="drawer-tab-panel active" data-drawer-panel="connections">
+          <div class="drawer-panel-guide"><b>판매처 연결과 표시 정보</b><span>연결 변경과 연결만 해제를 판매처별로 처리합니다. 이름 초안과 내보내기 반영 대기는 연결 상태와 별도로 저장됩니다.</span></div>
+          <section class="drawer-section" id="drawer-smart" data-source="smartstore"><div class="drawer-section-title"><h4><i class="dot smart"></i>스마트스토어</h4><span class="matrix-status pending">조회 중</span></div><div class="form-grid"><label>상품코드<input id="drawer-smart-product" disabled></label><label>옵션코드<input id="drawer-smart-option" disabled></label><label class="form-wide">판매처 상품명<textarea id="drawer-smart-name" data-seller-name="product" rows="2"></textarea></label><label class="form-wide">판매처 옵션명<textarea id="drawer-smart-option-name" data-seller-name="option" rows="2"></textarea></label></div><div class="drawer-section-actions"><button class="drawer-link-btn" data-drawer-link-source="smartstore">원본에서 연결 변경</button><button class="btn danger drawer-disconnect-btn" data-drawer-disconnect-source="smartstore">연결만 해제</button><button class="btn seller-draft-save" data-queue="false">초안 저장</button><button class="btn primary seller-draft-save" data-queue="true">반영 대기 추가</button></div></section>
+          <section class="drawer-section" id="drawer-make" data-source="makeshop"><div class="drawer-section-title"><h4><i class="dot make"></i>메이크샵</h4><span class="matrix-status pending">조회 중</span></div><div class="form-grid"><label>상품코드<input id="drawer-make-product" disabled></label><label>옵션코드<input id="drawer-make-option" disabled></label><label class="form-wide">판매처 상품명<textarea id="drawer-make-name" data-seller-name="product" rows="2"></textarea></label><label class="form-wide">판매처 옵션명<textarea id="drawer-make-option-name" data-seller-name="option" rows="2"></textarea></label></div><div class="drawer-section-actions"><button class="drawer-link-btn" data-drawer-link-source="makeshop">원본에서 연결 변경</button><button class="btn danger drawer-disconnect-btn" data-drawer-disconnect-source="makeshop">연결만 해제</button><button class="btn seller-draft-save" data-queue="false">초안 저장</button><button class="btn primary seller-draft-save" data-queue="true">반영 대기 추가</button></div></section>
+          <section class="drawer-section" id="drawer-ably" data-source="ably"><div class="drawer-section-title"><h4><i class="dot ably"></i>에이블리</h4><span class="matrix-status pending">조회 중</span></div><div class="form-grid"><label>상품코드<input id="drawer-ably-product" disabled></label><label>옵션코드<input id="drawer-ably-option" disabled></label><label class="form-wide">판매처 상품명<textarea id="drawer-ably-name" data-seller-name="product" rows="2"></textarea></label><label class="form-wide">판매처 옵션명<textarea id="drawer-ably-option-name" data-seller-name="option" rows="2"></textarea></label></div><div class="drawer-section-actions"><button class="drawer-link-btn" data-drawer-link-source="ably">원본에서 연결 변경</button><button class="btn danger drawer-disconnect-btn" data-drawer-disconnect-source="ably">연결만 해제</button><button class="btn seller-draft-save" data-queue="false">초안 저장</button><button class="btn primary seller-draft-save" data-queue="true">반영 대기 추가</button></div></section>
+          <section class="drawer-section drawer-link-manager-section">
+            <div class="drawer-section-title"><div><h4>다중·조합·세트 구성</h4><small>현재 SKU가 연결된 판매처 옵션의 구성과 계산재고를 관리합니다.</small></div><button id="drawer-open-multi-links" class="btn">전체 관리 열기</button></div>
+            <div id="drawer-link-manager" class="drawer-link-manager"><div class="drawer-empty-state loading"><b>연결 구성을 불러오는 중입니다.</b><span>1:1, 1:N, 세트 구성품을 함께 조회합니다.</span></div></div>
+          </section>
+        </div>
+        <div class="drawer-tab-panel" data-drawer-panel="inventory" hidden>
+          <div class="drawer-panel-guide"><b>판매처 원본 기준 재고·가격 수정안</b><span>값을 저장해도 원본 파일은 즉시 바뀌지 않습니다. 매트릭스에서 검토한 뒤 내보내기 단계에서 반영됩니다.</span></div>
+          <div id="drawer-inventory-list" class="drawer-inventory-list"></div>
+        </div>
+        <div class="drawer-tab-panel" data-drawer-panel="attributes" hidden>
+          <div class="drawer-panel-guide"><b>상품 공통 속성과 SKU 예외 태그</b><span>소재·상품군·형태와 상품 태그는 상품코드의 모든 옵션에 공유됩니다. SKU 태그만 현재 옵션에 적용됩니다.</span></div>
+          <div id="drawer-attributes-content"><div class="drawer-empty-state loading"><b>속성·태그를 불러오는 중입니다.</b><span>현재 SKU의 영구 저장값을 확인합니다.</span></div></div>
+        </div>
+        <div class="drawer-tab-panel" data-drawer-panel="history" hidden>
+          <div class="drawer-history-head"><div><b>SKU 변경이력</b><span>판매처 연결과 내보내기 준비 감사로그를 최신순으로 표시합니다.</span></div><button id="drawer-history-refresh" class="btn">새로고침</button></div>
+          <div id="drawer-history-list" class="drawer-history-list"><div class="drawer-empty-state"><b>변경이력을 불러오지 않았습니다.</b><span>탭을 열면 Supabase에서 조회합니다.</span></div></div>
+        </div>
+      </div>
+      <div class="drawer-foot"><p id="drawer-foot-status">판매처명 초안과 실제 반영 대기를 분리해 저장합니다.</p><button class="btn" id="drawer-cancel">닫기</button></div>
+    </aside>
+    <div id="drawer-backdrop" class="drawer-backdrop"></div>
+    <div id="view-settings-modal" class="modal-backdrop" hidden>
+      <section class="view-settings-modal" role="dialog" aria-modal="true" aria-labelledby="view-settings-title">
+        <div class="modal-head"><div><span>매트릭스 프리셋</span><h3 id="view-settings-title">보기 설정</h3></div><button id="close-view-settings" aria-label="보기 설정 닫기">×</button></div>
+        <div class="view-settings-body">
+          <label class="preset-name-label">프리셋 이름<input id="preset-name" maxlength="30" placeholder="예: 스마트스토어 재고 확인"></label>
+          <div class="view-settings-grid">
+            <fieldset><legend>판매처 표시</legend><label><input id="preset-channel-smartstore" type="checkbox"> 스마트스토어</label><label><input id="preset-channel-makeshop" type="checkbox"> 메이크샵</label><label><input id="preset-channel-ably" type="checkbox"> 에이블리</label></fieldset>
+            <fieldset><legend>표시 데이터</legend><label><input id="preset-show-codes" type="checkbox"> 상품·옵션코드</label><label><input id="preset-show-seller-names" type="checkbox"> 판매처 상품명·옵션명</label><label><input id="preset-show-inventory" type="checkbox"> 재고</label><label><input id="preset-show-price" type="checkbox"> 가격</label><label><input id="preset-show-discount" type="checkbox"> 할인정보</label><label><input id="preset-show-attributes" type="checkbox"> 소재·상품군·태그</label><label><input id="preset-show-sync" type="checkbox"> 최근 동기화</label><label><input id="preset-wrap-names" type="checkbox"> 상품명 두 줄 이상 표시</label><label><input id="preset-exclude-combination-skus" type="checkbox"> 조합 SKU 제외</label><label><input id="preset-include-related-sku-context" type="checkbox"> 관계 SKU 함께 보기</label></fieldset>
+          </div>
+          <div class="view-settings-selects">
+            <label>연결상태<select id="preset-status"><option value="all">전체</option><option value="connected">연결 완료</option><option value="unmatched">미매칭</option></select></label>
+            <label>정렬 기준<select id="preset-sort"><option value="sku_asc">SKU 오름차순</option><option value="stock_desc">셀피아 재고 많은 순</option><option value="price_desc">셀피아 가격 높은 순</option><option value="updated_desc">최근 갱신 순</option></select></label>
+            <label>표 배율<select id="preset-zoom"><option value="80">80%</option><option value="85">85%</option><option value="90">90%</option><option value="95">95%</option><option value="100">100%</option><option value="105">105%</option><option value="110">110%</option><option value="115">115%</option><option value="120">120%</option><option value="125">125%</option><option value="130">130%</option><option value="135">135%</option><option value="140">140%</option></select></label>
+            <label>이미지 크기<select id="preset-image-size"><option value="compact">작게</option><option value="default">기본</option><option value="large">크게</option></select></label>
+          </div>
+          <section class="view-settings-admin-action" aria-label="전체 데이터 관리 작업">
+            <div><b>전체 컬럼 원본값 갱신</b><span>현재 검색·필터와 무관하게 선택한 시스템 기준 컬럼의 전체 DB SKU를 대상으로 합니다.</span></div>
+            <button id="view-settings-bulk-source-refresh" class="btn" type="button">갱신 범위 확인</button>
+          </section>
+          <p class="view-settings-note">재고·가격 표시를 끄면 셀피아 기준 영역의 재고·가격·매입·발주 관련 열도 함께 숨겨집니다. ‘조합 SKU 제외’는 상위 SKU가 명시된 종속 SKU만 숨기며, 과거 다중 연결은 임의로 추측해 숨기지 않습니다. ‘관계 SKU 함께 보기’는 검색어가 있을 때만 작동하며, 직접 일치 SKU의 상위·하위 관계를 보조 행으로 표시합니다. SKU 오름차순은 999 → 1000 → 10000처럼 숫자 크기로 정렬됩니다.</p>
+        </div>
+        <div class="modal-foot preset-modal-foot"><button class="btn danger" id="delete-preset" hidden>삭제</button><button class="btn" id="duplicate-preset">복제</button><span></span><button class="btn" id="apply-view-settings">현재 보기에 적용</button><button class="btn primary" id="save-view-preset">내 프리셋 저장</button></div>
+      </section>
+    </div>
+    <div id="bulk-source-refresh-modal" class="modal-backdrop" hidden>
+      <section class="bulk-source-refresh-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-source-refresh-title">
+        <div class="modal-head"><div><span>전체 DB 관리 작업</span><h3 id="bulk-source-refresh-title">컬럼 전체 원본값 갱신</h3></div><button id="bulk-source-refresh-close" type="button" aria-label="컬럼 전체 원본값 갱신 닫기">×</button></div>
+        <div class="bulk-source-refresh-body">
+          <div class="bulk-source-refresh-warning"><b>현재 화면이 아니라 전체 DB가 대상입니다.</b><span>검색어·페이지·보기 설정과 관계없이 선택한 컬럼의 모든 SKU를 검사합니다. 먼저 미리보기만 실행되며 이 단계에서는 값이 바뀌지 않습니다.</span></div>
+          <fieldset id="bulk-source-refresh-columns" class="bulk-source-refresh-columns"><legend>원본값을 적용할 컬럼</legend>
+            <label><input type="checkbox" value="system_stock"><span><b>기준재고</b><em>셀피아 원본 재고 → 시스템 기준재고</em></span></label>
+            <label><input type="checkbox" value="system_base_price"><span><b>기준가격</b><em>셀피아 원본 판매가 → 시스템 기준가격</em></span></label>
+            <label><input type="checkbox" value="sellpia_purchase_price"><span><b>매입가</b><em>셀피아 원본 매입가 → 시스템 매입가</em></span></label>
+            <label><input type="checkbox" value="sellpia_order_unit"><span><b>발주단위</b><em>셀피아 원본 발주단위 → 시스템 발주단위</em></span></label>
+            <label><input type="checkbox" value="sellpia_minimum_order_unit"><span><b>최소발주단위</b><em>셀피아 원본 최소발주단위 → 시스템 최소발주단위</em></span></label>
+          </fieldset>
+          <div id="bulk-source-refresh-preview" class="bulk-source-refresh-preview" hidden>
+            <div class="bulk-source-refresh-preview-head"><div><b>미리보기 완료</b><span id="bulk-source-refresh-preview-time">DB 값을 변경하지 않고 집계했습니다.</span></div><button id="bulk-source-refresh-preview-reset" class="btn" type="button">컬럼 다시 선택</button></div>
+            <div id="bulk-source-refresh-preview-cards" class="bulk-source-refresh-preview-cards"></div>
+            <label class="bulk-source-refresh-confirm-label">실행 확인<span>아래 문구를 그대로 입력해야 실제 갱신할 수 있습니다.</span><strong id="bulk-source-refresh-confirm-phrase">-</strong><input id="bulk-source-refresh-confirm" autocomplete="off" spellcheck="false" placeholder="확인 문구 입력"></label>
+            <p class="bulk-source-refresh-execution-note">실입고가는 이 작업에서 제외됩니다. 미리보기 후 원본이 달라진 행만 저장하고, 완료 뒤 매트릭스를 다시 조회합니다.</p>
+          </div>
+          <section id="bulk-source-refresh-progress" class="bulk-source-refresh-progress" aria-live="polite" hidden>
+            <div id="bulk-source-refresh-progress-summary" class="bulk-source-refresh-progress-summary"></div>
+            <ol id="bulk-source-refresh-progress-phases" class="bulk-source-refresh-progress-phases"></ol>
+          </section>
+          <div id="bulk-source-refresh-error" class="bulk-source-refresh-error" hidden></div>
+        </div>
+        <div class="modal-foot"><button id="bulk-source-refresh-cancel" class="btn" type="button">취소</button><span></span><button id="bulk-source-refresh-preview-run" class="btn primary" type="button">영향 미리보기</button><button id="bulk-source-refresh-apply" class="btn danger" type="button" hidden disabled>전체 DB 갱신 실행</button></div>
+      </section>
+    </div>
+    <div id="advanced-filter-modal" class="modal-backdrop" hidden>
+      <section class="advanced-filter-modal" role="dialog" aria-modal="true" aria-labelledby="advanced-filter-title">
+        <div class="modal-head"><div><span>서버 상세 조회</span><h3 id="advanced-filter-title">상세 조건 필터</h3></div><button id="advanced-filter-close" aria-label="상세 필터 닫기">×</button></div>
+        <div class="advanced-filter-body">
+          <div class="advanced-filter-intro">
+            <div><b>조건 결합</b><span>최대 12개 조건을 전체 또는 일부 만족 방식으로 조합합니다.</span></div>
+            <select id="advanced-filter-logic" aria-label="조건 결합 방식"><option value="and">모든 조건 만족 (AND)</option><option value="or">한 조건 이상 만족 (OR)</option></select>
+          </div>
+          <label class="advanced-filter-field-search"><span>필드 찾기</span><input id="advanced-filter-field-search" type="search" autocomplete="off" placeholder="플랫폼·그룹·필드명 검색 (예: 스마트 재고)"></label>
+          <div class="advanced-filter-columns" aria-hidden="true"><span>필드</span><span>조건</span><span>비교값</span><span></span></div>
+          <div id="advanced-filter-rows" class="advanced-filter-rows"></div>
+          <button id="advanced-filter-add" class="advanced-filter-add" type="button">＋ 조건 추가</button>
+          <p class="advanced-filter-note">상품명·옵션명·코드는 문자 조건, 재고·가격은 숫자 조건으로 처리합니다. 태그와 속성도 같은 프리셋에 저장됩니다.</p>
+        </div>
+        <div class="modal-foot"><button class="btn" id="advanced-filter-reset" type="button">조건 초기화</button><span></span><button class="btn" id="advanced-filter-cancel" type="button">취소</button><button class="btn primary" id="advanced-filter-apply" type="button">필터 적용</button></div>
+      </section>
+    </div>
+    <div id="code-list-modal" class="modal-backdrop" hidden>
+      <section class="code-list-modal" role="dialog" aria-modal="true" aria-labelledby="code-list-title">
+        <div class="modal-head"><div><span>코드 순서 그대로 상품 모으기</span><h3 id="code-list-title">엑셀 코드목록 불러오기</h3></div><button id="code-list-close" aria-label="엑셀 코드목록 닫기">×</button></div>
+        <div class="code-list-body">
+          <div class="code-list-guide">
+            <div><b>필요한 코드 열만</b><span>셀피아 한 열만 쓰거나, 여러 판매처 열을 함께 쓸 수 있습니다. 각 행에는 코드 하나만 입력해주세요.</span></div>
+            <table aria-label="엑셀 코드목록 양식"><thead><tr><th>셀피아</th><th>스마트스토어</th><th>메이크샵</th><th>에이블리</th></tr></thead><tbody><tr><td>1014-1</td><td></td><td></td><td></td></tr><tr><td></td><td>4680371525-50094640701</td><td></td><td></td></tr><tr><td></td><td></td><td>2085501</td><td></td></tr></tbody></table>
+            <p>판매처 상품코드만 입력하면 모든 옵션을, <b>상품코드-옵션코드</b>를 입력하면 해당 옵션만 찾습니다. 코드는 하이픈으로 분리하지 않고 DB의 실제 조합과 비교합니다.</p>
+          </div>
+          <input id="code-list-file" type="file" accept=".xlsx,.xls,.csv" hidden>
+          <button id="code-list-dropzone" class="code-list-dropzone" type="button"><strong>엑셀 파일을 놓거나 선택하세요</strong><span>XLSX · XLS · CSV / 첫 번째 시트 사용</span></button>
+          <div id="code-list-progress" class="code-list-progress" hidden><div><b id="code-list-progress-title">파일 확인 중</b><span id="code-list-progress-detail">0행</span></div><div class="progress"><i id="code-list-progress-bar" style="width:0%"></i></div></div>
+          <div id="code-list-result" class="code-list-result" hidden>
+            <div class="code-list-summary"><p><span>입력 행</span><b id="code-list-input-count">0</b></p><p><span>매칭 SKU</span><b id="code-list-match-count">0</b></p><p><span>매핑 필요</span><b id="code-list-unmapped-count">0</b></p><p><span>코드 없음</span><b id="code-list-missing-count">0</b></p></div>
+            <div id="code-list-issues" class="code-list-issues"></div>
+          </div>
+        </div>
+        <div class="modal-foot"><button class="btn" id="code-list-reset">다른 파일 선택</button><span></span><button class="btn" id="code-list-cancel">취소</button><button class="btn primary" id="code-list-apply" disabled>매칭 상품 모아보기</button></div>
+      </section>
+    </div>
+    <div id="listing-link-modal" class="modal-backdrop" hidden>
+      <section class="listing-link-modal" role="dialog" aria-modal="true" aria-labelledby="listing-link-title">
+        <div class="modal-head"><div><span id="listing-link-kicker">판매처 조합 연결</span><h3 id="listing-link-title">조합 연결 관리</h3></div><button id="listing-link-close" aria-label="조합 연결 관리 닫기">×</button></div>
+        <div class="listing-link-body">
+          <section class="listing-link-scope" aria-label="현재 관리 기준">
+            <div><span>관리 기준</span><b id="listing-link-seller-key">-</b><em id="listing-link-seller-name">판매처 상품을 확인합니다.</em></div>
+            <div><span>누른 매트릭스 행</span><b id="listing-link-anchor-sku">-</b><em>연결 구성 전체를 표시합니다.</em></div>
+          </section>
+          <div id="listing-link-summary" class="listing-link-summary">현재 연결을 불러오는 중입니다.</div>
+          <div id="listing-link-components" class="listing-link-components"><div class="listing-link-empty loading">연결된 셀피아 SKU를 확인하고 있습니다.</div></div>
+          <button id="listing-link-add-toggle" class="listing-link-add-toggle" type="button">+ SKU 추가 연결</button>
+          <form id="listing-link-add-form" class="listing-link-add-form" hidden>
+            <div><label>셀피아 SKU<input id="listing-link-add-sku" required autocomplete="off" placeholder="예: 10016-2"></label><label>구성수량<input id="listing-link-add-qty" type="number" min="1" step="1" value="1" required></label><label>역할<select id="listing-link-add-role"><option value="additional">추가 구성</option><option value="primary">기준 구성</option></select></label></div>
+            <p>저장하면 이 판매처 옵션에 SKU가 추가됩니다. 판매처 원본값은 바뀌지 않습니다.</p>
+            <div><button id="listing-link-add-cancel" class="btn" type="button">취소</button><button id="listing-link-add-save" class="btn primary" type="submit">SKU 연결 저장</button></div>
+          </form>
+        </div>
+        <div class="modal-foot"><span id="listing-link-foot-note">연결 해제 이력은 DB에 보존됩니다.</span><button id="listing-link-done" class="btn primary" type="button">닫기</button></div>
+      </section>
+    </div>
+    <section id="mapping-popover" class="mapping-popover" hidden aria-label="판매처 원본 검색">
+      <div class="mapping-popover-head"><div><span id="mapping-source-label">판매처</span><h3><b id="mapping-target-sku">-</b> 연결 상품 찾기</h3></div><button id="close-mapping-popover" aria-label="검색창 닫기">×</button></div>
+      <div class="mapping-search"><span>⌕</span><input id="mapping-search-input" placeholder="코드 또는 상품명 / 옵션명 교집합 검색" autocomplete="off"></div>
+      <p id="mapping-search-help">최신 원본 데이터에서 검색합니다.</p>
+      <div id="mapping-search-results" class="mapping-search-results"><div class="mapping-empty">검색어를 입력해주세요.</div></div>
+    </section>
+    <div id="price-popover" class="price-popover" hidden></div>
+    <div id="discount-editor-modal" class="modal-backdrop" hidden>
+      <section class="discount-editor-modal" role="dialog" aria-modal="true" aria-labelledby="discount-editor-title">
+        <div class="modal-head"><div><span id="discount-editor-kicker">판매처 할인정보</span><h3 id="discount-editor-title">할인 수정</h3></div><button id="discount-editor-close" aria-label="할인 수정 닫기">×</button></div>
+        <div class="discount-editor-body">
+          <div class="discount-editor-product"><span>판매처 상품코드</span><b id="discount-editor-product-code">-</b><em id="discount-editor-group-size">상품의 모든 옵션에 함께 저장</em></div>
+          <div id="discount-editor-smartstore" class="discount-editor-control" hidden>
+            <label>기본 즉시할인 <span><input id="discount-editor-amount" type="number" min="0" step="1" inputmode="numeric" value="0"><b>원</b></span></label>
+            <p>스마트스토어 기본할인은 금액으로만 수정합니다. 0원을 저장하면 기본할인을 해제합니다.</p>
+          </div>
+
+          <div id="discount-editor-makeshop" class="discount-editor-control" hidden>
+            <label>기간 할인코드<select id="discount-editor-rule-code"><option value="NONE">NONE · 기간할인 없음</option><option value="M10">M10 · 10% / 십원 절사</option><option value="M15">M15 · 15% / 십원 절사</option><option value="M20">M20 · 20% / 백원 절사</option></select></label>
+            <p>코드를 고르면 메이크샵 기간할인 값과 절사 단위가 함께 고정됩니다.</p>
+          </div>
+          <fieldset class="discount-calculation-mode">
+            <legend>가격 계산 방식</legend>
+            <label><input type="radio" name="discount-calculation-mode" value="forward" checked><span><b>정방향</b><em>판매가 유지 · 할인 적용 후 최종판가 변경</em></span></label>
+            <label><input type="radio" name="discount-calculation-mode" value="reverse-base"><span><b>최종판가 유지</b><em>옵션가 유지 · 할인 적용 후 판매가 역산</em></span></label>
+          </fieldset>
+          <div class="discount-editor-anchor"><span>가격 계산 기준</span><b id="discount-editor-anchor-source">현재 판매가 확인 중</b><em><span id="discount-editor-anchor-price-label">예상 최종구매가</span> <strong id="discount-editor-anchor-final-price">-</strong></em></div>
+          <div class="discount-editor-preview"><span id="discount-editor-preview-label">현재 판매가 유지</span><b id="discount-editor-base-price">-</b><i>→</i><span>할인 적용가</span><strong id="discount-editor-preview-price">-</strong></div>
+          <p id="discount-editor-preview-note" class="discount-editor-preview-note">수동 할인 수정은 판매가를 역산하지 않습니다. 판매가는 유지되고 최종구매가만 달라집니다.</p>
+          <div class="discount-editor-preserved"><b>조건부 할인은 그대로 보존</b><span id="discount-editor-preserved-terms">보존할 조건부 할인 없음</span></div>
+        </div>
+        <div class="modal-foot"><button class="btn" id="discount-editor-cancel">취소</button><button class="btn primary" id="discount-editor-save">상품 전체 수정안 저장</button></div>
+      </section>
+    </div>
+    <div id="change-modal" class="modal-backdrop" hidden>
+      <section class="change-modal"><div class="modal-head"><div><span>변경사항 미리보기</span><h3>판매처 반영 전 최종 확인</h3></div><button id="close-change-modal">×</button></div><div class="modal-summary"><div><span>변경 상품</span><b id="modal-products">1개</b></div><div><span>변경 항목</span><b id="modal-count">1건</b></div><div><span>영향 판매처</span><b>연결된 판매처</b></div></div><div id="change-list" class="change-list"></div><div class="modal-notice"><b>DB 운영값은 즉시 저장</b><span>판매처 반영값은 작업 대기에 등록되고 성공 후 최종값으로 표시됩니다.</span></div><div class="modal-foot"><button class="btn" id="modal-back">돌아가기</button><button class="btn primary" id="apply-sellpia-changes">선택 변경사항 저장</button></div></section>
+    </div>
+    <div id="seller-export-modal" class="modal-backdrop" hidden>
+      <section class="seller-export-modal" role="dialog" aria-modal="true" aria-labelledby="seller-export-title">
+        <div class="modal-head"><div><span id="seller-export-kicker">판매처 원본 파일 생성</span><h3 id="seller-export-title">현재 데이터 내보내기</h3></div><button id="seller-export-close" aria-label="원본 내보내기 닫기">×</button></div>
+        <div class="seller-export-body">
+          <div class="seller-export-guide"><b id="seller-export-guide-title">최신 보관 원본에 현재 저장된 수정값을 반영해 내보냅니다.</b><span id="seller-export-guide-detail">수정값이 없어도 최신 원본 전체를 내보냅니다. 변경 셀은 노랑·굵은 글씨로 표시합니다.</span></div>
+          <div class="seller-export-sources">
+            <label data-export-source="smartstore"><input class="seller-export-source-check" type="checkbox" value="smartstore" checked><i class="dot smart"></i><span><b>스마트스토어</b><em>가장 마지막 업로드 원본</em></span><strong class="seller-original-state">최신 원본 확인 중</strong></label>
+            <label data-export-source="makeshop"><input class="seller-export-source-check" type="checkbox" value="makeshop"><i class="dot make"></i><span><b>메이크샵</b><em>수동 작업 예정 · 필요할 때 직접 선택</em></span><strong class="seller-original-state">최신 원본 확인 중</strong></label>
+            <label data-export-source="ably"><input class="seller-export-source-check" type="checkbox" value="ably" checked><i class="dot ably"></i><span><b>에이블리</b><em>가장 마지막 업로드 원본</em></span><strong class="seller-original-state">최신 원본 확인 중</strong></label>
+          </div>
+          <fieldset id="seller-export-scope" class="seller-export-scope">
+            <legend>내보내기 범위</legend>
+            <label><input type="radio" name="seller-export-scope" value="filtered"><span><b>현재 검색·필터 결과</b><em id="seller-export-filtered-count">현재 조건에 해당하는 SKU만 반영</em></span></label>
+            <label><input id="seller-export-selected-scope" type="radio" name="seller-export-scope" value="selected"><span><b>선택한 셀 범위의 SKU</b><em id="seller-export-selected-count">선택한 SKU 없음</em></span></label>
+            <label><input id="seller-export-tag-scope" type="radio" name="seller-export-scope" value="tag"><span><b>태그 적용 SKU</b><em id="seller-export-tag-count">태그를 선택하면 전체 적용 SKU를 확인합니다.</em></span></label>
+            <label><input type="radio" name="seller-export-scope" value="all"><span><b>전체 상품</b><em>검색·필터와 관계없이 전체 SKU의 저장된 가격 반영</em></span></label>
+            <div id="seller-export-tag-picker" class="seller-export-tag-picker" hidden><label for="seller-export-tag-select">태그</label><select id="seller-export-tag-select"><option value="">태그 선택</option></select><span>실제 내보내기 범위는 서버에서 다시 확인합니다.</span></div>
+          </fieldset>
+          <fieldset id="seller-export-price-mode" class="seller-export-scope"><legend>가격 계산</legend>
+            <label><input type="radio" name="seller-export-price-mode" value="rules" checked><span><b>수식 적용</b><em>기존 방식 그대로</em></span></label>
+            <label><input type="radio" name="seller-export-price-mode" value="sellpia_source"><span><b>셀피아 판매가 기준</b><em>스마트스토어 · 태그/선택 SKU 가격만 우회 계산</em></span></label>
+          </fieldset>
+          <div id="seller-export-preview" class="seller-export-preview"><span id="seller-export-preview-label">대상 수정안 · 실행 시 안전검사</span><b id="seller-export-preview-count">확인 중</b><em id="seller-export-preview-detail">선택한 판매처와 범위를 확인합니다.</em></div>
+          <div id="seller-export-source-price-detail" class="direct-export-preview" hidden></div>
+          <div id="seller-export-progress" class="seller-export-progress" hidden><div><b id="seller-export-progress-title">준비 중</b><span id="seller-export-progress-percent">0%</span></div><i><span id="seller-export-progress-bar"></span></i><p id="seller-export-progress-detail">원본을 확인합니다.</p></div>
+          <details id="seller-export-exclusions" class="seller-export-progress" hidden>
+            <summary id="seller-export-exclusions-title">제외 사유 보기</summary>
+            <p id="seller-export-exclusions-summary" style="white-space:pre-line"></p>
+            <button id="seller-export-exclusions-download" type="button">전체 제외 목록 CSV 저장</button>
+            <p>아래는 최대 50건입니다. 전체 목록은 CSV와 생성된 ZIP에 기록됩니다. 제외된 값은 원본 파일에 적용하지 않습니다.</p>
+            <div style="max-height:220px;overflow:auto"><table style="width:100%;font-size:12px"><thead><tr><th>판매처</th><th>셀피아 SKU</th><th>상품 / 옵션코드</th><th>제외 사유</th></tr></thead><tbody id="seller-export-exclusions-rows"></tbody></table></div>
+          </details>
+        </div>
+        <div class="modal-foot"><button class="btn" id="seller-export-cancel">취소</button><button class="btn" id="seller-export-price-preview" hidden>셀피아 가격 미리보기</button><button class="btn primary" id="seller-export-run">최신 가격 파일 만들기</button></div>
+      </section>
+    </div>
+    <div id="matrix-csv-modal" class="modal-backdrop" hidden>
+      <section class="matrix-csv-modal" role="dialog" aria-modal="true" aria-labelledby="matrix-csv-title">
+        <div class="modal-head"><div><span>현재 조회 결과 저장</span><h3 id="matrix-csv-title">상세 필터 CSV 내보내기</h3></div><button id="matrix-csv-close" aria-label="CSV 내보내기 닫기">×</button></div>
+        <div class="matrix-csv-body">
+          <div class="matrix-csv-summary"><div><span>내보낼 결과</span><b id="matrix-csv-count">0행</b></div><p id="matrix-csv-filter-summary">현재 검색·필터·정렬 조건을 그대로 사용합니다.</p></div>
+          <fieldset class="matrix-csv-scope">
+            <legend>CSV 열 범위</legend>
+            <label><input type="radio" name="matrix-csv-scope" value="visible" checked><span><b>현재 보기 열</b><em>지금 표시 중인 판매처와 재고·가격·속성 열만 저장</em></span></label>
+            <label><input type="radio" name="matrix-csv-scope" value="all"><span><b>전체 운영 열</b><em>원본값·수정안 상태·판매상태·기준시각까지 포함</em></span></label>
+          </fieldset>
+          <div id="matrix-csv-progress" class="matrix-csv-progress" hidden>
+            <div><b id="matrix-csv-progress-title">CSV 준비 중</b><span id="matrix-csv-progress-percent">0%</span></div>
+            <i><span id="matrix-csv-progress-bar"></span></i>
+            <p id="matrix-csv-progress-detail">서버에서 첫 데이터 묶음을 불러옵니다.</p>
+          </div>
+          <p class="matrix-csv-note">한글은 UTF-8 BOM으로, 상품·옵션코드는 엑셀에서 지수표기나 앞자리 0 손실이 없도록 텍스트로 저장합니다.</p>
+        </div>
+        <div class="modal-foot"><button class="btn" id="matrix-csv-cancel">취소</button><button class="btn primary" id="matrix-csv-run">CSV 만들기</button></div>
+      </section>
+    </div>
+    <div id="price-rule-bulk-modal" class="modal-backdrop" hidden>
+      <section class="price-rule-bulk-modal" role="dialog" aria-modal="true" aria-labelledby="price-rule-bulk-title">
+        <div class="modal-head"><div><span>선택한 SKU와 판매처별 규칙 지정</span><h3 id="price-rule-bulk-title">선택 SKU 가격 조합 배정</h3></div><button id="price-rule-bulk-close" aria-label="선택 SKU 가격 조합 배정 닫기">×</button></div>
+        <div class="price-rule-bulk-body">
+          <div class="price-rule-bulk-note"><b>이 단계에서는 판매처 가격을 바꾸지 않습니다.</b><span>가격 조합 배정만 DB에 저장하고, 실제 판매가·옵션가 내보내기 값은 다음 검토 단계에서 별도로 만듭니다.</span></div>
+          <div class="price-rule-bulk-workspace">
+            <section class="price-rule-bulk-targets">
+              <div class="price-rule-bulk-section-head"><b>1. 적용 대상</b><span>선택한 컬럼과 관계없이 셀이 속한 SKU 행만 사용합니다.</span></div>
+              <fieldset class="price-rule-bulk-scopes"><legend>선택된 상품</legend>
+                <label><input type="radio" name="price-rule-bulk-scope" value="selected" checked><span><b>선택한 셀이 속한 행</b><em id="price-rule-bulk-selected-count">0개 SKU</em><small>SKU 기준으로 중복 없이 적용</small></span></label>
+              </fieldset>
+              <fieldset class="price-rule-bulk-sources"><legend>배정할 판매처</legend><label><input type="checkbox" value="smartstore" checked><span class="dot smart"></span>스마트스토어</label><label><input type="checkbox" value="makeshop"><span class="dot make"></span>메이크샵 (수동 선택)</label><label><input type="checkbox" value="ably" checked><span class="dot ably"></span>에이블리</label></fieldset>
+              <label class="price-rule-bulk-set">저장된 가격 조합<select id="price-rule-bulk-set"><option value="">가격 조합 선택…</option></select><span id="price-rule-bulk-set-summary">저장된 계산 순서를 상품에 배정합니다.</span></label>
+            </section>
+            <section class="price-rule-bulk-composer" aria-labelledby="price-rule-bulk-composer-title">
+              <div class="price-rule-bulk-section-head"><div><b id="price-rule-bulk-composer-title">2. 새 가격 조합 만들기</b><span>기존 계산 태그를 골라 순서대로 묶습니다.</span></div><button id="price-rule-bulk-composer-reset" class="btn" type="button">초기화</button></div>
+              <div class="price-rule-bulk-composer-fields">
+                <label>가격 조합 이름<input id="price-rule-bulk-composer-name" maxlength="50" placeholder="예: 판매가 +4,000원 · 즉시할인 -1,000원"></label>
+                <label>계산 태그 추가<select id="price-rule-bulk-composer-add"><option value="">계산 태그 선택…</option></select></label>
+              </div>
+              <div id="price-rule-bulk-composer-steps" class="price-rule-bulk-composer-steps"><p>계산 태그를 하나 이상 추가해주세요.</p></div>
+              <div class="price-rule-bulk-composer-foot"><span>각 SKU의 시스템 기준가격에서 이 순서대로 계산합니다.</span><button id="price-rule-bulk-composer-save" class="btn primary" type="button" disabled>조합 저장 후 선택</button></div>
+            </section>
+          </div>
+          <div id="price-rule-bulk-progress" class="price-rule-bulk-progress" hidden><div><b id="price-rule-bulk-progress-title">배정 준비</b><span id="price-rule-bulk-progress-percent">0%</span></div><i><span id="price-rule-bulk-progress-bar"></span></i><p id="price-rule-bulk-progress-detail">상품 범위를 확인합니다.</p></div>
+        </div>
+        <div class="modal-foot"><button id="price-rule-bulk-cancel" class="btn" type="button">취소</button><button id="price-rule-bulk-run" class="btn" type="button">규칙 배정 저장</button><button id="price-rule-bulk-stage" class="btn primary" type="button">배정 규칙으로 가격 수정안 생성</button></div>
+      </section>
+    </div>
+    <div id="inbound-cost-modal" class="modal-backdrop" hidden>
+      <section class="inbound-cost-modal" role="dialog" aria-modal="true" aria-labelledby="inbound-cost-modal-title">
+        <div class="modal-head"><div><span id="inbound-cost-modal-sku">셀피아 SKU</span><h3 id="inbound-cost-modal-title">실입고가 설정</h3></div><button id="inbound-cost-modal-close" aria-label="실입고가 설정 닫기">×</button></div>
+        <div class="inbound-cost-modal-body">
+          <div class="inbound-cost-source-summary"><span>셀피아 매입가 <b id="inbound-cost-source-price">-</b></span><span>발주단위 <b id="inbound-cost-source-order-unit">-</b></span><span>최소발주단위 <b id="inbound-cost-source-min-unit">-</b></span></div>
+          <fieldset class="inbound-cost-modes"><legend>실입고가 입력 방식</legend><label><input type="radio" name="inbound-cost-mode" value="empty"><span><b>미설정</b><em>확정되지 않은 값은 빈칸으로 표시</em></span></label><label><input type="radio" name="inbound-cost-mode" value="manual"><span><b>직접 입력</b><em>확인한 개당 실입고가 저장</em></span></label><label><input type="radio" name="inbound-cost-mode" value="formula"><span><b>수식태그</b><em>셀피아 매입가에서 자동 계산</em></span></label></fieldset>
+          <label id="inbound-cost-manual-field">직접 입력 금액<input id="inbound-cost-manual" type="number" min="0" step="1"></label>
+          <label id="inbound-cost-formula-field">수식태그<select id="inbound-cost-formula"><option value="">수식태그 선택…</option></select></label>
+          <div id="inbound-cost-linked-formula" class="inbound-cost-linked-formula" hidden></div>
+          <div class="inbound-cost-preview"><span>저장될 실입고가</span><b id="inbound-cost-preview">-</b><em id="inbound-cost-preview-equation">입력 방식을 선택해주세요.</em></div>
+        </div>
+        <div class="modal-foot"><button id="inbound-cost-modal-cancel" class="btn" type="button">취소</button><button id="inbound-cost-modal-save" class="btn primary" type="button">실입고가 저장</button></div>
+      </section>
+    </div>
+    <aside id="relation-edge-editor-drawer" class="relation-edge-editor-drawer" aria-labelledby="relation-edge-editor-title" hidden>
+      <header>
+        <div><span>선택 관계 수정</span><h3 id="relation-edge-editor-title">상위·하위 관계</h3></div>
+        <button id="relation-edge-editor-close" type="button" aria-label="관계 수정 패널 닫기">×</button>
+      </header>
+      <p id="relation-edge-editor-copy">우클릭한 관계의 상위와 하위를 확인한 뒤 저장하세요.</p>
+      <label>상위 상품<select id="relation-edge-editor-parent"><option value="">상위를 선택해주세요</option></select></label>
+      <div class="relation-edge-editor-arrow">↓</div>
+      <label>하위 상품<select id="relation-edge-editor-child"><option value="">하위를 선택해주세요</option></select></label>
+      <div class="relation-edge-editor-boundary"><b>이 작업이 바꾸는 것</b><span>관계 화면의 상위·하위 연결 한 건만 수정합니다. 상품 원본·가격·재고는 바꾸지 않습니다.</span></div>
+      <section class="relation-edge-history" aria-label="선택 관계 변경 이력">
+        <header><div><b>변경 이력</b><span>현재 상태와 정확히 이어지는 최신 변경만 되돌릴 수 있습니다.</span></div><button id="relation-edge-history-refresh" type="button">새로고침</button></header>
+        <div id="relation-edge-history-list"><span>관계 이력을 불러오는 중입니다.</span></div>
+      </section>
+      <footer><button id="relation-edge-editor-cancel" class="btn" type="button">취소</button><button id="relation-edge-editor-save" class="btn primary" type="button" disabled>선택 관계 수정 저장</button></footer>
+    </aside>
+    <div id="relation-image-modal" class="modal-backdrop" hidden>
+      <section class="relation-image-modal" role="dialog" aria-modal="true" aria-labelledby="relation-image-title">
+        <div class="modal-head"><div><span>관계 상품 이미지</span><h3 id="relation-image-title">상품 이미지 확대</h3></div><button id="relation-image-close" type="button" aria-label="상품 이미지 확대 닫기">×</button></div>
+        <div class="relation-image-modal-body"><img id="relation-image-preview" alt=""><div><b id="relation-image-product-name">상품명</b><span id="relation-image-option-name">옵션명</span></div></div>
+      </section>
+    </div>
+    <div id="multi-link-sku-action-modal" class="modal-backdrop" hidden>
+      <section class="multi-link-sku-action-modal" role="dialog" aria-modal="true" aria-labelledby="multi-link-sku-action-title">
+        <div class="modal-head"><div><span>선택 행 작업</span><h3 id="multi-link-sku-action-title">SKU 구성·재고</h3></div><button id="multi-link-sku-action-close" type="button" aria-label="SKU 구성·재고 닫기">×</button></div>
+        <div id="multi-link-sku-action-body" class="multi-link-sku-action-body"></div>
+      </section>
+    </div>
+    <div id="multi-link-workspace-context-menu" class="matrix-context-menu multi-link-workspace-context-menu" role="menu" aria-label="연결 행 작업" hidden>
+      <span>선택 행 작업</span>
+      <button id="multi-link-context-open-sku" type="button" role="menuitem"><b>SKU 구성·재고</b><em>구성수량·종속·계산재고</em></button>
+    </div>
+    <div id="selected-source-refresh-modal" class="modal-backdrop" hidden>
+      <section class="selected-source-refresh-modal" role="dialog" aria-modal="true" aria-labelledby="selected-source-refresh-title">
+        <div class="modal-head">
+          <div><span>현재 화면 선택 작업</span><h3 id="selected-source-refresh-title">선택 셀 원본값 갱신</h3></div>
+          <button id="selected-source-refresh-close" type="button" aria-label="선택 셀 원본값 갱신 닫기">×</button>
+        </div>
+        <div class="selected-source-refresh-body">
+          <div id="selected-source-refresh-scope" class="selected-source-refresh-scope"><b>선택 범위 확인 중</b><span>DB를 변경하지 않고 영향을 미리 확인합니다.</span></div>
+          <div id="selected-source-refresh-counts" class="selected-source-refresh-counts" aria-live="polite"></div>
+          <div class="selected-source-refresh-boundary"><b>처리 범위</b><span>현재 화면에서 선택한 셀과 그 셀이 대표하는 SKU만 처리합니다. 전체 DB 컬럼 갱신과는 별도 작업입니다.</span></div>
+          <div id="selected-source-refresh-results" class="selected-source-refresh-results"></div>
+          <div id="selected-source-refresh-error" class="selected-source-refresh-error" role="alert" hidden></div>
+        </div>
+        <div class="modal-foot">
+          <button id="selected-source-refresh-cancel" class="btn" type="button">닫기</button>
+          <span></span>
+          <button id="selected-source-refresh-retry" class="btn" type="button" hidden>실패 항목만 다시 미리보기</button>
+          <button id="selected-source-refresh-apply" class="btn primary" type="button" hidden disabled>확인된 대상 갱신 실행</button>
+        </div>
+      </section>
+    </div>
+    <div id="matrix-context-menu" class="matrix-context-menu" role="menu" aria-label="선택 셀 작업" hidden>
+      <span>선택 셀 작업</span>
+      <button id="matrix-context-source-refresh" class="source-refresh" type="button" role="menuitem">
+        <b>원본값으로 갱신</b>
+        <em id="matrix-context-source-refresh-count">갱신할 셀 없음</em>
+      </button>
+      <button id="matrix-context-product-copy" class="product-copy" type="button" role="menuitem">
+        <b>같은 상품코드 복제</b>
+        <em id="matrix-context-product-copy-detail">복제할 행을 선택해주세요</em>
+      </button>
+      <button id="matrix-context-option-add" class="option-link" type="button" role="menuitem">
+        <b>남은 옵션 추가</b>
+        <em id="matrix-context-option-add-detail">상품코드를 먼저 복제해주세요</em>
+      </button>
+      <button id="matrix-context-price-basis" class="price-basis" type="button" role="menuitem">
+        <b id="matrix-context-price-basis-label">기준가격 SKU 선택</b>
+        <em id="matrix-context-price-basis-detail">셀피아 상품코드 그룹을 확인해주세요</em>
+      </button>
+      <button id="matrix-context-disconnect" class="danger" type="button" role="menuitem">
+        <b>연결 해제</b>
+        <em id="matrix-context-disconnect-count">해제할 연결 없음</em>
+      </button>
+    </div>
+    <div id="toast" class="toast" role="status"></div>
+    <div id="mapping-import-modal" class="modal-backdrop" hidden>
+      <div class="seller-export-modal" role="dialog" aria-modal="true" aria-labelledby="mapping-import-title" style="width:min(1100px,96vw);max-height:90vh;overflow:auto">
+        <div class="modal-head"><h3 id="mapping-import-title">매칭값 일괄 업로드</h3></div>
+        <div style="padding:16px">
+          <p>셀피아 SKU 기준으로 판매처 연결을 등록합니다. 빈 판매처 칸은 기존 연결 유지, 상품코드만 있고 옵션코드가 비어 있으면 옵션 없는 상품으로 검사합니다.</p>
+          <p>엑셀 첫 시트 또는 CSV · 최대 20,000행 / 20MB · 코드는 텍스트 형식으로 입력해주세요. 기존 수동 연결과 같은 방식으로 등록하며 재고·가격 값은 변경하지 않습니다.</p>
+          <div class="bundle-template-actions"><button id="mapping-import-template" class="btn" type="button">셀피아 SKU 미매칭 양식</button><button id="mapping-import-seller-template" class="btn" type="button">판매처 SKU 미매칭 양식</button></div>
+          <p>셀피아 SKU 양식은 셀피아 기준으로 비연결 SKU를, 판매처 SKU 양식은 판매처별로 셀피아 연결이 없는 상품·옵션을 채웁니다. 판매처 SKU 양식에서는 B열 셀피아 SKU를 채운 뒤 그대로 업로드하세요.</p>
+          <input id="mapping-import-file" type="file" accept=".xlsx,.xls,.csv" aria-label="매칭값 파일 선택">
+          <p id="mapping-import-status" role="status" aria-live="polite">파일을 선택해주세요.</p>
+          <p>아래는 최대 100건입니다. 전체 검사·저장 결과는 CSV로 확인할 수 있습니다. 기존 연결 변경 건을 확인한 뒤 등록해주세요.</p>
+          <div style="max-height:45vh;overflow:auto"><table class="relation-import-table"><thead><tr><th>행</th><th>셀피아 SKU</th><th>판매처</th><th>이전 상품 / 옵션</th><th>등록 상품 / 옵션</th><th>상태</th><th>사유 / 상품명</th></tr></thead><tbody id="mapping-import-rows"></tbody></table></div>
+        </div>
+        <div class="modal-foot"><button id="mapping-import-report" class="btn" type="button" disabled>전체 결과 CSV</button><button id="mapping-import-cancel" class="btn" type="button">닫기</button><button id="mapping-import-apply" class="btn primary" type="button" disabled>등록 가능한 매칭값 적용</button></div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="./vendor/exceljs.min.js?v=20260910-rule-destination-v111"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
+    <script src="./seller-source-parsers.js?v=20260917-medium-contract-v1"></script>
+    <script src="./seller-export-adapter.js?v=20260922-makeshop-batch-row-patch-v2"></script>
+    <script src="./matrix-csv-export.js?v=20260910-rule-destination-v111"></script>
+    <script src="./discount-price-math.js?v=20260914-matrix-visible-export-v2"></script>
+    <script src="./source-refresh-verifier.js?v=20260910-rule-destination-v111"></script>
+    <script src="./relation-import-parser.js?v=20260910-rule-destination-v111"></script>
+    <script src="./bundle-import-parser.js?v=20260910-rule-destination-v111"></script>
+    <script src="./seller-bundle-import-parser.js?v=20260910-rule-destination-v111"></script>
+    <script src="./sellpia-source-parser.js?v=20260910-rule-destination-v111"></script>
+    <script src="./sellpia-inventory-count.js?v=20261001-inventory-count-v1"></script>
+    <script src="./sellpia-carrier-export.js?v=20260920-sellpia-carrier-v1"></script>
+    <link rel="stylesheet" href="./matrix-shadow.css?v=20260917-matrix-compact-v1">
+    <script src="./value-state-model.js?v=20260917-shadow-preview-v1"></script>
+    <script src="./release-policy.js?v=20260917-shadow-preview-v1"></script>
+    <script src="./source-lifecycle.js?v=20260917-shadow-preview-v1"></script>
+    <script src="./baseline-identity-shadow.js?v=20260917-shadow-preview-v1"></script>
+    <script src="./matrix-shadow.js?v=20260919-full-scope-v12"></script>
+    <script src="./baseline-canary.js?v=20260917-shadow-preview-v1"></script>
+    <script src="./matrix-multilisting.js?v=20261001-matrix-multilisting-v1"></script>
+  <script src="./data-service.js?v=20261001-matrix-multilisting-v1"></script>
+    <script src="./channels-page.js?v=20260910-rule-destination-v111"></script>
+    <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
+    <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
+    <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
+  <script src="./app.js?v=20261001-matrix-multilisting-v1"></script>
+    <script src="./mapping-import.js?v=20260910-rule-destination-v111"></script>
+    <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
+    <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
+    <script src="./ably-stock-export.js?v=20260917-ably-stock-x-v1"></script>
+    <script src="./ably-price-projection.js?v=20260929-ably-carrier-policy-v1"></script>
+    <script src="./ably-playauto-export.js?v=20260929-ably-carrier-policy-v1"></script>
+    <script src="./ably-combinations.js?v=20260917-ably-stock-x-v1"></script>
+    <script src="./ably-combination-lab.js?v=20260910-rule-destination-v111"></script>
+    <script src="./ably-pair-generator.js?v=20260917-ably-stock-x-v1"></script>
+<script src="./ably-workspace.js?v=20260917-ably-stock-x-v1"></script>
+<script src="./platform-price-formula.js?v=20260910-rule-destination-v111"></script>
+<script>window.HubPriceWorkspaceEnabled=true;</script>
+<script src="./tag-price-workspace.js?v=20260917-tags-representative-ui-v1"></script>
+<script src="./rule-registry.js?v=20260921-inbound-won-round-v1"></script>
+<script src="./platform-rule-service.js?v=20260915-settings-direct-v1"></script>
+<script src="./price-result-materializer.js?v=20260921-bounded-source-refresh-v1"></script>
+<script src="./current-price-export.js?v=20261001-seller-fanout-v1"></script>
+<script src="./representative-price.js?v=20260917-tags-representative-ui-v1"></script>
+<script src="./representative-price-workspace.js?v=20260917-tags-representative-ui-v1"></script>
+<script src="./rule-workspace.js?v=20260918-tag-partial-v2"></script>
+      <script src="./ui-cleanup-v1.js?v=20260915-tag-matrix-v1"></script>
+      <script src="./tag-management-v2.js?v=20260929-ably-carrier-policy-v1"></script>
+      <script src="./seller-file-workflow-v2.js?v=20261001-seller-fanout-v1"></script>
+  </body>
+</html>

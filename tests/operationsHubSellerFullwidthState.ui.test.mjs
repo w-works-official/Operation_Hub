@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {createRequire} from 'node:module';
+const require=createRequire((process.env.CODEX_NODE_MODULES||'C:/Users/hihi0/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules')+'/ui-test.cjs');
+const {chromium}=require('playwright');
+const browser=await chromium.launch({channel:'msedge',headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:1600,height:1000}});
+ await page.route('**/*',route=>route.abort());
+ await page.setContent('<div id="jobs"><div class="page-head"></div><section class="queue-batch-workspace">history</section></div>');
+ await page.evaluate(()=>{
+  window.qa={recalculations:[]};
+  window.SystemV3Data={loadAuxiliarySellerFiles:async()=>({rows:[]}),loadLatestSellerOriginalStatus:async()=>[]};
+  window.SystemV3SellerExportBridge={previewCarrier:async()=>{throw Error('RPC scoped read · statement timeout');}};
+  window.HubPriceMaterializer={materialize:async payload=>{const {onProgress,...request}=payload;qa.recalculations.push(structuredClone(request));onProgress?.({phase:'persist',totalSkus:2,completedSkus:2,persistedRows:10,errorRows:0});return {generationId:77,totalSkus:2,completedSkus:2,persistedRows:10,errorRows:0,status:'complete'};}};
+ });
+ await page.addStyleTag({content:fs.readFileSync('mockups/operations-hub/seller-file-workflow-v2.css','utf8')});
+ await page.addScriptTag({content:fs.readFileSync('mockups/operations-hub/seller-file-workflow-v2.js','utf8')});
+ const cards=page.locator('.export-channel-card');assert.equal(await cards.count(),3);
+ const boxes=await cards.evaluateAll(nodes=>nodes.map(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};}));
+ assert.ok(boxes.every(box=>box.width>1400));assert.ok(boxes[0].y<boxes[1].y&&boxes[1].y<boxes[2].y);
+ assert.equal(await page.locator('[data-seller-panel="ably"] #export-preview-v2').count(),1);
+ assert.equal(await page.locator('.seller-export-history').getAttribute('open'),null);
+ await page.locator('[data-seller-scope-mode="smartstore"]').selectOption('manual');
+ await page.locator('[data-seller-scope-manual="smartstore"]').fill('S-1 S-2 S-1');
+ await page.locator('[data-standard-recalculate="smartstore"]').click();
+ await page.waitForFunction(()=>qa.recalculations.length===1);
+ const recovery=await page.evaluate(()=>{const {onProgress,...payload}=qa.recalculations[0];return payload;});
+ assert.deepEqual(recovery,{skus:['S-1','S-2'],sources:['smartstore'],reason:'seller-export-timeout-recovery:smartstore',activeRulesOnly:true,maxAffectedSkus:5000});
+ assert.match(await page.locator('[data-standard-result="smartstore"]').textContent(),/generation 77/);
+ const panel=page.locator('[data-seller-panel="smartstore"]');
+ await page.locator('[data-standard-carrier-input="smartstore"]').setInputFiles({name:'small.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('sample')});
+ await page.waitForFunction(()=>document.querySelector('[data-seller-panel="smartstore"]').dataset.state==='error');
+ assert.equal(await panel.locator('[data-standard-progress]').isVisible(),false);
+ assert.equal(await panel.locator('[data-standard-result]').isVisible(),true);
+ assert.match(await panel.textContent(),/statement timeout/);
+ await page.evaluate(()=>{
+  window.SystemV3SellerExportBridge.previewCarrier=async()=>({plan:{kind:'TransformationPlan',summary:{total:3,matched:3,changed:1,blocked:0},preview:[],canGenerate:true,safety:{reason:'safe'},timings:{total_ms:10}}});
+ });
+ await panel.getByRole('button',{name:'재시도',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('[data-seller-panel="smartstore"]').dataset.state==='preview');
+ assert.equal(await panel.locator('[data-seller-recovery]').isVisible(),false);
+ assert.equal(await panel.locator('[data-standard-progress]').isVisible(),false);
+ assert.equal(await panel.locator('.transformation-plan-preview').isVisible(),true);
+ await page.locator('[data-seller-reset="smartstore"]').click();
+ assert.equal(await panel.getAttribute('data-state'),'idle');
+ assert.equal(await panel.locator('[data-standard-result]').isVisible(),false);
+ assert.match(await page.locator('[data-selected-carrier="smartstore"]').textContent(),/선택한 파일 없음/);
+ await page.evaluate(()=>{window.SystemV3SellerExportBridge.previewCarrier=()=>new Promise(resolve=>window.releaseCarrier=resolve);});
+ await page.locator('[data-standard-carrier-input="smartstore"]').setInputFiles({name:'late.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('sample')});
+ await page.waitForFunction(()=>typeof window.releaseCarrier==='function');
+ assert.equal(await panel.getAttribute('data-state'),'processing');
+ await page.locator('[data-seller-reset="smartstore"]').click();
+ await page.evaluate(()=>window.releaseCarrier({plan:{kind:'TransformationPlan',summary:{},preview:[]}}));
+ await page.waitForTimeout(30);
+ assert.equal(await panel.getAttribute('data-state'),'idle');
+ console.log('PASS: seller full-width rows, shared Ably panel, folded history, error/retry/reset, late preview discarded; network writes=0');
+}finally{await browser.close();}

@@ -1,0 +1,32 @@
+.inventory-summary-panel{margin-bottom:10px;padding:13px}
+.inventory-summary-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.inventory-summary-head>div:first-child{display:grid;gap:3px}
+.inventory-summary-head span{color:#64748b;font-size:8px;font-weight:900}
+.inventory-summary-head b{font-size:11px}
+.inventory-summary-head em{color:#8492a6;font-size:7px;font-style:normal}
+.inventory-summary-actions{display:flex;gap:6px}
+.inventory-metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:12px}
+.inventory-metrics article{border:1px solid var(--line-soft);border-radius:7px;background:#f8fafc;padding:9px}
+.inventory-metrics article span{display:block;color:#718096;font-size:7px}
+.inventory-metrics article strong{display:block;margin-top:4px;font-size:16px}
+.inventory-metrics article.accent{border-color:#a9c9f5;background:#f1f6ff}
+.inventory-metrics article.accent strong{color:#1558c0}
+.inventory-table-panel{overflow:hidden}
+.inventory-toolbar{min-height:48px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--line);background:#f8fafc;padding:7px 9px}
+.inventory-toolbar .search-box{width:min(360px,40vw)}
+.inventory-toolbar select{height:34px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:0 28px 0 9px;color:#475569;font-size:9px;font-weight:800}
+.inventory-toolbar>span{margin-left:auto;color:#64748b;font-size:8px;font-weight:900}
+.inventory-table-wrap{max-height:calc(100vh - 405px);min-height:260px;overflow:auto}
+.inventory-table{min-width:930px}
+.inventory-table th{position:sticky;top:0;z-index:2}
+.inventory-table th:nth-child(n+3),.inventory-table td:nth-child(n+3):not(:last-child){text-align:right}
+.inventory-table td{height:38px}
+.inventory-table .inventory-actual{color:#1558c0;font-size:10px;font-weight:1000}
+.inventory-table .inventory-added{color:#16814b;font-weight:900}
+.inventory-table .inventory-zero{color:#94a3b8}
+.inventory-table .inventory-event{color:#718096;font-size:7px;text-align:left}
+.inventory-empty{height:210px!important;color:#94a3b8!important;text-align:center!important}
+.inventory-foot{min-height:38px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);background:#fbfcfe;padding:0 10px;color:#718096;font-size:7px}
+.inventory-foot b{color:#526277}
+.inventory-loading{opacity:.6;pointer-events:none}
+@media(max-width:860px){.inventory-metrics{grid-template-columns:repeat(2,1fr)}.inventory-summary-head{align-items:flex-start;flex-direction:column}.inventory-toolbar{flex-wrap:wrap}.inventory-toolbar .search-box{width:100%}}

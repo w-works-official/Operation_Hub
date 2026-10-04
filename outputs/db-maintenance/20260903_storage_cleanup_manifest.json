@@ -1,0 +1,79 @@
+{
+  "captured_at": "2026-09-03T03:26:53.825439+00:00",
+  "project_ref": "bpgvqmtsjgegnrdzmpep",
+  "database_bytes_before": 575974547,
+  "policy": {
+    "sellpia_ready_snapshots_to_keep": 2,
+    "cron_job_run_days_to_keep": 7,
+    "preserve_exported_items": true,
+    "pricing_reset_archives_changed": false
+  },
+  "snapshots_to_remove": [
+    {
+      "snapshot_id": "fc3b00e7-82fa-4f54-8a20-fe3bb7a55af6",
+      "created_at": "2026-08-12T07:08:22.222304+00:00",
+      "source_file_name": "exported-list_2026-07-16_12.23.36.xlsx | exported-list_2026-07-16_12.23.45.xlsx | exported-list_2026-07-16_12.23.53.xlsx",
+      "source_file_size": 6451848,
+      "source_row_count": 27223,
+      "valid_row_count": 27223,
+      "invalid_row_count": 0,
+      "child_rows": 27223
+    },
+    {
+      "snapshot_id": "32c873cb-ca30-4d00-a310-6e581186f314",
+      "created_at": "2026-08-20T03:52:25.172129+00:00",
+      "source_file_name": "exported-list_2026-08-20_12.25.16.csv | exported-list_2026-08-20_12.25.17 (1).csv | exported-list_2026-08-20_12.25.17.csv",
+      "source_file_size": 16824783,
+      "source_row_count": 24233,
+      "valid_row_count": 24233,
+      "invalid_row_count": 0,
+      "child_rows": 24233
+    }
+  ],
+  "export_batches": [
+    {
+      "export_batch_id": "851c770a-5d2f-496a-8360-769022afcace",
+      "created_at": "2026-08-14T05:22:11.103322+00:00",
+      "batch_status": "failed",
+      "items_to_remove": 10504,
+      "exported_items_preserved": 0
+    },
+    {
+      "export_batch_id": "e0e068f2-4e4c-465f-958e-6c4fdf8bda39",
+      "created_at": "2026-08-14T05:57:03.344115+00:00",
+      "batch_status": "exported",
+      "items_to_remove": 9830,
+      "exported_items_preserved": 674
+    },
+    {
+      "export_batch_id": "f15bf888-4d19-4782-a46a-1cc1919a3169",
+      "created_at": "2026-08-14T06:59:23.538262+00:00",
+      "batch_status": "exported",
+      "items_to_remove": 9830,
+      "exported_items_preserved": 674
+    }
+  ],
+  "expected": {
+    "snapshot_parent_rows_removed": 2,
+    "snapshot_child_rows_removed_by_cascade": 51456,
+    "failed_or_cancelled_export_items_removed": 30164,
+    "exported_items_preserved": 1348,
+    "cron_rows_older_than_7_days_at_dry_run": 23148,
+    "pricing_archive_rows_preserved": 8234
+  },
+  "completed": {
+    "database_bytes_after": 384158867,
+    "database_reduction_bytes": 191815680,
+    "database_reduction_percent": 33.3,
+    "ready_snapshots_remaining": 2,
+    "latest_snapshot_rows": 23936,
+    "matrix_rows_verified": 23936,
+    "failed_or_cancelled_export_items_removed": 30164,
+    "exported_items_preserved": 1351,
+    "retention_job_schedule_utc": "23 18 * * *",
+    "retention_job_schedule_kst": "03:23 daily",
+    "refresh_jobs_active": true,
+    "waiting_locks": 0,
+    "pricing_archive_rows_preserved": 8234
+  }
+}

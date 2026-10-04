@@ -1,0 +1,3 @@
+-- User canceled order integration. Preserve history while disabling both public and private entry points.
+revoke execute on function public.list_operations_hub_order_stock_v1(text,date,integer),public.save_operations_hub_order_stock_v1(text,uuid,date,text,jsonb),public.undo_operations_hub_order_stock_v1(text,uuid),public.list_operations_hub_stock_history_v1(text) from public,anon,authenticated;
+revoke execute on function operations_private.inventory_list(text,date,integer),operations_private.inventory_save(text,uuid,date,text,jsonb),operations_private.inventory_undo(text,uuid),operations_private.inventory_history(text) from public,anon,authenticated;

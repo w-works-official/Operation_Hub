@@ -1,0 +1,1125 @@
+/*
+ * Operations Hub workspace scale layer
+ *
+ * Baseline: 27-inch FHD (1920x1080) at 100% Windows scaling.
+ * This file changes presentation only. It intentionally contains no state,
+ * behavior, or data-contract selectors.
+ */
+
+.multi-link-page,
+.price-rule-page,
+.price-rule-bulk-modal {
+  --ui-workspace-caption: 12px;
+  --ui-workspace-body: 13px;
+  --ui-workspace-control: 14px;
+  --ui-workspace-title: 18px;
+  --ui-workspace-control-height: 40px;
+  --ui-workspace-button-height: 40px;
+  --ui-workspace-card-radius: 10px;
+  --ui-workspace-line-height: 1.45;
+}
+
+/* Multi-link page heading and two-column workspace */
+.multi-link-page .page-head p,
+.multi-link-page .multi-link-head-note span {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .multi-link-head-note b {
+  font-size: 13px;
+}
+
+.multi-link-page .multi-link-layout {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.multi-link-page .relation-folder-panel,
+.multi-link-page .relation-workspace {
+  padding: 16px;
+}
+
+/* User folders */
+.multi-link-page .relation-folder-head {
+  margin-bottom: 12px;
+}
+
+.multi-link-page .relation-folder-head span {
+  font-size: var(--ui-workspace-caption);
+}
+
+.multi-link-page .relation-folder-head b {
+  margin-top: 4px;
+  font-size: 16px;
+}
+
+.multi-link-page .relation-folder-head button {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 20px;
+}
+
+.multi-link-page .relation-folder-list {
+  gap: 6px;
+}
+
+.multi-link-page .relation-folder-item {
+  gap: 4px;
+  margin-left: calc(var(--folder-depth) * 16px);
+}
+
+.multi-link-page .relation-folder-list > button,
+.multi-link-page .relation-folder-item > button:first-child {
+  min-height: 44px;
+  height: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.multi-link-page .relation-folder-item > button:first-child span i {
+  font-size: 11px;
+}
+
+.multi-link-page .relation-folder-actions {
+  gap: 2px;
+}
+
+.multi-link-page .relation-folder-actions button {
+  width: 30px;
+  height: 36px;
+  font-size: 13px;
+}
+
+.multi-link-page .relation-folder-form {
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 9px;
+}
+
+.multi-link-page .relation-folder-form > b,
+.multi-link-page .relation-folder-form label,
+.multi-link-page .relation-folder-note {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-folder-form input,
+.multi-link-page .relation-folder-form select {
+  height: var(--ui-workspace-control-height);
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: var(--ui-workspace-control);
+}
+
+.multi-link-page .relation-folder-form .btn {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* Relation list / graph header and controls */
+.multi-link-page .relation-workspace-head {
+  gap: 20px;
+  padding: 18px 20px;
+}
+
+.multi-link-page .relation-workspace-head > div:first-child > span,
+.multi-link-page .relation-workspace-head p {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-workspace-head h3 {
+  margin-top: 4px;
+  font-size: 20px;
+}
+
+.multi-link-page .relation-workspace-actions {
+  gap: 9px;
+}
+
+.multi-link-page .relation-workspace-search {
+  width: min(420px, 34vw);
+  height: var(--ui-workspace-control-height);
+  padding: 0 12px;
+  border-radius: 8px;
+}
+
+.multi-link-page .relation-workspace-search > span {
+  font-size: 20px;
+}
+
+.multi-link-page .relation-workspace-search input {
+  height: 38px;
+  font-size: var(--ui-workspace-control);
+}
+
+.multi-link-page .relation-view-switch {
+  height: var(--ui-workspace-control-height);
+  border-radius: 8px;
+}
+
+.multi-link-page .relation-view-switch button,
+.multi-link-page .relation-workspace-actions > .btn {
+  min-height: var(--ui-workspace-button-height);
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.multi-link-page .relation-edge-summary {
+  padding: 12px 20px;
+}
+
+.multi-link-page .relation-edge-summary b,
+.multi-link-page .relation-edge-summary span {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-edge-list {
+  padding: 16px;
+}
+
+.multi-link-page .relation-edge-row {
+  grid-template-columns: minmax(280px, 1fr) 120px minmax(280px, 1fr);
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.multi-link-page .relation-compact-node {
+  min-height: 72px;
+  gap: 9px;
+  padding: 13px 14px;
+  border-radius: var(--ui-workspace-card-radius);
+}
+
+.multi-link-page .relation-compact-node > div span {
+  font-size: var(--ui-workspace-caption);
+}
+
+.multi-link-page .relation-compact-node > div b {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.multi-link-page .relation-compact-node > em,
+.multi-link-page .relation-compact-node > button,
+.multi-link-page .relation-edge-action span,
+.multi-link-page .relation-edge-action button {
+  min-height: 26px;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+
+.multi-link-page .relation-edge-action i {
+  font-size: 24px;
+}
+
+.multi-link-page .relation-workspace-empty,
+.multi-link-page .relation-workspace-empty b {
+  font-size: var(--ui-workspace-body);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-workspace-empty b {
+  font-size: 15px;
+}
+
+/* Full relationship tree */
+.multi-link-page .relation-graph-board {
+  padding: 16px;
+}
+
+.multi-link-page .relation-tree-head > div b {
+  font-size: 15px;
+}
+
+.multi-link-page .relation-tree-head > div span,
+.multi-link-page .relation-tree-head button {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-tree {
+  padding: 14px;
+}
+
+.multi-link-page .relation-graph-columns {
+  grid-auto-columns: 330px;
+  gap: 42px;
+}
+
+.multi-link-page .relation-graph-column > header span,
+.multi-link-page .relation-graph-column > header b {
+  font-size: var(--ui-workspace-caption);
+}
+
+.multi-link-page .relation-graph-node {
+  gap: 6px;
+  min-height: 74px;
+  padding: 12px;
+  border-radius: 9px;
+}
+
+.multi-link-page .relation-graph-node > span,
+.multi-link-page .relation-graph-node > em,
+.multi-link-page .relation-graph-parent-links button {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.multi-link-page .relation-graph-node > b {
+  font-size: 14px;
+}
+
+/* Product loader and relationship editor */
+.multi-link-page .multi-link-organization-form,
+.multi-link-page .relation-compose-panel {
+  padding: 16px;
+}
+
+.multi-link-page .multi-link-form-guide b,
+.multi-link-page .relation-product-loader label,
+.multi-link-page .multi-link-organization-form label,
+.multi-link-page .relation-single-link-fallback > summary {
+  font-size: var(--ui-workspace-caption);
+}
+
+.multi-link-page .multi-link-form-guide span,
+.multi-link-page .relation-board-products > span {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-product-loader {
+  grid-template-columns: 190px minmax(300px, 1fr) 170px;
+  gap: 12px;
+  padding: 15px;
+}
+
+.multi-link-page .relation-product-loader select,
+.multi-link-page .relation-product-loader input,
+.multi-link-page .multi-link-organization-form input,
+.multi-link-page .multi-link-organization-form select {
+  height: var(--ui-workspace-control-height);
+  padding: 0 11px;
+  font-size: var(--ui-workspace-control);
+}
+
+.multi-link-page .relation-product-loader .btn,
+.multi-link-page .multi-link-organization-form > .btn {
+  min-height: var(--ui-workspace-button-height);
+  font-size: 13px;
+}
+
+.multi-link-page .relation-board-products article {
+  min-width: 290px;
+  min-height: 54px;
+  padding: 10px 12px;
+}
+
+.multi-link-page .relation-board-products article span,
+.multi-link-page .relation-board-products article em {
+  font-size: 11px;
+}
+
+.multi-link-page .relation-board-products article b {
+  font-size: 13px;
+}
+
+/* Excel relation / bundle import */
+.multi-link-page .relation-import-panel > summary {
+  min-height: 48px;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.multi-link-page .relation-import-panel > summary span {
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+}
+
+.multi-link-page .relation-import-panel > summary b {
+  font-size: 14px;
+}
+
+.multi-link-page .relation-import-panel > summary em,
+.multi-link-page .relation-import-guide span,
+.multi-link-page .bundle-template-actions span {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-import-body {
+  gap: 12px;
+  padding: 15px;
+}
+
+.multi-link-page .relation-import-guide > div {
+  gap: 6px 9px;
+  padding: 12px;
+}
+
+.multi-link-page .relation-import-guide b,
+.multi-link-page .relation-import-guide code {
+  font-size: 13px;
+}
+
+.multi-link-page .relation-import-dropzone {
+  min-height: 104px;
+  padding: 18px;
+}
+
+.multi-link-page .relation-import-dropzone strong {
+  font-size: 14px;
+}
+
+.multi-link-page .relation-import-dropzone span,
+.multi-link-page .relation-import-result,
+.multi-link-page .relation-import-result table {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-import-actions .btn,
+.multi-link-page .bundle-template-actions .btn {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* Option dependency drag board */
+.multi-link-page .relation-board-toolbar,
+.multi-link-page .relation-board-savebar {
+  padding: 14px 16px;
+}
+
+.multi-link-page .relation-board-toolbar > div:first-child b,
+.multi-link-page .relation-board-savebar > div b {
+  font-size: 15px;
+}
+
+.multi-link-page .relation-board-toolbar > div:first-child span,
+.multi-link-page .relation-board-savebar > div span {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-board-toolbar .btn,
+.multi-link-page .relation-board-savebar .btn {
+  min-height: 38px;
+  font-size: 13px;
+}
+
+.multi-link-page .relation-drag-board {
+  min-height: 460px;
+  padding: 14px;
+}
+
+.multi-link-page .relation-board-canvas {
+  min-height: 430px;
+  grid-auto-columns: minmax(330px, 360px);
+  gap: 32px;
+}
+
+.multi-link-page .relation-board-column {
+  min-height: 420px;
+}
+
+.multi-link-page .relation-board-column > header {
+  min-height: 52px;
+  padding: 12px;
+}
+
+.multi-link-page .relation-board-column > header span,
+.multi-link-page .relation-board-column > header em,
+.multi-link-page .relation-board-parent-lane > header b {
+  font-size: 11px;
+}
+
+.multi-link-page .relation-board-column > header b,
+.multi-link-page .relation-board-parent-lane > header span {
+  font-size: 13px;
+}
+
+.multi-link-page .relation-board-column p,
+.multi-link-page .relation-board-parent-lane p,
+.multi-link-page .relation-board-column-drop,
+.multi-link-page .relation-board-parent-drop {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .relation-board-column-drop,
+.multi-link-page .relation-board-parent-drop {
+  min-height: 46px;
+  padding: 12px;
+}
+
+.multi-link-page .relation-board-node {
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  min-height: 94px;
+  gap: 10px;
+  padding: 12px 28px;
+  border-radius: 10px;
+  transition: border-color .15s, box-shadow .15s, opacity .15s, transform .15s;
+}
+
+.multi-link-page .relation-board-node-image {
+  width: 54px;
+  height: 54px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+.multi-link-page .relation-board-node-copy span {
+  font-size: var(--ui-workspace-caption);
+}
+
+.multi-link-page .relation-board-node-copy b {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.multi-link-page .relation-board-node-copy strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.multi-link-page .relation-board-node-copy em {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.multi-link-page .relation-board-node-actions button {
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.multi-link-page .relation-board-port {
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;
+  border-width: 4px;
+}
+
+.multi-link-page .relation-board-port.input {
+  left: -11px;
+}
+
+.multi-link-page .relation-board-port.output {
+  right: -11px;
+}
+
+.multi-link-page .relation-board-link {
+  stroke-width: 4;
+  opacity: .95;
+}
+
+.multi-link-page .relation-board-link.preview {
+  stroke-width: 5;
+}
+
+.multi-link-page .relation-board-node.dragging {
+  opacity: .72;
+  transform: scale(1.015);
+  outline: 3px solid #8ab4ff;
+  box-shadow: 0 12px 26px #2563eb2b;
+}
+
+.multi-link-page .relation-board-drag-ghost {
+  border: 2px solid #2563eb;
+  border-radius: 10px;
+  opacity: .98;
+  box-shadow: 0 18px 38px #0f172a45;
+}
+
+.multi-link-page .relation-board-drop-active {
+  transform: scale(1.02);
+  box-shadow: inset 0 0 0 3px #2563eb, 0 9px 24px #2563eb30;
+}
+
+/* Canonical and seller-specific bundle workspaces */
+.multi-link-page .bundle-management-panel > summary {
+  min-height: 54px;
+  padding: 14px 16px;
+}
+
+.multi-link-page .bundle-management-panel > summary > span {
+  width: 40px;
+  height: 32px;
+  font-size: 11px;
+}
+
+.multi-link-page .bundle-management-panel > summary > b {
+  font-size: 16px;
+}
+
+.multi-link-page .bundle-management-panel > summary > em,
+.multi-link-page .bundle-management-head > div span,
+.multi-link-page .seller-bundle-notice em,
+.multi-link-page .seller-bundle-boundary {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.multi-link-page .bundle-management-body {
+  gap: 14px;
+  padding: 16px;
+}
+
+.multi-link-page .bundle-target-switch button {
+  min-width: 180px;
+  min-height: var(--ui-workspace-button-height);
+  padding: 10px 16px;
+  font-size: 13px;
+}
+
+.multi-link-page .bundle-management-head > div b,
+.multi-link-page .seller-bundle-notice b {
+  font-size: 14px;
+}
+
+.multi-link-page .bundle-search-form input,
+.multi-link-page .bundle-component-form input,
+.multi-link-page .bundle-component-form select,
+.multi-link-page .seller-bundle-target-form input,
+.multi-link-page .seller-bundle-target-form select,
+.multi-link-page .seller-bundle-component-form input {
+  height: var(--ui-workspace-control-height);
+  font-size: var(--ui-workspace-control);
+}
+
+.multi-link-page .bundle-search-form .btn,
+.multi-link-page .bundle-component-form .btn,
+.multi-link-page .seller-bundle-target-form .btn,
+.multi-link-page .seller-bundle-component-form .btn {
+  min-height: var(--ui-workspace-button-height);
+  font-size: 13px;
+}
+
+.multi-link-page .bundle-empty {
+  min-height: 112px;
+  font-size: var(--ui-workspace-body);
+}
+
+.multi-link-page .bundle-card > header,
+.multi-link-page .seller-bundle-card > header {
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  min-height: 82px;
+  padding: 12px 14px;
+}
+
+.multi-link-page .bundle-card-copy span,
+.multi-link-page .bundle-component-copy span,
+.multi-link-page .seller-bundle-card > header > div em,
+.multi-link-page .seller-bundle-component > div:nth-child(2) span {
+  font-size: var(--ui-workspace-caption);
+}
+
+.multi-link-page .bundle-card-copy b,
+.multi-link-page .seller-bundle-card > header > div b,
+.multi-link-page .bundle-component-copy b,
+.multi-link-page .seller-bundle-component > div:nth-child(2) b {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.multi-link-page .bundle-card-copy strong,
+.multi-link-page .seller-bundle-card > header > div strong,
+.multi-link-page .bundle-component-copy strong,
+.multi-link-page .seller-bundle-component > div:nth-child(2) strong {
+  font-size: 13px;
+}
+
+.multi-link-page .bundle-card > header > em,
+.multi-link-page .seller-bundle-card > header mark,
+.multi-link-page .seller-bundle-notice > span {
+  padding: 5px 9px;
+  font-size: 11px;
+}
+
+.multi-link-page .bundle-component-row,
+.multi-link-page .seller-bundle-component {
+  grid-template-columns: 54px minmax(240px, 1fr) 130px auto;
+  min-height: 76px;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.multi-link-page .bundle-component-row label,
+.multi-link-page .bundle-component-form label,
+.multi-link-page .seller-bundle-target-form label,
+.multi-link-page .seller-bundle-component label,
+.multi-link-page .seller-bundle-component-form label,
+.multi-link-page .bundle-manual-panel > summary {
+  font-size: var(--ui-workspace-caption);
+}
+
+.multi-link-page .bundle-component-row input,
+.multi-link-page .bundle-component-row select,
+.multi-link-page .seller-bundle-component input {
+  height: 38px;
+  font-size: 13px;
+}
+
+.multi-link-page .bundle-component-actions .btn,
+.multi-link-page .bundle-component-actions button {
+  min-height: 36px;
+  font-size: 12px;
+}
+
+.multi-link-page .seller-bundle-target-form {
+  grid-template-columns: 170px minmax(210px, 1fr) minmax(200px, 1fr) 140px auto;
+  gap: 10px;
+  padding: 14px;
+}
+
+/* Price-rule page and inbound-cost formulas */
+.price-rule-page .price-rule-lab-body {
+  gap: 16px;
+  padding: 18px 20px 22px;
+}
+
+.price-rule-page .price-rule-lab-summary > div {
+  padding: 12px 14px;
+}
+
+.price-rule-page .price-rule-lab-summary span,
+.price-rule-page .price-rule-lab-panel-head span,
+.price-rule-page .price-rule-lab-foot,
+.price-rule-page .inbound-cost-tag-preview {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.price-rule-page .price-rule-lab-summary b {
+  font-size: 19px;
+}
+
+.price-rule-page .price-rule-lab-grid {
+  gap: 16px;
+}
+
+.price-rule-page .price-rule-lab-panel,
+.price-rule-page .inbound-cost-rule-panel {
+  padding: 15px;
+}
+
+.price-rule-page .price-rule-lab-panel-head b {
+  font-size: 16px;
+}
+
+.price-rule-page .price-rule-lab-panel-head > strong {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.price-rule-page .price-rule-tag-list,
+.price-rule-page .price-rule-set-list {
+  max-height: 270px;
+  gap: 8px;
+}
+
+.price-rule-page .price-rule-tag-card,
+.price-rule-page .price-rule-set-card {
+  min-height: 58px;
+  grid-template-columns: 7px 1fr;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 9px;
+}
+
+.price-rule-page .price-rule-tag-card b,
+.price-rule-page .price-rule-set-card b {
+  font-size: 14px;
+}
+
+.price-rule-page .price-rule-tag-card em,
+.price-rule-page .price-rule-set-card em {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.price-rule-page .price-rule-editor-form,
+.price-rule-page .inbound-cost-rule-grid > .price-rule-editor-form {
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.price-rule-page .price-rule-editor-form > label,
+.price-rule-page .price-rule-editor-form details label,
+.price-rule-page .inbound-cost-formula-fields label,
+.price-rule-page .price-rule-set-builder > b {
+  font-size: var(--ui-workspace-caption);
+}
+
+.price-rule-page .price-rule-editor-form input,
+.price-rule-page .price-rule-editor-form select {
+  height: var(--ui-workspace-control-height);
+  padding: 0 10px;
+  font-size: var(--ui-workspace-control);
+}
+
+.price-rule-page .price-rule-editor-form summary {
+  min-height: 30px;
+  display:flex;
+  align-items:center;
+  font-size: 13px;
+}
+
+.price-rule-page .price-rule-form-actions .btn {
+  min-height: var(--ui-workspace-button-height);
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.price-rule-page .price-rule-set-selected article {
+  min-height: 48px;
+  grid-template-columns: 30px 1fr auto;
+  padding: 9px;
+}
+
+.price-rule-page .price-rule-set-selected article > strong,
+.price-rule-page .price-rule-set-selected article button {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+}
+
+.price-rule-page .price-rule-set-selected article b {
+  font-size: 13px;
+}
+
+.price-rule-page .price-rule-set-selected article em,
+.price-rule-page .price-rule-empty {
+  font-size: var(--ui-workspace-caption);
+}
+
+/* Horizontal multi-cell price-combination modal */
+.price-rule-bulk-modal .modal-head h3 {
+  font-size: 20px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-body {
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-workspace {
+  gap: 16px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-targets,
+.price-rule-bulk-modal .price-rule-bulk-composer {
+  gap: 13px;
+  padding: 15px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-note b,
+.price-rule-bulk-modal .price-rule-bulk-section-head b,
+.price-rule-bulk-modal .price-rule-bulk-scopes b,
+.price-rule-bulk-modal .price-rule-bulk-sources label,
+.price-rule-bulk-modal .price-rule-bulk-set {
+  font-size: 13px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-note span,
+.price-rule-bulk-modal .price-rule-bulk-section-head span,
+.price-rule-bulk-modal .price-rule-bulk-scopes em,
+.price-rule-bulk-modal .price-rule-bulk-scopes small,
+.price-rule-bulk-modal .price-rule-bulk-set span,
+.price-rule-bulk-modal .price-rule-bulk-progress,
+.price-rule-bulk-modal .price-rule-bulk-composer-foot span {
+  font-size: var(--ui-workspace-caption);
+  line-height: var(--ui-workspace-line-height);
+}
+
+.price-rule-bulk-modal .price-rule-bulk-section-head .btn,
+.price-rule-bulk-modal .price-rule-bulk-composer-foot .btn {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-scopes label > span {
+  min-height: 64px;
+  padding: 10px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-set select,
+.price-rule-bulk-modal .price-rule-bulk-composer-fields input,
+.price-rule-bulk-modal .price-rule-bulk-composer-fields select {
+  height: var(--ui-workspace-control-height);
+  padding: 0 10px;
+  font-size: var(--ui-workspace-control);
+}
+
+.price-rule-bulk-modal .price-rule-bulk-composer-fields label {
+  font-size: var(--ui-workspace-caption);
+}
+
+.price-rule-bulk-modal .price-rule-bulk-composer-steps {
+  min-height: 190px;
+  max-height: 330px;
+  gap: 8px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-composer-steps > p {
+  font-size: var(--ui-workspace-caption);
+}
+
+.price-rule-bulk-modal .price-rule-bulk-composer-steps article {
+  min-height: 52px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  padding: 9px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-composer-steps article > strong,
+.price-rule-bulk-modal .price-rule-bulk-composer-steps article button {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-composer-steps article b {
+  font-size: 13px;
+}
+
+.price-rule-bulk-modal .price-rule-bulk-composer-steps article em {
+  font-size: 11px;
+}
+
+/* Compact density is opt-in. It keeps controls usable without returning to 7-9px text. */
+.ui-density-compact .multi-link-page,
+.ui-density-compact .price-rule-page,
+.ui-density-compact .price-rule-bulk-modal {
+  --ui-workspace-caption: 11px;
+  --ui-workspace-body: 12px;
+  --ui-workspace-control: 12px;
+  --ui-workspace-title: 16px;
+  --ui-workspace-control-height: 34px;
+  --ui-workspace-button-height: 34px;
+}
+
+.ui-density-compact .multi-link-page .multi-link-layout {
+  grid-template-columns: 210px minmax(0, 1fr);
+}
+
+.ui-density-compact .multi-link-page .relation-folder-panel,
+.ui-density-compact .multi-link-page .relation-workspace,
+.ui-density-compact .price-rule-page .price-rule-lab-body {
+  padding: 12px;
+}
+
+.ui-density-compact .multi-link-page .relation-folder-list > button,
+.ui-density-compact .multi-link-page .relation-folder-item > button:first-child {
+  min-height: 36px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.ui-density-compact .multi-link-page .relation-workspace-head,
+.ui-density-compact .multi-link-page .relation-edge-list,
+.ui-density-compact .multi-link-page .relation-compose-panel,
+.ui-density-compact .multi-link-page .bundle-management-body {
+  padding: 12px;
+}
+
+.ui-density-compact .multi-link-page .relation-board-canvas {
+  grid-auto-columns: minmax(280px, 310px);
+  gap: 24px;
+}
+
+.ui-density-compact .multi-link-page .relation-board-node {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  min-height: 76px;
+  padding: 9px 24px;
+}
+
+.ui-density-compact .multi-link-page .relation-board-node-image {
+  width: 44px;
+  height: 44px;
+}
+
+.ui-density-compact .multi-link-page .relation-board-node-copy b,
+.ui-density-compact .multi-link-page .relation-board-node-copy strong,
+.ui-density-compact .multi-link-page .bundle-card-copy b,
+.ui-density-compact .multi-link-page .bundle-component-copy b,
+.ui-density-compact .price-rule-page .price-rule-tag-card b,
+.ui-density-compact .price-rule-page .price-rule-set-card b {
+  font-size: 12px;
+}
+
+.ui-density-compact .multi-link-page .bundle-component-row,
+.ui-density-compact .multi-link-page .seller-bundle-component {
+  min-height: 62px;
+  padding: 8px 10px;
+}
+
+.ui-density-compact .price-rule-page .price-rule-tag-card,
+.ui-density-compact .price-rule-page .price-rule-set-card {
+  min-height: 48px;
+  padding: 8px;
+}
+
+@media (max-width: 1250px) {
+  .multi-link-page .multi-link-layout {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+
+  .multi-link-page .relation-workspace-head {
+    display: grid;
+  }
+
+  .multi-link-page .relation-workspace-actions {
+    justify-content: flex-start;
+  }
+
+  .multi-link-page .relation-workspace-search {
+    width: min(480px, 60vw);
+  }
+
+  .multi-link-page .seller-bundle-target-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .multi-link-page .seller-bundle-target-form button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .multi-link-page .multi-link-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .multi-link-page .relation-folder-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .multi-link-page .relation-edge-row {
+    grid-template-columns: 1fr;
+  }
+
+  .multi-link-page .relation-product-loader,
+  .multi-link-page .seller-bundle-target-form,
+  .multi-link-page .bundle-component-form {
+    grid-template-columns: 1fr;
+  }
+
+  .price-rule-bulk-modal .price-rule-bulk-workspace,
+  .price-rule-page .price-rule-lab-grid,
+  .price-rule-page .inbound-cost-rule-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.app-shell:not(.ui-density-compact) .multi-link-legacy-workspace > summary em {
+  font-size: var(--ui-workspace-caption);
+}
+
+/* Relation and bundle lists share one spreadsheet-like reading rhythm. */
+.multi-link-page .multi-link-product-cell {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.multi-link-page .multi-link-tab-panel .multi-link-cell-matrix th,
+.multi-link-page .multi-link-tab-panel .multi-link-cell-matrix td {
+  border-right: 1px solid #d7e1ee;
+  border-bottom: 1px solid #d7e1ee;
+}
+
+.multi-link-page .bundle-matrix th:nth-child(1) { width: 33%; }
+.multi-link-page .bundle-matrix th:nth-child(2) { width: 58px; }
+.multi-link-page .bundle-matrix th:nth-child(3) { width: 33%; }
+.multi-link-page .bundle-matrix th:nth-child(4) { width: 130px; }
+.multi-link-page .bundle-matrix th:nth-child(5) { width: 150px; }
+
+.multi-link-page .bundle-component-form {
+  grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr) 130px auto;
+}
+
+/* Inventory survey remains a review-only reference until its calculation is approved. */
+.nav-item span small {
+  display: block;
+  margin-top: 2px;
+  color: #a16207;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+#dashboard .quick-grid button.review-only {
+  border-color: #f2cf7a;
+  background: #fffaf0;
+}
+
+#dashboard .quick-grid button.review-only em {
+  color: #9a6700;
+}
+
+.inventory-review-label {
+  display: inline-flex;
+  margin-left: 7px;
+  border-radius: 999px;
+  background: #fff1c7;
+  padding: 3px 7px;
+  color: #8a5a00;
+  font-size: 11px;
+  font-weight: 900;
+  vertical-align: middle;
+}
+
+.inventory-review-notice {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #efcc75;
+  border-radius: 9px;
+  background: #fffaf0;
+  padding: 12px 14px;
+}
+
+.inventory-review-notice b {
+  color: #8a5a00;
+  font-size: 12px;
+}
+
+.inventory-review-notice span {
+  color: #785b25;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+#inventory .mock-badge.review,
+#inventory .inventory-metrics article.accent.review {
+  border-color: #efcc75;
+  background: #fff8e6;
+  color: #8a5a00;
+}
+
+#inventory button:disabled {
+  cursor: not-allowed;
+  opacity: .62;
+}
+
+@media (max-width: 900px) {
+  .inventory-review-notice {
+    grid-template-columns: 1fr;
+  }
+}

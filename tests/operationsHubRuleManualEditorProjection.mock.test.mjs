@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const app=fs.readFileSync(new URL('../mockups/operations-hub/app.js',import.meta.url),'utf8');
+const product={sellpia_sku_code:'A',system_base_price:10000,smartstore_product_code:'p',smartstore_match_tier:'mapped',smartstore_price:4000,smartstore_stock:5,__sellerPriceComponents:{smartstore:{source_base_price:4000,source_option_price:0,source_final_price:4000,source_discount_terms:[]}},__hubRulePrices:{smartstore:{platformBase:10000,platformOption:0,platformDiscount:0,platformFinal:10000,platformTerms:[],ruleNames:['동일가 테스트']}}};
+let reads=0;
+const context={console,structuredClone,Date,Number,Error,document:{addEventListener(){}},window:{addEventListener(){}},liveData:{loadProductsBySkus:async skus=>{reads++;assert.deepEqual(skus,['A']);assert.equal(product.__sellerDrafts['smartstore:sellpia_sale_price'].pricing_input_mode,'option');return [{...product,__hubRulePrices:{smartstore:{platformBase:10000,platformOption:300,platformDiscount:0,platformFinal:10300,platformTerms:[],ruleNames:['동일가 테스트']}}}];}},matrixState:{rows:[product]},matrixRowsBySku:new Map([['A',product]]),drawerState:{discountTerms:{}},matchState:()=>({key:'matched',label:'매칭'}),drawerDraftState:()=>({key:'pending',label:'수정'}),escapeHtml:v=>String(v??''),formatNullableNumber:v=>v==null?'':Number(v).toLocaleString('ko-KR'),nativeDiscountSummary:()=>'',calculateNativeDiscountedBase:v=>v,renderNativeDiscountEditor:()=>'',renderDrawerPricePolicy:()=>'<legacy>'};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(new URL('../mockups/operations-hub/discount-price-math.js',import.meta.url),'utf8'),context);
+context.discountPriceMath=context.window.SystemV3DiscountPriceMath;
+const section=(start,end)=>app.slice(app.indexOf(start),app.indexOf(end,app.indexOf(start)));
+vm.runInContext(section('function internalBasePriceText(','function systemOperationalCell(')+section('function applyLocalSellerDraft(','function syncMatrixSellerDraftCell(')+section('function renderHubPricePolicy(','async function loadDrawerPriceRuleAssignments(')+section('function renderDrawerInventoryChannel(','function renderDrawerInventory('),context);
+context.applyLocalSellerPriceDraft(product,'smartstore',{change_id:9,draft_status:'pending',draft_base_price:4000,draft_option_price:300,draft_final_price:4300,saved_option_price_source:'manual',saved_base_price_source:'source',saved_input_mode:'option'});
+assert.equal(product.__hubRulePrices.smartstore,undefined,'a just-saved edit invalidates the previous projection immediately');
+assert.equal(product.__sellerDrafts['smartstore:sellpia_sale_price'].pricing_input_mode,'option');
+await context.refreshHubPriceProjection();assert.equal(reads,1);assert.equal(product.__hubRulePrices.smartstore.platformFinal,10300);
+assert.equal(context.matrixRowsBySku.get('A'),product,'refresh preserves references used by the matrix and drawer');
+const html=context.renderDrawerInventoryChannel('smartstore','스마트스토어',product);
+assert.match(html,/data-drawer-price-component="base"[^>]*value="4000"/);
+assert.match(html,/data-drawer-price-component="option"[^>]*value="300"/);
+assert.match(html,/data-drawer-price-component="final"[^>]*value="4300"/);
+assert.match(html,/동일가 테스트/);assert.doesNotMatch(html,/<legacy>/);
+assert.match(app,/if \(groupResult \|\| priceComponent\)[\s\S]*?materializeHubPrices[\s\S]*?refreshHubPriceProjection\(\)/);
+assert.match(app,/if \(baseChanged \|\| optionChanged \|\| finalChanged \|\| discountChanged\)[\s\S]*?materializeHubPrices[\s\S]*?refreshHubPriceProjection\(\)/);
+console.log('PASS manual editor projection: stale invalidation, refreshed Rule result and object identity; explicit manual override wins in drawer');
+

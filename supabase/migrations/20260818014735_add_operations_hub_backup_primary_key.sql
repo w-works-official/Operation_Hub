@@ -1,0 +1,3 @@
+alter table operations_private.operations_hub_manual_links_backup_20260818_013437
+  add constraint operations_hub_manual_links_backup_20260818_013437_pkey
+  primary key (source_channel, sellpia_sku_code);

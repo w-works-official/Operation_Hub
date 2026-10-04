@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {PGlite} from '../work/rule-registry-db-test/node_modules/@electric-sql/pglite/dist/index.js';
+const patchPath=process.env.HUB_RULE_COMPACT_SQL_PATH||new URL('../supabase/migrations/20260910045516_hub_rule_registry_compact_list.sql',import.meta.url);
+test('compact registry listing preserves auth, save branch and full server assignments',async()=>{
+ const db=new PGlite();
+ try {
+  await db.exec(`create role anon;create role authenticated;create schema operations_private;
+   create table public.product_tags(tag_id uuid primary key);
+   create table public.operations_hub_product_profiles(sellpia_sku_code text primary key);
+   create table public.operations_hub_relation_nodes(node_id bigint primary key,sellpia_sku_code text,is_active boolean);
+   create table public.operations_hub_relation_edges(edge_id bigint primary key,parent_node_id bigint,child_node_id bigint,is_active boolean);
+   create function operations_private.require_operations_hub_operator_session(token text) returns jsonb language plpgsql as $$begin if token is distinct from 'operator' then raise exception 'unauthorized';end if;return '{"username":"test"}'::jsonb;end$$;`);
+  await db.exec(await readFile(new URL('../supabase/migrations/20260910031047_hub_field_dependencies.sql',import.meta.url),'utf8'));
+  await db.exec('alter table operations_private.hub_rule_assignments add column assigned_tag_id uuid;');
+  const definition=async()=> (await db.query("select pg_get_functiondef('public.hub_rule_registry_v1(text,text,jsonb)'::regprocedure) fn")).rows[0].fn;
+  const original=await definition();
+  const rpc=async(action,rule=null,token='operator')=>(await db.query('select public.hub_rule_registry_v1($1,$2,$3) result',[token,action,rule])).rows[0].result;
+  const saved=await rpc('save',{name:'compact',target_field:'basis_sku_price',scope:'',input_origin:'self',source_field:'source_base_price',config:{steps:[{op:'add',value:0}]}});
+  await db.query("insert into operations_private.hub_rule_assignments(sku,rule_id,target_field,scope,updated_by) select 'SKU'||g,$1,'basis_sku_price','','long-user-requested-audit-actor' from generate_series(1,23760)g",[saved.id]);
+  await db.exec("update operations_private.hub_rule_assignments set assigned_tag_id='00000000-0000-4000-8000-000000000001',version=3 where sku in ('SKU1','SKU2')");
+  const before=await rpc('list');
+  await db.exec(await readFile(patchPath,'utf8'));
+  const afterDefinition=await definition();
+  assert.equal(afterDefinition,original,'entire existing v1 RPC is byte-for-byte unchanged');
+  const compact=async(token='operator')=>(await db.query('select public.hub_rule_registry_list_v2($1) result',[token])).rows[0].result;
+  const after=await compact();
+  assert.deepEqual(after.rules,before.rules);assert.deepEqual(after.dependencies,before.dependencies);
+  assert.equal(after.assignment_groups.length,2);assert.equal(after.assignments,undefined);
+  const expanded=after.assignment_groups.flatMap(({entries,...group})=>entries.map(([sku,version])=>({...group,sku,version})));
+  const slots=rows=>rows.map(({sku,rule_id,target_field,scope,version,assigned_tag_id})=>({sku,rule_id,target_field,scope,version,assigned_tag_id})).sort((a,b)=>a.sku.localeCompare(b.sku));
+  assert.deepEqual(slots(expanded),slots(before.assignments));
+  const beforeBytes=Buffer.byteLength(JSON.stringify(before)),afterBytes=Buffer.byteLength(JSON.stringify(after));
+  assert.ok(afterBytes<beforeBytes*.1);console.log(`REGISTRY_COMPACT_BYTES=${beforeBytes}->${afterBytes}`);
+  assert.equal((await db.query('select count(*)::int n from operations_private.hub_rule_assignments where updated_by=$1',['long-user-requested-audit-actor'])).rows[0].n,23760);
+  await assert.rejects(compact('invalid'),/unauthorized/);
+  const edited=await rpc('save',{...saved,name:'edited',config:{steps:[{op:'add',value:100}]}});assert.equal(edited.version,2);assert.equal(edited.name,'edited');
+  await assert.rejects(rpc('save',{...edited,version:1}),/최신/);
+ }finally{await db.close();}
+});
