@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260908042524",
+  "name": "operations_hub_failed_upload_storage_cleanup_scope_remove",
+  "statements": [
+    {
+      "index": 0,
+      "text": "drop policy if exists codex_failed_upload_20260908_delete on storage.objects;"
+    }
+  ]
+}
+

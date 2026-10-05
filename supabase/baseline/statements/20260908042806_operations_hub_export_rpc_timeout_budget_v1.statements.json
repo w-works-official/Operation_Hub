@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260908042806",
+  "name": "operations_hub_export_rpc_timeout_budget_v1",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Bound export RPCs consistently; preserve existing 45-second authenticated prepare/complete settings.\nset local lock_timeout='3s';\nalter function public.export_operations_hub_matrix_chunk(integer,integer,text,text[],text,text,jsonb,text[]) set statement_timeout='45s';\nalter function public.prepare_operations_hub_export(uuid,text,bigint[],text[]) set statement_timeout='45s';\nalter function public.prepare_operations_hub_change_export(uuid,bigint[],text[]) set statement_timeout='45s';\nnotify pgrst, 'reload schema';\nnotify pgrst, 'reload config';\n"
+    }
+  ]
+}
+

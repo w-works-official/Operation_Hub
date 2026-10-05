@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260728013827",
+  "name": "backup_final_excel_mapping_20260728_v1",
+  "statements": [
+    {
+      "index": 0,
+      "text": "create table if not exists review.match_candidate_queue_backup_final_excel_20260728_v1 (like review.match_candidate_queue including all);"
+    }
+  ]
+}
+

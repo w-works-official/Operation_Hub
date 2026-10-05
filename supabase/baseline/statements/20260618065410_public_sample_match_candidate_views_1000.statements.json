@@ -1,0 +1,33 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618065410",
+  "name": "public_sample_match_candidate_views_1000",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Expand public local-HTML sample views to the 1,000-row queue and add a\n-- convenience v2 view with uploaded Sellpia image metadata.\n\ncreate or replace view public.match_candidate_queue_sample\nwith (security_invoker = true)\nas\nselect\n  queue_id,\n  source_batch_id,\n  source_channel,\n  source_row_no,\n  channel_product_code,\n  channel_option_code,\n  channel_product_name,\n  channel_option_name,\n  channel_seller_code,\n  channel_stock,\n  channel_status,\n  best_sellpia_product_code,\n  best_sellpia_sku_code,\n  best_sellpia_product_name,\n  best_sellpia_option_name,\n  match_tier,\n  match_score,\n  match_reason,\n  duplicate_candidate_count,\n  duplicate_risk,\n  review_required,\n  recommended_action,\n  source_candidate_key,\n  created_at,\n  updated_at\nfrom review.match_candidate_queue\nwhere source_batch_id in (\n  'sample_smartstore_100',\n  'sample_makeshop_100',\n  'sample_smartstore_500',\n  'sample_makeshop_500'\n)"
+    },
+    {
+      "index": 1,
+      "text": "create or replace view public.match_candidate_details_sample\nwith (security_invoker = true)\nas\nselect\n  d.detail_id,\n  d.queue_id,\n  d.candidate_rank,\n  d.sellpia_product_code,\n  d.sellpia_sku_code,\n  d.sellpia_product_name,\n  d.sellpia_option_name,\n  d.match_score,\n  d.match_reason,\n  d.risk_flags,\n  d.created_at\nfrom review.match_candidate_details d\njoin review.match_candidate_queue q\n  on q.queue_id = d.queue_id\nwhere q.source_batch_id in (\n  'sample_smartstore_100',\n  'sample_makeshop_100',\n  'sample_smartstore_500',\n  'sample_makeshop_500'\n)"
+    },
+    {
+      "index": 2,
+      "text": "create or replace view public.mapping_matrix_review_sample_v2\nwith (security_invoker = true)\nas\nselect\n  q.*,\n  case\n    when q.source_channel = 'smartstore' and q.match_tier = 'AUTO_APPROVE_CANDIDATE' then 'STOCK_MATCH'\n    when q.source_channel = 'smartstore' and q.match_tier = 'NO_MATCH' then 'STOCK_SMARTSTORE_NOT_FOUND'\n    when q.source_channel = 'smartstore' then 'STOCK_HOLD_REVIEW'\n    else null\n  end as stock_compare_status,\n  case\n    when q.match_tier = 'AUTO_APPROVE_CANDIDATE' then 'AUTO_APPROVE_SAFE'\n    when q.match_tier = 'FAST_REVIEW' then 'FAST_REVIEW'\n    when q.match_tier = 'NO_MATCH' then 'HOLD_RISKY'\n    else q.match_tier\n  end as auto_approval_tier,\n  i.original_file_name as sellpia_image_file_name,\n  i.storage_public_url as sellpia_image_url,\n  i.upload_status as sellpia_image_upload_status,\n  (i.storage_public_url is not null) as has_sellpia_image\nfrom public.match_candidate_queue_sample q\nleft join public.sellpia_product_images_public i\n  on i.p_code = q.best_sellpia_sku_code\n and i.upload_status = 'uploaded'"
+    },
+    {
+      "index": 3,
+      "text": "grant select on public.match_candidate_queue_sample to anon, authenticated"
+    },
+    {
+      "index": 4,
+      "text": "grant select on public.match_candidate_details_sample to anon, authenticated"
+    },
+    {
+      "index": 5,
+      "text": "grant select on public.mapping_matrix_review_sample_v2 to anon, authenticated"
+    }
+  ]
+}
+

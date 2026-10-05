@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260917121947",
+  "name": "hub_representative_inactive_assignment_review_v1",
+  "statements": [
+    {
+      "index": 0,
+      "text": "create or replace function operations_private.hub_product_price_read_v1(p_product text)\nreturns jsonb language plpgsql stable set search_path=pg_catalog as $$\ndeclare input jsonb; stored operations_private.hub_product_price_results%rowtype; status text; history jsonb;\nbegin\n input:=operations_private.hub_product_price_inputs_v1(p_product);\n select r.* into stored from operations_private.hub_product_price_result_heads h join operations_private.hub_product_price_results r on r.id=h.result_id where h.product_code=p_product;\n if stored.id is not null then history:=to_jsonb(stored);end if;\n status:=case when input->'rule'='null'::jsonb then 'inactive'\n  when jsonb_array_length(input->'issues')>0 then case when not exists(select 1 from jsonb_array_elements(input->'issues') i where i->>'reason' not in ('stale','proof')) then 'stale' else 'blocked' end\n  when stored.id is null then 'stale' when stored.input_fingerprint<>input->>'input_fingerprint' then 'stale' else stored.status end;\n return input||jsonb_build_object('status',status,'freshness',case when status='calculated' then 'fresh' else status end,\n 'value',case when status='calculated' then stored.value end,'generation_id',stored.generation_id,\n 'selected_options',case when status='calculated' then stored.proof->'selected_options' else '[]'::jsonb end,\n 'stored_history',history,'stored_assignment',(select to_jsonb(a) from operations_private.hub_product_price_assignments a where a.product_code=p_product),'stage','representative_price','scope','product','output_field','representative_base_price','exclusive_group','representative_price_rule');\nend $$;\n\n"
+    }
+  ]
+}
+

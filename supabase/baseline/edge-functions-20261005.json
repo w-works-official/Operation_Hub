@@ -1,0 +1,52 @@
+{
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "warning": "Observational inventory. No deploy. verify_jwt metadata is not an instruction to change deployed function configuration.",
+  "functions": [
+    {
+      "slug": "migrate-google-product-image",
+      "status": "ACTIVE",
+      "version": 3,
+      "verify_jwt": false,
+      "ezbr_sha256": "36cf6d3651fed105e30b28bfe0496f4bad9f0629f4aba9c96f082956802665f6",
+      "provenance": "Supabase get_edge_function read-only connector 2026-10-05; returned source index.ts preserved verbatim with LF. Bundle hash is deployed bundle metadata, not source-file hash. Reviewed credential accesses use Deno.env; no literal credential found in expanded scan.",
+      "secret_scan": "Expanded literal-secret assignment/comparison, bearer/JWT and embedded-credential URL scan; see docs/db-ledger.md. Initial scan was insufficient.",
+      "deployed_source_recovered": true
+    },
+    {
+      "slug": "upload-product-image",
+      "status": "ACTIVE",
+      "version": 1,
+      "verify_jwt": false,
+      "ezbr_sha256": "8a24b669f6f2265a167882ff6136aed20e46a2dc7a374252d95d3e48a72df768",
+      "provenance": "Supabase get_edge_function read-only connector 2026-10-05; returned source index.ts preserved verbatim with LF. Bundle hash is deployed bundle metadata, not source-file hash. Reviewed credential accesses use Deno.env; no literal credential found in expanded scan.",
+      "secret_scan": "Expanded literal-secret assignment/comparison, bearer/JWT and embedded-credential URL scan; see docs/db-ledger.md. Initial scan was insufficient.",
+      "deployed_source_recovered": true
+    },
+    {
+      "slug": "import-mapping-batch-20260729",
+      "status": "ACTIVE",
+      "version": 3,
+      "verify_jwt": false,
+      "ezbr_sha256": "0246ee301aa4ad763673ede818a0d12d88d926db7a542db06f61b47c0d7ecb95",
+      "provenance": "Supabase get_edge_function read-only connector 2026-10-05. PUBLIC SOURCE SANITIZED: deployed literal import secret removed and replaced with Deno.env.get('MAPPING_IMPORT_SECRET'), explicit empty-env rejection. NOT exact deployed source. No deploy or secret provisioning.",
+      "secret_scan": "Expanded literal-secret assignment/comparison, bearer/JWT and embedded-credential URL scan; see docs/db-ledger.md. Initial scan was insufficient.",
+      "deployed_source_recovered": true,
+      "status_review": "SANITIZED_NEEDS_REVIEW_BEFORE_DEPLOY",
+      "future_deploy_requires": "Explicitly provision MAPPING_IMPORT_SECRET through a separately authorized secret-management workflow. No secret was provisioned here.",
+      "public_source_sanitized": true,
+      "public_source_sha256": "92dbff7a451b483dcc63237c43e408e0410525a218c8aa34326235aba7cef611",
+      "public_source_hash_definition": "SHA-256 of sanitized index.ts file bytes; differs from historical deployed bundle hash."
+    },
+    {
+      "slug": "operations-hub-original-files",
+      "status": "ACTIVE",
+      "version": 5,
+      "verify_jwt": false,
+      "ezbr_sha256": "9f4dbd83359f7e8ab2a27e36c3e44a7498f9465f4b98e08383ffd40b37bbb2f5",
+      "provenance": "list_edge_functions read-only 2026-10-05; company source already present; source/bundle equivalence unproven.",
+      "deployed_source_recovered": false,
+      "secret_scan": "Expanded literal-secret assignment/comparison, bearer/JWT and embedded-credential URL scan; see docs/db-ledger.md. Initial scan was insufficient."
+    }
+  ]
+}
+

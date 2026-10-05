@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260729025418",
+  "name": "cleanup_obsolete_matching_artifacts_phase1_20260729",
+  "statements": [
+    {
+      "index": 0,
+      "text": "drop view if exists public.mapping_matrix_review_sample_v3;\ndrop view if exists public.mapping_matrix_review_sample_v2;\ndrop view if exists public.match_candidate_details_sample;\ndrop view if exists public.match_candidate_queue_sample;\ndrop view if exists review.v_stock_compare_with_decision;\n\ndrop table if exists review.match_candidate_queue_backup_final_excel_20260728_v1;\ndrop table if exists review.match_candidate_queue_backup_ably_discontinue_20260708_v1;\ndrop table if exists review.match_candidate_queue_backup_ably_excluded_finalize_20260708_v1;\ndrop table if exists review.match_candidate_queue_backup_delivery_auto_approval_20260708_v1;\ndrop table if exists review.auto_approval_apply_backup_v1;\ndrop table if exists review.review_queue_summary_cache_v1;\ndrop table if exists review.stock_compare_queue;"
+    }
+  ]
+}
+

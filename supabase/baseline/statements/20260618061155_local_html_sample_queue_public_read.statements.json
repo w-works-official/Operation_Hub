@@ -1,0 +1,37 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618061155",
+  "name": "local_html_sample_queue_public_read",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Local HTML sample queue read policy\n--\n-- Purpose:\n--   Allow the local HTML prototype to read only the prepared 200-row sample\n--   review queue with a browser publishable/anon key. This does not allow\n--   decision writes and does not expose full production review queues.\n\ngrant usage on schema review to anon, authenticated"
+    },
+    {
+      "index": 1,
+      "text": "grant select on review.match_candidate_queue to anon, authenticated"
+    },
+    {
+      "index": 2,
+      "text": "grant select on review.match_candidate_details to anon, authenticated"
+    },
+    {
+      "index": 3,
+      "text": "drop policy if exists \"match candidate queue sample readable by anon\" on review.match_candidate_queue"
+    },
+    {
+      "index": 4,
+      "text": "create policy \"match candidate queue sample readable by anon\"\n  on review.match_candidate_queue\n  for select\n  to anon\n  using (\n    source_batch_id in ('sample_smartstore_100', 'sample_makeshop_100')\n  )"
+    },
+    {
+      "index": 5,
+      "text": "drop policy if exists \"match candidate details sample readable by anon\" on review.match_candidate_details"
+    },
+    {
+      "index": 6,
+      "text": "create policy \"match candidate details sample readable by anon\"\n  on review.match_candidate_details\n  for select\n  to anon\n  using (\n    exists (\n      select 1\n      from review.match_candidate_queue q\n      where q.queue_id = match_candidate_details.queue_id\n        and q.source_batch_id in ('sample_smartstore_100', 'sample_makeshop_100')\n    )\n  )"
+    }
+  ]
+}
+

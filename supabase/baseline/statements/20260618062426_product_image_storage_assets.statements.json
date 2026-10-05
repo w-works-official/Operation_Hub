@@ -1,0 +1,65 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618062426",
+  "name": "product_image_storage_assets",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Product image storage assets\n--\n-- Purpose:\n--   Store Sellpia product/option image files in Supabase Storage and keep a\n--   code-to-image metadata table for the local HTML review workflow.\n--\n-- Safety:\n--   - This does not change seller data.\n--   - This does not change matching decisions.\n--   - Browser clients can read image metadata and public objects only.\n--   - Uploads should be performed by a local service-role script, never from\n--     the browser client.\n\ncreate schema if not exists asset"
+    },
+    {
+      "index": 2,
+      "text": "create table if not exists asset.sellpia_product_images (\n  p_code text primary key,\n  own_code text,\n  original_file_name text,\n  drive_file_id text,\n  drive_folder_id text,\n  source_image_url text,\n  storage_bucket text not null default 'product-images',\n  storage_path text,\n  storage_public_url text,\n  content_type text,\n  byte_size bigint,\n  upload_status text not null default 'pending',\n  upload_error text,\n  source_updated_at timestamptz,\n  uploaded_at timestamptz,\n  created_at timestamptz not null default now(),\n  updated_at timestamptz not null default now(),\n  raw_payload jsonb not null default '{}'::jsonb,\n  constraint ck_sellpia_product_images_upload_status\n    check (upload_status in ('pending', 'uploaded', 'failed', 'skipped'))\n)"
+    },
+    {
+      "index": 3,
+      "text": "create index if not exists ix_sellpia_product_images_own_code\n  on asset.sellpia_product_images(own_code)"
+    },
+    {
+      "index": 4,
+      "text": "create index if not exists ix_sellpia_product_images_drive_file\n  on asset.sellpia_product_images(drive_file_id)"
+    },
+    {
+      "index": 5,
+      "text": "create index if not exists ix_sellpia_product_images_upload_status\n  on asset.sellpia_product_images(upload_status)"
+    },
+    {
+      "index": 6,
+      "text": "alter table asset.sellpia_product_images enable row level security"
+    },
+    {
+      "index": 7,
+      "text": "drop policy if exists \"sellpia product images readable\" on asset.sellpia_product_images"
+    },
+    {
+      "index": 8,
+      "text": "create policy \"sellpia product images readable\"\n  on asset.sellpia_product_images\n  for select\n  to anon, authenticated\n  using (true)"
+    },
+    {
+      "index": 9,
+      "text": "grant usage on schema asset to anon, authenticated"
+    },
+    {
+      "index": 10,
+      "text": "grant select on asset.sellpia_product_images to anon, authenticated"
+    },
+    {
+      "index": 11,
+      "text": "create or replace view public.sellpia_product_images_public\nwith (security_invoker = true)\nas\nselect\n  p_code,\n  own_code,\n  original_file_name,\n  drive_file_id,\n  source_image_url,\n  storage_bucket,\n  storage_path,\n  storage_public_url,\n  content_type,\n  byte_size,\n  upload_status,\n  uploaded_at,\n  updated_at\nfrom asset.sellpia_product_images"
+    },
+    {
+      "index": 12,
+      "text": "grant select on public.sellpia_product_images_public to anon, authenticated"
+    },
+    {
+      "index": 13,
+      "text": "drop policy if exists \"product images publicly readable\" on storage.objects"
+    },
+    {
+      "index": 14,
+      "text": "create policy \"product images publicly readable\"\n  on storage.objects\n  for select\n  to anon, authenticated\n  using (bucket_id = 'product-images')"
+    }
+  ]
+}
+

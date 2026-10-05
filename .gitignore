@@ -1,0 +1,18 @@
+# Dependencies and local secrets
+node_modules/
+**/.env*
+!**/.env.example
+
+# Local Supabase state and branch worktrees
+**/.temp/
+**/.branches/
+
+# Split scratch area
+/work/
+
+# Generated visual QA artifacts only; preserve other outputs, including
+# outputs/db-maintenance fixtures and future read-only database baselines.
+/outputs/ui-qa/
+/outputs/screenshots/
+/outputs/reports/
+/_site/

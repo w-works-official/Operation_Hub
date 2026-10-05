@@ -1,0 +1,25 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618065744",
+  "name": "sample_queue_anon_policy_1000",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Allow anon/local HTML reads for prepared 100 and 500 sample batches only.\n\ndrop policy if exists \"match candidate queue sample readable by anon\" on review.match_candidate_queue"
+    },
+    {
+      "index": 1,
+      "text": "create policy \"match candidate queue sample readable by anon\"\n  on review.match_candidate_queue\n  for select\n  to anon\n  using (\n    source_batch_id in (\n      'sample_smartstore_100',\n      'sample_makeshop_100',\n      'sample_smartstore_500',\n      'sample_makeshop_500'\n    )\n  )"
+    },
+    {
+      "index": 2,
+      "text": "drop policy if exists \"match candidate details sample readable by anon\" on review.match_candidate_details"
+    },
+    {
+      "index": 3,
+      "text": "create policy \"match candidate details sample readable by anon\"\n  on review.match_candidate_details\n  for select\n  to anon\n  using (\n    exists (\n      select 1\n      from review.match_candidate_queue q\n      where q.queue_id = match_candidate_details.queue_id\n        and q.source_batch_id in (\n          'sample_smartstore_100',\n          'sample_makeshop_100',\n          'sample_smartstore_500',\n          'sample_makeshop_500'\n        )\n    )\n  )"
+    }
+  ]
+}
+

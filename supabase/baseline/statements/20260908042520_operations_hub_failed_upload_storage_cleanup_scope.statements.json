@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260908042520",
+  "name": "operations_hub_failed_upload_storage_cleanup_scope",
+  "statements": [
+    {
+      "index": 0,
+      "text": "create policy codex_failed_upload_20260908_delete on storage.objects for delete to anon\nusing (bucket_id='seller-originals' and name in (\n'smartstore/601787c6-14d4-46ff-984d-ce45e6808e6d/01.xlsx',\n'smartstore/601787c6-14d4-46ff-984d-ce45e6808e6d/02.xlsx')\nand now() < (timestamp with time zone '2026-09-08 05:00:00+00')\nand exists(select 1 from public.seller_inventory_snapshots s where s.snapshot_id='601787c6-14d4-46ff-984d-ce45e6808e6d' and s.upload_status='failed'));"
+    }
+  ]
+}
+

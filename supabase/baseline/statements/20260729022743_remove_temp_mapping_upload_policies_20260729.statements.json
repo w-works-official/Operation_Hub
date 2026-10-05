@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260729022743",
+  "name": "remove_temp_mapping_upload_policies_20260729",
+  "statements": [
+    {
+      "index": 0,
+      "text": "drop policy if exists \"temp final mapping upload 20260729\" on storage.objects;\ndrop policy if exists \"temp final mapping update 20260729\" on storage.objects;\ndrop policy if exists \"temp final mapping delete 20260729\" on storage.objects;"
+    }
+  ]
+}
+

@@ -1,0 +1,57 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618055104",
+  "name": "match_candidate_queue_details",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Match candidate queue/details\n--\n-- Purpose:\n--   Prevent many-to-many row explosion by storing one review queue row per\n--   original channel option, while keeping duplicate candidate details in a\n--   separate child table.\n\ncreate table if not exists review.match_candidate_queue (\n  queue_id bigserial primary key,\n  source_batch_id text,\n  source_channel text not null,\n  source_row_no text,\n  channel_product_code text,\n  channel_option_code text,\n  channel_product_name text,\n  channel_option_name text,\n  channel_seller_code text,\n  channel_stock integer,\n  channel_status text,\n  best_sellpia_product_code text,\n  best_sellpia_sku_code text,\n  best_sellpia_product_name text,\n  best_sellpia_option_name text,\n  match_tier text not null default 'UNCLASSIFIED',\n  match_score numeric,\n  match_reason text,\n  duplicate_candidate_count integer not null default 0,\n  duplicate_risk text,\n  review_required boolean not null default false,\n  recommended_action text,\n  evidence_json jsonb not null default '{}'::jsonb,\n  created_at timestamptz not null default now(),\n  updated_at timestamptz not null default now()\n)"
+    },
+    {
+      "index": 1,
+      "text": "create index if not exists ix_match_candidate_queue_channel_tier\n  on review.match_candidate_queue(source_channel, match_tier)"
+    },
+    {
+      "index": 2,
+      "text": "create index if not exists ix_match_candidate_queue_channel_option\n  on review.match_candidate_queue(source_channel, channel_product_code, channel_option_code)"
+    },
+    {
+      "index": 3,
+      "text": "create index if not exists ix_match_candidate_queue_sellpia_sku\n  on review.match_candidate_queue(best_sellpia_sku_code)"
+    },
+    {
+      "index": 4,
+      "text": "create index if not exists ix_match_candidate_queue_review_required\n  on review.match_candidate_queue(source_channel, review_required)"
+    },
+    {
+      "index": 5,
+      "text": "create table if not exists review.match_candidate_details (\n  detail_id bigserial primary key,\n  queue_id bigint not null references review.match_candidate_queue(queue_id) on update cascade on delete cascade,\n  candidate_rank integer not null,\n  sellpia_product_code text,\n  sellpia_sku_code text,\n  sellpia_product_name text,\n  sellpia_option_name text,\n  match_score numeric,\n  match_reason text,\n  risk_flags text,\n  evidence_json jsonb not null default '{}'::jsonb,\n  created_at timestamptz not null default now()\n)"
+    },
+    {
+      "index": 6,
+      "text": "create index if not exists ix_match_candidate_details_queue_rank\n  on review.match_candidate_details(queue_id, candidate_rank)"
+    },
+    {
+      "index": 7,
+      "text": "create index if not exists ix_match_candidate_details_sellpia_sku\n  on review.match_candidate_details(sellpia_sku_code)"
+    },
+    {
+      "index": 8,
+      "text": "alter table review.match_candidate_queue enable row level security"
+    },
+    {
+      "index": 9,
+      "text": "alter table review.match_candidate_details enable row level security"
+    },
+    {
+      "index": 10,
+      "text": "create policy \"match candidate queue readable\"\n  on review.match_candidate_queue\n  for select\n  to authenticated\n  using (true)"
+    },
+    {
+      "index": 11,
+      "text": "create policy \"match candidate details readable\"\n  on review.match_candidate_details\n  for select\n  to authenticated\n  using (true)"
+    }
+  ]
+}
+

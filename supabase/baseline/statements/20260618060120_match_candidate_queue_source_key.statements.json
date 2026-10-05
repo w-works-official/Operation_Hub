@@ -1,0 +1,21 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618060120",
+  "name": "match_candidate_queue_source_key",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Add stable source key for importing queue/details from local generated files.\n\nalter table review.match_candidate_queue\n  add column if not exists source_candidate_key text"
+    },
+    {
+      "index": 1,
+      "text": "create unique index if not exists ux_match_candidate_queue_batch_source_key\n  on review.match_candidate_queue (\n    coalesce(source_batch_id, ''),\n    source_channel,\n    coalesce(source_candidate_key, '')\n  )\n  where source_candidate_key is not null\n    and source_candidate_key <> ''"
+    },
+    {
+      "index": 2,
+      "text": "create index if not exists ix_match_candidate_queue_source_key\n  on review.match_candidate_queue(source_channel, source_candidate_key)"
+    }
+  ]
+}
+

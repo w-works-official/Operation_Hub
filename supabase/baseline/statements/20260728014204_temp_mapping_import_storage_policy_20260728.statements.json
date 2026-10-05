@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260728014204",
+  "name": "temp_mapping_import_storage_policy_20260728",
+  "statements": [
+    {
+      "index": 0,
+      "text": "create policy \"temp final mapping upload 20260728\" on storage.objects for insert to anon with check (bucket_id = 'product-images' and name like 'temp-final-mapping-20260728/%');\ncreate policy \"temp final mapping delete 20260728\" on storage.objects for delete to anon using (bucket_id = 'product-images' and name like 'temp-final-mapping-20260728/%');"
+    }
+  ]
+}
+

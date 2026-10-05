@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260917075835",
+  "name": "hub_input_scope_exact_column_lookup_v1",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Exact scope semantics unchanged; avoid repeatedly materializing entire cache rows as JSON.\ncreate or replace function operations_private.hub_input_scope_v1(p_sku text,p_source text)\nreturns text[] language plpgsql stable set search_path=pg_catalog as $scope$\ndeclare codes text[]:=array[p_sku];next_codes text[];products text[];i integer;\nbegin\n if length(coalesce(p_sku,'')) not between 1 and 128 or p_source is null or p_source not in ('','smartstore','makeshop','ably') then raise exception 'invalid input scope';end if;\n for i in 1..64 loop\n  products:=array[]::text[];\n  if p_source<>'' then\n   select coalesce(array_agg(distinct product),'{}') into products from(\n    select case p_source when 'smartstore' then c.smartstore_product_code when 'makeshop' then c.makeshop_product_code when 'ably' then c.ably_product_code end product\n    from operations_private.operations_hub_matrix_export_cache c where c.sellpia_sku_code=any(codes)\n   ) group_keys where product is not null and product<>'';\n  end if;\n  select array_agg(distinct sku order by sku) into next_codes from(\n   select unnest(codes) sku union\n   select r.parent_sku from operations_private.hub_field_references r where r.child_sku=any(codes) union\n   select c.sellpia_sku_code from operations_private.operations_hub_matrix_export_cache c\n    where (p_source='smartstore' and c.smartstore_product_code=any(products))\n     or (p_source='makeshop' and c.makeshop_product_code=any(products))\n     or (p_source='ably' and c.ably_product_code=any(products))\n  ) inputs;\n  if cardinality(next_codes)>2000 then raise exception 'input dependency scope too large';end if;\n  if next_codes=codes then return codes;end if;codes:=next_codes;\n end loop;\n raise exception 'input scope exceeds 64 expansion steps';\nend $scope$;\nrevoke all on function operations_private.hub_input_scope_v1(text,text) from public,anon,authenticated;\n"
+    }
+  ]
+}
+

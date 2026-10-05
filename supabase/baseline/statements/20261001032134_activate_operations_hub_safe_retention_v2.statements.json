@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20261001032134",
+  "name": "activate_operations_hub_safe_retention_v2",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Activate only the two low-risk Operations Hub retention categories approved\n-- for the first production rollout. This migration never invokes retention.\n-- Cancelled-history cleanup remains explicitly inactive.\n\ndo $$\ndeclare\n  v_snapshot_job_id bigint;\n  v_cron_log_job_id bigint;\n  v_cancelled_job_id bigint;\nbegin\n  select jobid into strict v_snapshot_job_id\n  from cron.job\n  where jobname='operations-hub-snapshot-retention-v2'\n    and command='select operations_private.archive_operations_hub_snapshot_history_v2();';\n\n  select jobid into strict v_cron_log_job_id\n  from cron.job\n  where jobname='operations-hub-cron-log-retention-v2'\n    and command='select operations_private.prune_operations_hub_cron_history_v2();';\n\n  select jobid into strict v_cancelled_job_id\n  from cron.job\n  where jobname='operations-hub-cancelled-history-retention-v1'\n    and command='select operations_private.prune_operations_hub_cancelled_history_v1();';\n\n  perform cron.alter_job(v_snapshot_job_id,active:=true);\n  perform cron.alter_job(v_cron_log_job_id,active:=true);\n  perform cron.alter_job(v_cancelled_job_id,active:=false);\n\n  if not exists (\n    select 1 from cron.job where jobid=v_snapshot_job_id and active\n  ) or not exists (\n    select 1 from cron.job where jobid=v_cron_log_job_id and active\n  ) or exists (\n    select 1 from cron.job where jobid=v_cancelled_job_id and active\n  ) then\n    raise exception 'Operations Hub safe retention activation invariant failed';\n  end if;\nend\n$$;\n\r\n"
+    }
+  ]
+}
+

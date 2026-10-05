@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260811032113",
+  "name": "restrict_source_sync_event_rpc",
+  "statements": [
+    {
+      "index": 0,
+      "text": "revoke execute on function public.sv3p_log_source_sync_event(text, jsonb) from authenticated; grant execute on function public.sv3p_log_source_sync_event(text, jsonb) to anon, service_role;"
+    }
+  ]
+}
+

@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260729022304",
+  "name": "create_mapping_import_payload_chunks_20260729",
+  "statements": [
+    {
+      "index": 0,
+      "text": "create table if not exists public.mapping_import_payload_chunks (\n  import_batch_id uuid not null references public.mapping_import_batches(import_batch_id) on delete cascade,\n  chunk_no integer not null,\n  base64_data text not null,\n  primary key (import_batch_id, chunk_no)\n);\nalter table public.mapping_import_payload_chunks enable row level security;"
+    }
+  ]
+}
+

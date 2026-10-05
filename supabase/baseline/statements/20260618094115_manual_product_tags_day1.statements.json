@@ -1,0 +1,97 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618094115",
+  "name": "manual_product_tags_day1",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Manual product tags for local HTML review workflow.\n--\n-- Scope:\n--   - Manual tags only. No automatic tag assignment.\n--   - Assignments attach to review queue rows, not to original seller/stage data.\n--   - Browser writes are limited by RLS to prepared sample batches.\n\ncreate table if not exists public.product_tags (\n  tag_id uuid primary key default gen_random_uuid(),\n  tag_name text not null unique,\n  tag_color text not null default '#e2e8f0',\n  description text,\n  is_active boolean not null default true,\n  created_by text,\n  created_at timestamptz not null default now(),\n  updated_at timestamptz not null default now(),\n  constraint ck_product_tags_name\n    check (length(btrim(tag_name)) between 1 and 32),\n  constraint ck_product_tags_color\n    check (tag_color ~ '^#[0-9A-Fa-f]{6}$')\n)"
+    },
+    {
+      "index": 1,
+      "text": "create table if not exists public.product_tag_assignments (\n  assignment_id uuid primary key default gen_random_uuid(),\n  tag_id uuid not null references public.product_tags(tag_id) on update cascade on delete restrict,\n  source_batch_id text not null,\n  source_channel text not null,\n  queue_id bigint not null,\n  sellpia_sku_code text,\n  channel_product_code text,\n  channel_option_code text,\n  reviewer text not null,\n  memo text,\n  is_active boolean not null default true,\n  created_at timestamptz not null default now(),\n  updated_at timestamptz not null default now(),\n  constraint ck_product_tag_assignments_reviewer\n    check (length(btrim(reviewer)) between 1 and 64)\n)"
+    },
+    {
+      "index": 2,
+      "text": "create unique index if not exists ux_product_tag_assignments_current_queue_tag\n  on public.product_tag_assignments(queue_id, tag_id)\n  where is_active = true"
+    },
+    {
+      "index": 3,
+      "text": "create index if not exists ix_product_tag_assignments_queue\n  on public.product_tag_assignments(queue_id, is_active)"
+    },
+    {
+      "index": 4,
+      "text": "create index if not exists ix_product_tag_assignments_tag\n  on public.product_tag_assignments(tag_id, is_active)"
+    },
+    {
+      "index": 5,
+      "text": "create index if not exists ix_product_tag_assignments_channel\n  on public.product_tag_assignments(source_channel, source_batch_id, is_active)"
+    },
+    {
+      "index": 7,
+      "text": "alter table public.product_tags enable row level security"
+    },
+    {
+      "index": 8,
+      "text": "alter table public.product_tag_assignments enable row level security"
+    },
+    {
+      "index": 9,
+      "text": "drop policy if exists \"product tags readable\" on public.product_tags"
+    },
+    {
+      "index": 10,
+      "text": "create policy \"product tags readable\"\n  on public.product_tags\n  for select\n  to anon, authenticated\n  using (is_active = true)"
+    },
+    {
+      "index": 11,
+      "text": "drop policy if exists \"product tags insertable\" on public.product_tags"
+    },
+    {
+      "index": 12,
+      "text": "create policy \"product tags insertable\"\n  on public.product_tags\n  for insert\n  to anon, authenticated\n  with check (\n    is_active = true\n    and length(btrim(tag_name)) between 1 and 32\n    and tag_color ~ '^#[0-9A-Fa-f]{6}$'\n  )"
+    },
+    {
+      "index": 13,
+      "text": "drop policy if exists \"product tag assignments readable\" on public.product_tag_assignments"
+    },
+    {
+      "index": 14,
+      "text": "create policy \"product tag assignments readable\"\n  on public.product_tag_assignments\n  for select\n  to anon, authenticated\n  using (\n    source_batch_id in (\n      'sample_smartstore_100',\n      'sample_makeshop_100',\n      'sample_smartstore_500',\n      'sample_makeshop_500'\n    )\n  )"
+    },
+    {
+      "index": 15,
+      "text": "drop policy if exists \"product tag assignments insertable\" on public.product_tag_assignments"
+    },
+    {
+      "index": 16,
+      "text": "create policy \"product tag assignments insertable\"\n  on public.product_tag_assignments\n  for insert\n  to anon, authenticated\n  with check (\n    is_active = true\n    and length(btrim(reviewer)) between 1 and 64\n    and source_batch_id in (\n      'sample_smartstore_100',\n      'sample_makeshop_100',\n      'sample_smartstore_500',\n      'sample_makeshop_500'\n    )\n  )"
+    },
+    {
+      "index": 17,
+      "text": "drop policy if exists \"product tag assignments updatable\" on public.product_tag_assignments"
+    },
+    {
+      "index": 18,
+      "text": "create policy \"product tag assignments updatable\"\n  on public.product_tag_assignments\n  for update\n  to anon, authenticated\n  using (\n    source_batch_id in (\n      'sample_smartstore_100',\n      'sample_makeshop_100',\n      'sample_smartstore_500',\n      'sample_makeshop_500'\n    )\n  )\n  with check (\n    source_batch_id in (\n      'sample_smartstore_100',\n      'sample_makeshop_100',\n      'sample_smartstore_500',\n      'sample_makeshop_500'\n    )\n  )"
+    },
+    {
+      "index": 19,
+      "text": "grant select, insert on public.product_tags to anon, authenticated"
+    },
+    {
+      "index": 20,
+      "text": "grant select, insert, update on public.product_tag_assignments to anon, authenticated"
+    },
+    {
+      "index": 21,
+      "text": "create or replace view public.mapping_matrix_review_sample_v3\nwith (security_invoker = true)\nas\nselect\n  q.*,\n  coalesce(tag_data.tags, '[]'::jsonb) as manual_tags,\n  coalesce(tag_data.tag_names, array[]::text[]) as manual_tag_names,\n  coalesce(cardinality(tag_data.tag_names), 0) as manual_tag_count,\n  coalesce(cardinality(tag_data.tag_names), 0) > 0 as has_manual_tag\nfrom public.mapping_matrix_review_sample_v2 q\nleft join lateral (\n  select\n    jsonb_agg(\n      jsonb_build_object(\n        'assignment_id', a.assignment_id,\n        'tag_id', t.tag_id,\n        'tag_name', t.tag_name,\n        'tag_color', t.tag_color,\n        'memo', a.memo,\n        'reviewer', a.reviewer,\n        'created_at', a.created_at\n      )\n      order by t.tag_name\n    ) as tags,\n    array_agg(t.tag_name order by t.tag_name) as tag_names\n  from public.product_tag_assignments a\n  join public.product_tags t\n    on t.tag_id = a.tag_id\n   and t.is_active = true\n  where a.queue_id = q.queue_id\n    and a.is_active = true\n) tag_data on true"
+    },
+    {
+      "index": 22,
+      "text": "grant select on public.mapping_matrix_review_sample_v3 to anon, authenticated"
+    }
+  ]
+}
+

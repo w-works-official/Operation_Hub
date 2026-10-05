@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260917084300",
+  "name": "hub_price_proof_verification_rpc_acl_v2",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Match existing public-invoker/private-definer RPC routing.\n-- Private v2 entries retain mandatory operator/session and QA-transaction guards.\ngrant execute on function operations_private.hub_baseline_plan_register_v2(text,uuid,text,uuid,integer,text,jsonb,integer,integer) to anon,authenticated;\ngrant execute on function operations_private.hub_baseline_artifact_seal_v2(text,uuid,text,text,text,text,jsonb,boolean) to anon,authenticated;\ngrant execute on function operations_private.hub_baseline_confirm_plan_v2(text,uuid,text,uuid,text,uuid,integer,text,jsonb,boolean) to anon,authenticated;\nnotify pgrst,'reload schema';"
+    }
+  ]
+}
+

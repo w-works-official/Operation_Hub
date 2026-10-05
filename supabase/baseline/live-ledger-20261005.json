@@ -1,0 +1,4310 @@
+{
+  "format_version": 1,
+  "captured_on": "2026-10-05",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "read_only_provenance": "Supabase connector list_migrations and read-only SELECT version,name,cardinality(statements),SHA256(statement sequence) FROM supabase_migrations.schema_migrations. Missing-by-name statement texts retrieved using SELECT only. No application row tables queried.",
+  "hash_definition": "SHA-256 UTF-8 array_to_string(statements, LF). Hash refers to complete original live statement sequence, not JSON archive file bytes.",
+  "warning": "NOT A REPLAY BASELINE. Do not apply archived statements or repair ledger based on timestamp/name correspondence. No live schema change authorized.",
+  "live_migration_count": 285,
+  "company_owned_sql_count_at_split": 222,
+  "missing_by_name_at_split": 68,
+  "repo_only_by_name": [
+    {
+      "path": "supabase\\migrations\\20260812045438_operations_hub_read_model.sql",
+      "version": "20260812045438",
+      "name": "operations_hub_read_model"
+    },
+    {
+      "path": "supabase\\migrations\\20260812080000_operations_hub_matrix_presets.sql",
+      "version": "20260812080000",
+      "name": "operations_hub_matrix_presets"
+    },
+    {
+      "path": "supabase\\migrations\\20260820120500_cache_operations_hub_csv_export.sql",
+      "version": "20260820120500",
+      "name": "cache_operations_hub_csv_export"
+    },
+    {
+      "path": "supabase\\migrations\\20260820123000_nonblocking_operations_hub_csv_cache.sql",
+      "version": "20260820123000",
+      "name": "nonblocking_operations_hub_csv_cache"
+    },
+    {
+      "path": "supabase\\migrations\\20260820134500_operations_hub_inventory_survey.sql",
+      "version": "20260820134500",
+      "name": "operations_hub_inventory_survey"
+    }
+  ],
+  "duplicate_local_versions": [
+    {
+      "path": "supabase\\migrations\\20260910090000_hub_calculated_export_stream.sql",
+      "version": "20260910090000",
+      "name": "hub_calculated_export_stream"
+    },
+    {
+      "path": "supabase\\migrations\\20260910090000_hub_seller_unmatched_templates.sql",
+      "version": "20260910090000",
+      "name": "hub_seller_unmatched_templates"
+    }
+  ],
+  "migrations": [
+    {
+      "version": "20260618051611",
+      "name": "system_v1_initial_review_schema",
+      "statement_count": 43,
+      "body_sha256": "a01e2deaf9a88b867bf56ad0df146e2c8b31a07519e1aa83692d44cf3e0d4dc8",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618051611_system_v1_initial_review_schema.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/BACKUP_20260701_laptop_repair/projects/Supabase_Integ_Handoff_0619/integ_refs/20260618051611_system_v1_initial_review_schema.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618051611_system_v1_initial_review_schema.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618051611",
+        "name": "system_v1_initial_review_schema",
+        "file": "supabase/baseline/statements/20260618051611_system_v1_initial_review_schema.statements.json",
+        "original_statement_count": 43,
+        "retained_statement_count": 43,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260618055104",
+      "name": "match_candidate_queue_details",
+      "statement_count": 12,
+      "body_sha256": "3e7c5014122587589090f8774f2fa941edff2e656ed28387afd54b9541356bbf",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618055104_match_candidate_queue_details.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618055104_match_candidate_queue_details.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618055104",
+        "name": "match_candidate_queue_details",
+        "file": "supabase/baseline/statements/20260618055104_match_candidate_queue_details.statements.json",
+        "original_statement_count": 12,
+        "retained_statement_count": 12,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260618060120",
+      "name": "match_candidate_queue_source_key",
+      "statement_count": 3,
+      "body_sha256": "51c80f572221dc1edb9d6cb5b1f42266c28fd406fa4953e20b5e27c50abaf0d5",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618060120_match_candidate_queue_source_key.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618060120_match_candidate_queue_source_key.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618060120",
+        "name": "match_candidate_queue_source_key",
+        "file": "supabase/baseline/statements/20260618060120_match_candidate_queue_source_key.statements.json",
+        "original_statement_count": 3,
+        "retained_statement_count": 3,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260618061155",
+      "name": "local_html_sample_queue_public_read",
+      "statement_count": 7,
+      "body_sha256": "6d83f7f5a508f9b23e6977e034296b31a2dbaa01483ee9d198fc46ef17f66460",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618061155_local_html_sample_queue_public_read.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618061155_local_html_sample_queue_public_read.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618061155",
+        "name": "local_html_sample_queue_public_read",
+        "file": "supabase/baseline/statements/20260618061155_local_html_sample_queue_public_read.statements.json",
+        "original_statement_count": 7,
+        "retained_statement_count": 7,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260618061723",
+      "name": "public_sample_match_candidate_views",
+      "statement_count": 4,
+      "body_sha256": "303bd2de9ccd076bf9d97ddd2bb50307021896cf1992de8fd144e60ebeefdda7",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618061723_public_sample_match_candidate_views.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618061723_public_sample_match_candidate_views.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618061723",
+        "name": "public_sample_match_candidate_views",
+        "file": "supabase/baseline/statements/20260618061723_public_sample_match_candidate_views.statements.json",
+        "original_statement_count": 4,
+        "retained_statement_count": 4,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260618062426",
+      "name": "product_image_storage_assets",
+      "statement_count": 15,
+      "body_sha256": "356be9a7b42b1febf7c8ebc77550f3e12dc641469a148fe180c95e0838e48c0a",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618062426_product_image_storage_assets.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618062426_product_image_storage_assets.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618062426",
+        "name": "product_image_storage_assets",
+        "file": "supabase/baseline/statements/20260618062426_product_image_storage_assets.statements.json",
+        "original_statement_count": 15,
+        "retained_statement_count": 14,
+        "omitted_statement_indexes": [
+          1
+        ],
+        "status": "NEEDS_REVIEW_DML_BODY_WITHHELD"
+      }
+    },
+    {
+      "version": "20260618065410",
+      "name": "public_sample_match_candidate_views_1000",
+      "statement_count": 6,
+      "body_sha256": "86046cf5028119eab596bfd5441c3b0ad94dbf83b884966078f9c1147c485dd9",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618065410_public_sample_match_candidate_views_1000.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618065410_public_sample_match_candidate_views_1000.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618065410",
+        "name": "public_sample_match_candidate_views_1000",
+        "file": "supabase/baseline/statements/20260618065410_public_sample_match_candidate_views_1000.statements.json",
+        "original_statement_count": 6,
+        "retained_statement_count": 6,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260618065744",
+      "name": "sample_queue_anon_policy_1000",
+      "statement_count": 4,
+      "body_sha256": "f0d3b90c35b1132756d70a0ddabfda0619c918bba939e650b151e966f83cf469",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618065744_sample_queue_anon_policy_1000.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618065744_sample_queue_anon_policy_1000.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618065744",
+        "name": "sample_queue_anon_policy_1000",
+        "file": "supabase/baseline/statements/20260618065744_sample_queue_anon_policy_1000.statements.json",
+        "original_statement_count": 4,
+        "retained_statement_count": 4,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260618094115",
+      "name": "manual_product_tags_day1",
+      "statement_count": 23,
+      "body_sha256": "b7454e530ba8caa205930fb228a229ee85b639f528d1e26bb8ede4c760452526",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618094115_manual_product_tags_day1.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260618094115_manual_product_tags_day1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260618094115",
+        "name": "manual_product_tags_day1",
+        "file": "supabase/baseline/statements/20260618094115_manual_product_tags_day1.statements.json",
+        "original_statement_count": 23,
+        "retained_statement_count": 22,
+        "omitted_statement_indexes": [
+          6
+        ],
+        "status": "NEEDS_REVIEW_DML_BODY_WITHHELD"
+      }
+    },
+    {
+      "version": "20260625072458",
+      "name": "sellpia_shared_product_tags",
+      "statement_count": 1,
+      "body_sha256": "68f829fb7919635875853655553169c5170b0bd90325b26571a3d278cbfeede2",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260625133000_sellpia_shared_product_tags.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260625133000_sellpia_shared_product_tags.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260625072458",
+        "name": "sellpia_shared_product_tags",
+        "file": "supabase/baseline/statements/20260625072458_sellpia_shared_product_tags.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260626031533",
+      "name": "public_api_grant_hardening",
+      "statement_count": 1,
+      "body_sha256": "36000913ea3a6f81e1b4a6433cc8faf7c7d9d1a77e69f4d9a0e475047e5a7c6c",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_OLD_20260711_guard_commit/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260626093000_public_api_grant_hardening.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-07-11/f-v1-db-write-delete-update/work_CLEAN_20260711/MY/handoff/picking-system-integ-20260701/supabase/migrations/20260626093000_public_api_grant_hardening.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260626031533",
+        "name": "public_api_grant_hardening",
+        "file": "supabase/baseline/statements/20260626031533_public_api_grant_hardening.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260728013827",
+      "name": "backup_final_excel_mapping_20260728_v1",
+      "statement_count": 1,
+      "body_sha256": "ea763bdea636cbb719e5a62653e2673ff029f14026a8bcf95acb8a2baea64d3e",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260728013827",
+        "name": "backup_final_excel_mapping_20260728_v1",
+        "file": "supabase/baseline/statements/20260728013827_backup_final_excel_mapping_20260728_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260728014204",
+      "name": "temp_mapping_import_storage_policy_20260728",
+      "statement_count": 1,
+      "body_sha256": "f6264108e1fd7314fd8af5643bf8a5fe700d29df86cf1e62c89f956242fa84c5",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260728014204",
+        "name": "temp_mapping_import_storage_policy_20260728",
+        "file": "supabase/baseline/statements/20260728014204_temp_mapping_import_storage_policy_20260728.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729014416",
+      "name": "create_channel_sku_mapping_import_tables_20260729",
+      "statement_count": 1,
+      "body_sha256": "d5f89e5d828c38d75c8528fc4bb302e4a76e413ed52d375f4815d81c2ce66c10",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729014416",
+        "name": "create_channel_sku_mapping_import_tables_20260729",
+        "file": "supabase/baseline/statements/20260729014416_create_channel_sku_mapping_import_tables_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729015332",
+      "name": "create_mapping_hash_import_helpers_20260729",
+      "statement_count": 1,
+      "body_sha256": "a71c4d7391a0b24a7123ddc56fd4621881b0dbffc93c7516d7b4f3aaf0f3adaf",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729015332",
+        "name": "create_mapping_hash_import_helpers_20260729",
+        "file": "supabase/baseline/statements/20260729015332_create_mapping_hash_import_helpers_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729020436",
+      "name": "create_mapping_bloom_import_helpers_20260729",
+      "statement_count": 1,
+      "body_sha256": "b88dc54284dc6c9e1b2afe7c903b5f3ce81f9ea6840d4aa03a05a8b56646c1fb",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729020436",
+        "name": "create_mapping_bloom_import_helpers_20260729",
+        "file": "supabase/baseline/statements/20260729020436_create_mapping_bloom_import_helpers_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729021937",
+      "name": "enable_http_for_mapping_import_20260729",
+      "statement_count": 1,
+      "body_sha256": "b5b79f616c8cc09827b263ca33c134a193821285b414e16488b6bd533cd7480b",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729021937",
+        "name": "enable_http_for_mapping_import_20260729",
+        "file": "supabase/baseline/statements/20260729021937_enable_http_for_mapping_import_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729022304",
+      "name": "create_mapping_import_payload_chunks_20260729",
+      "statement_count": 1,
+      "body_sha256": "e59b11f281c7a6485181ebc1ab1c21a09ae96f26b463ae6f2ca9b6b30b102c20",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729022304",
+        "name": "create_mapping_import_payload_chunks_20260729",
+        "file": "supabase/baseline/statements/20260729022304_create_mapping_import_payload_chunks_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729022438",
+      "name": "create_final_excel_mapping_import_20260729",
+      "statement_count": 1,
+      "body_sha256": "5c6d8d25d114668ab86a561091d46be74e60d728b7b8726f4b83c351a065a974",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729022438",
+        "name": "create_final_excel_mapping_import_20260729",
+        "file": "supabase/baseline/statements/20260729022438_create_final_excel_mapping_import_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729022538",
+      "name": "enable_http_and_temp_mapping_upload_20260729",
+      "statement_count": 1,
+      "body_sha256": "6ccaaa550db76205d3f7d58012a150a77ab2f56155f281b5f2743c7550bdb903",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729022538",
+        "name": "enable_http_and_temp_mapping_upload_20260729",
+        "file": "supabase/baseline/statements/20260729022538_enable_http_and_temp_mapping_upload_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729022743",
+      "name": "remove_temp_mapping_upload_policies_20260729",
+      "statement_count": 1,
+      "body_sha256": "7105f76008058ad5aa5d5fe5420551a0b9c001c0cfc213e10046c6d3e5e68216",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729022743",
+        "name": "remove_temp_mapping_upload_policies_20260729",
+        "file": "supabase/baseline/statements/20260729022743_remove_temp_mapping_upload_policies_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729025418",
+      "name": "cleanup_obsolete_matching_artifacts_phase1_20260729",
+      "statement_count": 1,
+      "body_sha256": "bd2a38125bb9a684a31ebc7d28bf992f516beb4098f1cdcd77557de28d4ea5d9",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729025418",
+        "name": "cleanup_obsolete_matching_artifacts_phase1_20260729",
+        "file": "supabase/baseline/statements/20260729025418_cleanup_obsolete_matching_artifacts_phase1_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729025936",
+      "name": "remove_legacy_product_matching_pipeline_20260729",
+      "statement_count": 1,
+      "body_sha256": "2df5d91e6d7768da3fc784358ea82b15b8e097b7a91f9d4fb793126b2d4ddc1e",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729025936",
+        "name": "remove_legacy_product_matching_pipeline_20260729",
+        "file": "supabase/baseline/statements/20260729025936_remove_legacy_product_matching_pipeline_20260729.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260729070553",
+      "name": "add_sheet_mapping_page_rpc",
+      "statement_count": 1,
+      "body_sha256": "c3a709fcc297fbbec5ddeedb1fa5b9cbccdbe65df219bd9e9b19579b16004a01",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260729070553",
+        "name": "add_sheet_mapping_page_rpc",
+        "file": null,
+        "original_statement_count": 1,
+        "retained_statement_count": 0,
+        "omitted_statement_indexes": [
+          0
+        ],
+        "status": "NEEDS_REVIEW_SECRET_BODY_WITHHELD",
+        "reason": "Live history contains a literal secret in an authorization comparison. Entire statement withheld; original live hash retained as provenance only."
+      }
+    },
+    {
+      "version": "20260806020553",
+      "name": "add_sheet_manual_mapping_upsert",
+      "statement_count": 1,
+      "body_sha256": "72905646964a36f6c1cfc729f922dcda453696ea55afa99624df83b5c80a6ec2",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260806020553",
+        "name": "add_sheet_manual_mapping_upsert",
+        "file": "supabase/baseline/statements/20260806020553_add_sheet_manual_mapping_upsert.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260811032036",
+      "name": "add_source_sync_event_log",
+      "statement_count": 1,
+      "body_sha256": "f05422def4507aca493e96e8b931234fcac334ca5779a03fff8da6623fde7282",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260811032036",
+        "name": "add_source_sync_event_log",
+        "file": "supabase/baseline/statements/20260811032036_add_source_sync_event_log.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260811032113",
+      "name": "restrict_source_sync_event_rpc",
+      "statement_count": 1,
+      "body_sha256": "e158bdb172dd82f414219ea360a05717bd197f3afc87031823798b5ac3634b1d",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260811032113",
+        "name": "restrict_source_sync_event_rpc",
+        "file": "supabase/baseline/statements/20260811032113_restrict_source_sync_event_rpc.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260812034459",
+      "name": "allow_dashboard_sellpia_photo_upsert",
+      "statement_count": 1,
+      "body_sha256": "31bf16927698958be46e97411271c06edd1318effe8ba77387602ef003e01860",
+      "repo_sources": [
+        "supabase/image-project-migrations/20260812032000_allow_dashboard_sellpia_photo_upsert.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260812052850",
+      "name": "operations_hub_sellpia_inventory",
+      "statement_count": 1,
+      "body_sha256": "2e360497bec61c2d2db8ff3616d84af30bd0d3b6d3825a9d5f9d81d7dea558cc",
+      "repo_sources": [
+        "supabase/migrations/20260812070000_operations_hub_sellpia_inventory.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260812065849",
+      "name": "operations_hub_seller_inventory",
+      "statement_count": 1,
+      "body_sha256": "a27fd76ba48604cba2b75fddca4aa516a0a975beaaa5bbe653e1fbf064fae68d",
+      "repo_sources": [
+        "supabase/migrations/20260812093000_operations_hub_seller_inventory.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260812071625",
+      "name": "optimize_operations_hub_live_matrix",
+      "statement_count": 1,
+      "body_sha256": "a43b330e70783cf86cc20f0922d068241f982da83fc6cfe671c4584f95d25366",
+      "repo_sources": [
+        "supabase/migrations/20260812163000_optimize_operations_hub_live_matrix.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260812071954",
+      "name": "move_operations_hub_cache_private",
+      "statement_count": 1,
+      "body_sha256": "b4783f234c4dd77d38460232b7f782daf1605f404ed9398a12846529cffe538d",
+      "repo_sources": [
+        "supabase/migrations/20260812164000_move_operations_hub_cache_private.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260812072905",
+      "name": "operations_hub_sellpia_edits",
+      "statement_count": 1,
+      "body_sha256": "0175d8b3e7879ffd6633f2dfe2144656e085bdc90eeeb13eec1b947d9efd2d99",
+      "repo_sources": [
+        "supabase/migrations/20260812170000_operations_hub_sellpia_edits.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814020350",
+      "name": "operations_hub_manual_links_and_seller_details",
+      "statement_count": 1,
+      "body_sha256": "c85e2531f05c6d077406f836e9f41183f649e48f0d752cd1aad3aea6ef621242",
+      "repo_sources": [
+        "supabase/migrations/20260814020007_operations_hub_manual_links_and_seller_details.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814021259",
+      "name": "fix_operations_hub_manual_link_conflict",
+      "statement_count": 1,
+      "body_sha256": "ca9f02302de24152d4b8cbe318b1458939df6fa8a3f319ef65050bf587dfba1a",
+      "repo_sources": [
+        "supabase/migrations/20260814021208_fix_operations_hub_manual_link_conflict.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814025145",
+      "name": "operations_hub_code_list_lookup",
+      "statement_count": 1,
+      "body_sha256": "f398e7e601475ea2e84835303b671caa4e756794130a8ec9255d9aa9f2c8e3fc",
+      "repo_sources": [
+        "supabase/migrations/20260814024918_operations_hub_code_list_lookup.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814030527",
+      "name": "operations_hub_search_source_filters",
+      "statement_count": 1,
+      "body_sha256": "74fb062e0e4aa7089e32495856006a8394251c3a9563061fa91452cc2e9dc4c6",
+      "repo_sources": [
+        "supabase/migrations/20260814030241_operations_hub_search_source_filters.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814035022",
+      "name": "operations_hub_change_workflow",
+      "statement_count": 1,
+      "body_sha256": "64a087f98ae3ffc24a966c48a2452eff70a0517d26f58b292f6896b18f67efac",
+      "repo_sources": [
+        "supabase/migrations/20260814043000_operations_hub_change_workflow.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814042022",
+      "name": "operations_hub_seller_export",
+      "statement_count": 1,
+      "body_sha256": "d89c9cfbbd3a90a551cfc33c52f5a45bef20cac5613a8a532e3e953e8377164c",
+      "repo_sources": [
+        "supabase/migrations/20260814131808_operations_hub_seller_export.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814042743",
+      "name": "operations_hub_export_failure_finalize",
+      "statement_count": 1,
+      "body_sha256": "5ebc9642000b73492d34b261869e74edb281568ab748c630104d76f90726164a",
+      "repo_sources": [
+        "supabase/migrations/20260814140500_operations_hub_export_failure_finalize.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814043047",
+      "name": "operations_hub_export_partial_success",
+      "statement_count": 1,
+      "body_sha256": "d53f7e64c2688e44b9c2c56ce961342fec1baaa4accfeb1ca6ea02bf7c73b6bf",
+      "repo_sources": [
+        "supabase/migrations/20260814143500_operations_hub_export_partial_success.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814045210",
+      "name": "operations_hub_seller_drafts_and_originals",
+      "statement_count": 1,
+      "body_sha256": "6a063c3f1c0b14bc13ce6e9a07c9194de361e56bde4389c10e7ccf19e2d35945",
+      "repo_sources": [
+        "supabase/migrations/20260814153000_operations_hub_seller_drafts_and_originals.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814045609",
+      "name": "operations_hub_export_source_alias",
+      "statement_count": 1,
+      "body_sha256": "e6d56d459855fc1be4fbf73f7665f9968181094613e1485fc81832589c2cd563",
+      "repo_sources": [
+        "supabase/migrations/20260814154500_operations_hub_export_source_alias.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814050911",
+      "name": "operations_hub_export_bulk_prepare",
+      "statement_count": 1,
+      "body_sha256": "8cb8a523277da48a2f027dfcc655f22841137683e143af15a38950bcbe50ff6f",
+      "repo_sources": [
+        "supabase/migrations/20260814173000_operations_hub_export_bulk_prepare.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814053439",
+      "name": "operations_hub_export_row_conflicts",
+      "statement_count": 1,
+      "body_sha256": "81e0af07d35fc55d8086a09b605173f2791ed91f0259803ee86eaf48be13486e",
+      "repo_sources": [
+        "supabase/migrations/20260814183000_operations_hub_export_row_conflicts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814055112",
+      "name": "operations_hub_inventory_match_batches",
+      "statement_count": 1,
+      "body_sha256": "02c9e9826509114dac427a72659bc7718e4ecf4947b4690ac53045a0c2d4e557",
+      "repo_sources": [
+        "supabase/migrations/20260814190000_operations_hub_inventory_match_batches.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814064117",
+      "name": "operations_hub_search_drafts_projection",
+      "statement_count": 1,
+      "body_sha256": "9496b697a0bb034d7d53333a5ab801b23b052368f38ff4554b0b0f402db4321b",
+      "repo_sources": [
+        "supabase/migrations/20260814063641_operations_hub_search_drafts_projection.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260814064231",
+      "name": "operations_hub_projection_failed_state",
+      "statement_count": 1,
+      "body_sha256": "a86e91fdc6e1d1acd353f6fdc5f9d002d19f509519383f0fb54a30d409c4df09",
+      "repo_sources": [
+        "supabase/migrations/20260814064148_operations_hub_projection_failed_state.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818014154",
+      "name": "operations_hub_mapping_sync",
+      "statement_count": 1,
+      "body_sha256": "1741ab5d221ad521dba50762a8c1b1fabaf72ec3b043aa3a14101139a44fb204",
+      "repo_sources": [
+        "supabase/migrations/20260818013437_operations_hub_mapping_sync.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818014544",
+      "name": "fix_operations_hub_mapping_batch_separator",
+      "statement_count": 1,
+      "body_sha256": "a69441b712f14443898a570c60b455114ee95c61a5c8f0d10c0d0621b310d797",
+      "repo_sources": [
+        "supabase/migrations/20260818014307_fix_operations_hub_mapping_batch_separator.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818014810",
+      "name": "add_operations_hub_backup_primary_key",
+      "statement_count": 1,
+      "body_sha256": "838f356eabb481c5b894838a4f85fd05b0baa46f136e0f7c7d75486c331b511e",
+      "repo_sources": [
+        "supabase/migrations/20260818014735_add_operations_hub_backup_primary_key.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818020154",
+      "name": "operations_hub_mapping_workflow_adapter",
+      "statement_count": 1,
+      "body_sha256": "9a7c1fba21ae9cd569d0874eeae1fbc62ff8586579d91ddbdc6e4a9b73666beb",
+      "repo_sources": [
+        "supabase/migrations/20260818015705_operations_hub_mapping_workflow_adapter.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818024647",
+      "name": "operations_hub_product_profiles",
+      "statement_count": 1,
+      "body_sha256": "4103cc0d98390973560fd945d4cd9f27453c3939a54566e3ff62b3b87dd6ee82",
+      "repo_sources": [
+        "supabase/migrations/20260818024647_operations_hub_product_profiles.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818031710",
+      "name": "operations_hub_price_policy_engine",
+      "statement_count": 1,
+      "body_sha256": "f5446d673e376340109219a9d7e8fb53847e62e01eba7c94b21b4078c4f9badf",
+      "repo_sources": [
+        "supabase/migrations/20260818031045_operations_hub_price_policy_engine.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818034159",
+      "name": "operations_hub_multilink_bom",
+      "statement_count": 1,
+      "body_sha256": "d0030f77176bd68f355804c74653f753363b50cee46441022fbb2d816f4226bb",
+      "repo_sources": [
+        "supabase/migrations/20260818033238_operations_hub_multilink_bom.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818034444",
+      "name": "optimize_operations_hub_multilink_cache",
+      "statement_count": 1,
+      "body_sha256": "a57608cbb0f5cba3b84a2e17231cdf02e0b969738136563facc1153e43f3e966",
+      "repo_sources": [
+        "supabase/migrations/20260818034351_optimize_operations_hub_multilink_cache.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818034659",
+      "name": "optimize_operations_hub_multilink_rollup",
+      "statement_count": 1,
+      "body_sha256": "a8a88dc277c0f58783e236aa516142a6baa3b5a1decfe2fb9acaf3f527b14517",
+      "repo_sources": [
+        "supabase/migrations/20260818034543_optimize_operations_hub_multilink_rollup.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818034818",
+      "name": "exclude_ambiguous_legacy_listing_options",
+      "statement_count": 1,
+      "body_sha256": "64262b0b34076c9de578687e174684b0e728e283c2e08870975df574d6525299",
+      "repo_sources": [
+        "supabase/migrations/20260818034744_exclude_ambiguous_legacy_listing_options.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818034927",
+      "name": "fix_multilink_component_upsert_conflict",
+      "statement_count": 1,
+      "body_sha256": "d71b89dab140291ff3532e858a1db69a6fed4d7f5117c0ee8c863cc58544c1a5",
+      "repo_sources": [
+        "supabase/migrations/20260818034857_fix_multilink_component_upsert_conflict.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818035017",
+      "name": "correct_multilink_constraint_name",
+      "statement_count": 1,
+      "body_sha256": "2819b6fe06ac7e318ccf38b5d1f480e6558eff8cd421f66122688c7c7a1dee65",
+      "repo_sources": [
+        "supabase/migrations/20260818034953_correct_multilink_constraint_name.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818035302",
+      "name": "index_multilink_component_event_fk",
+      "statement_count": 1,
+      "body_sha256": "5524e63109c47307f65242299a3464a96e51167fdb5301de3a025bfb64be8c19",
+      "repo_sources": [
+        "supabase/migrations/20260818035245_index_multilink_component_event_fk.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818035408",
+      "name": "global_identity_check_for_partial_link_refresh",
+      "statement_count": 1,
+      "body_sha256": "d7cbde0778365e797469c4b0757c18cc18eab4ae5ff60c318fe2c8db39f4079c",
+      "repo_sources": [
+        "supabase/migrations/20260818035322_global_identity_check_for_partial_link_refresh.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818045931",
+      "name": "operations_hub_bundle_inventory_drafts",
+      "statement_count": 1,
+      "body_sha256": "1eac9d2176e7e2b523addfc11ce1e1e50d0228bdfc7f4c2297158faf4ecf9c79",
+      "repo_sources": [
+        "supabase/migrations/20260818045443_operations_hub_bundle_inventory_drafts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818083313",
+      "name": "operations_hub_advanced_matrix_filters",
+      "statement_count": 1,
+      "body_sha256": "e708368ebee16fb03d6b46abe04d2aa74f4e9117beb9b7d3ce3693ecc7f16844",
+      "repo_sources": [
+        "supabase/migrations/20260818082659_operations_hub_advanced_matrix_filters.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260818084646",
+      "name": "optimize_operations_hub_advanced_filters",
+      "statement_count": 1,
+      "body_sha256": "3f99806593f516529da5789e2342acd1e68a1e3fcf3cb66b46278f7a50380f3b",
+      "repo_sources": [
+        "supabase/migrations/20260818084516_optimize_operations_hub_advanced_filters.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820022639",
+      "name": "operations_hub_filtered_csv_export",
+      "statement_count": 1,
+      "body_sha256": "eddfcc0b296296a80a8979af34bfdf17bd8cba6199924fb270a53d190abf3747",
+      "repo_sources": [
+        "supabase/migrations/20260820093000_operations_hub_filtered_csv_export.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820022907",
+      "name": "optimize_operations_hub_filtered_csv_export",
+      "statement_count": 1,
+      "body_sha256": "0ec753f91732bcbe0357c02045339bf0f81f0edbc96379eff2b0e7cf19b7f9e6",
+      "repo_sources": [
+        "supabase/migrations/20260820094500_optimize_operations_hub_filtered_csv_export.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820031327",
+      "name": "create_operations_hub_inventory_survey",
+      "statement_count": 1,
+      "body_sha256": "04c13a1e72058e5cab5bc6be0985583eba8f951a46e66d64d48d09dec44b76cc",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260820031327",
+        "name": "create_operations_hub_inventory_survey",
+        "file": "supabase/baseline/statements/20260820031327_create_operations_hub_inventory_survey.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260820034356",
+      "name": "sellpia_authoritative_matrix",
+      "statement_count": 1,
+      "body_sha256": "b56626bc5defec7e3e7be2ae14f2b262c3262386df20aaa90b52a1b547316131",
+      "repo_sources": [
+        "supabase/migrations/20260820150000_sellpia_authoritative_matrix.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820043306",
+      "name": "fix_sellpia_csv_and_matrix_read_cache",
+      "statement_count": 1,
+      "body_sha256": "1d4a9bf7451c443d1e505e29e4b0f1ca9c8a053e7ad4f22908fa76207a3a027c",
+      "repo_sources": [
+        "supabase/migrations/20260820183000_fix_sellpia_csv_and_matrix_read_cache.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820043949",
+      "name": "cache_operations_hub_dashboard_metrics",
+      "statement_count": 1,
+      "body_sha256": "119f997ec0344eb6d307c88dee37eb35642dad5154d4538b35816dd8cb7a0668",
+      "repo_sources": [
+        "supabase/migrations/20260820184500_cache_operations_hub_dashboard_metrics.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820044341",
+      "name": "optimize_operations_hub_listing_source_search",
+      "statement_count": 1,
+      "body_sha256": "868e84a141c22503e9f6375bd1ab95255e937d29aacd776b4421949646b956c1",
+      "repo_sources": [
+        "supabase/migrations/20260820190000_optimize_operations_hub_listing_source_search.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820044436",
+      "name": "index_operations_hub_listing_source_search",
+      "statement_count": 1,
+      "body_sha256": "3466ac698ec0e0bf0a76f6aee1da1024fbe1aa60ab1e959c489e7323c00fa6c5",
+      "repo_sources": [
+        "supabase/migrations/20260820191500_index_operations_hub_listing_source_search.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820044855",
+      "name": "skip_unchanged_operations_hub_cache_refresh",
+      "statement_count": 1,
+      "body_sha256": "e234772ce98494b8b8cf0a96b25f89ca4a9069b560489fff3d374e9de9d4fed9",
+      "repo_sources": [
+        "supabase/migrations/20260820193000_skip_unchanged_operations_hub_cache_refresh.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820055229",
+      "name": "seller_patch_upload_and_price_layers",
+      "statement_count": 1,
+      "body_sha256": "afeb92502eccbe2fce77129fa75f059cfee0b0e695ec2cbbac0ea985ab9e7e04",
+      "repo_sources": [
+        "supabase/migrations/20260820054207_seller_patch_upload_and_price_layers.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820055406",
+      "name": "seller_patch_base_snapshot_index",
+      "statement_count": 1,
+      "body_sha256": "2b136c000552c1b95b0f297d1c2b1e802a51a5c17db297554a5c11002c2b5eb5",
+      "repo_sources": [
+        "supabase/migrations/20260820055356_seller_patch_base_snapshot_index.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820062737",
+      "name": "simplify_price_rules_and_baseline_save",
+      "statement_count": 1,
+      "body_sha256": "a6644d1f618a636cc4b9114adb8a2f08a087d43c3ada134f2f252078f6f2d760",
+      "repo_sources": [
+        "supabase/migrations/20260820061850_simplify_price_rules_and_baseline_save.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820065111",
+      "name": "price_rule_tags_qa_sandbox",
+      "statement_count": 1,
+      "body_sha256": "c523189201f24b74ecd7b4cfb875e111f338aae2c6c97bd0b2b22a2828b7eb1e",
+      "repo_sources": [
+        "supabase/migrations/20260820200000_price_rule_tags_qa_sandbox.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820065208",
+      "name": "price_rule_tag_fk_indexes",
+      "statement_count": 1,
+      "body_sha256": "a574271602168366b4d024afdc1a8bd4dc0f4d63d46432b850af05d28824621c",
+      "repo_sources": [
+        "supabase/migrations/20260820201500_price_rule_tag_fk_indexes.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820072011",
+      "name": "price_rule_assignment_flow",
+      "statement_count": 1,
+      "body_sha256": "9fdb94aefdef10dc937d4c2d4af9efe005efb8011e7cd27e0edb7e1aa9c30832",
+      "repo_sources": [
+        "supabase/migrations/20260820210000_price_rule_assignment_flow.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260820081115",
+      "name": "operations_hub_sellpia_patch_upload",
+      "statement_count": 1,
+      "body_sha256": "df846d206acf858dacd579ec7e16b021f649db993f1fa371d38be1472b6288e1",
+      "repo_sources": [
+        "supabase/migrations/20260820220000_operations_hub_sellpia_patch_upload.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821021213",
+      "name": "operations_hub_seller_price_components",
+      "statement_count": 1,
+      "body_sha256": "5a0f97b93a9790c559567bce21080eb6145eb72e122df24d56c0f46f9bc02513",
+      "repo_sources": [
+        "supabase/migrations/20260821014626_operations_hub_seller_price_components.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821021231",
+      "name": "operations_hub_export_price_components",
+      "statement_count": 1,
+      "body_sha256": "214dfa52066d08f1be7ddee1c43f196847584ead0edce4289fc572a3442e0637",
+      "repo_sources": [
+        "supabase/migrations/20260821020657_operations_hub_export_price_components.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821021401",
+      "name": "backfill_legacy_seller_price_drafts",
+      "statement_count": 1,
+      "body_sha256": "badc2893d71fee5a4f9ded1b790d0beb95dced16714cf3a59bcf0111b40bd77e",
+      "repo_sources": [
+        "supabase/migrations/20260821021307_backfill_legacy_seller_price_drafts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821030242",
+      "name": "bulk_price_rule_assignment",
+      "statement_count": 1,
+      "body_sha256": "1bdf02c4405339b8641d189a349b2efaa20e80d95b7bc4533543ea347e7dfe80",
+      "repo_sources": [
+        "supabase/migrations/20260821040000_bulk_price_rule_assignment.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821030456",
+      "name": "price_rule_soft_delete",
+      "statement_count": 1,
+      "body_sha256": "69a71ec8dd7c54b323a70dd76f0656bd759c858b2acc469e4333918df89251b5",
+      "repo_sources": [
+        "supabase/migrations/20260821041000_price_rule_soft_delete.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821031034",
+      "name": "stage_assigned_price_drafts",
+      "statement_count": 1,
+      "body_sha256": "4ad59cc92cff2f39b030c01e58aa55a87e063d8e37705936ef36498a7b7269b5",
+      "repo_sources": [
+        "supabase/migrations/20260821042000_stage_assigned_price_drafts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821032328",
+      "name": "remove_price_rule_virtual_qa_dependency",
+      "statement_count": 1,
+      "body_sha256": "0a026e5c0dbfafa9772a49136d04b4d795f45509aeb8a151af1855fecb4fcfab",
+      "repo_sources": [
+        "supabase/migrations/20260821043000_remove_price_rule_virtual_qa_dependency.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821032331",
+      "name": "seed_live_price_test_products",
+      "statement_count": 1,
+      "body_sha256": "32062503c6af4572c83499204e13515e46540052037170d031d1f3f34f60a661",
+      "repo_sources": [
+        "supabase/migrations/20260821044000_seed_live_price_test_products.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821034025",
+      "name": "drop_price_rule_virtual_qa",
+      "statement_count": 1,
+      "body_sha256": "e6aa014c53d2f037f1ba8a8bb5b23e35e14e70ca7bb9ba04382478bec6b3404d",
+      "repo_sources": [
+        "supabase/migrations/20260821045000_drop_price_rule_virtual_qa.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821050640",
+      "name": "operations_hub_seller_discount_terms_v2",
+      "statement_count": 1,
+      "body_sha256": "10b9871e6536b3350cd1921d094ff4d429eb19443814deefb092b1e737a02ae4",
+      "repo_sources": [
+        "supabase/migrations/20260821110000_operations_hub_seller_discount_terms_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821051632",
+      "name": "operations_hub_export_discount_bridge_v2",
+      "statement_count": 1,
+      "body_sha256": "3fffa81c607b4dad5aca899dcd1a31c9a8ea6ea4a78d0c68501d027382cb198f",
+      "repo_sources": [
+        "supabase/migrations/20260821113000_operations_hub_export_discount_bridge_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821051720",
+      "name": "operations_hub_price_v2_fk_indexes",
+      "statement_count": 1,
+      "body_sha256": "1bdc1549f25662ebfa3b38077ebe5e9c1c1bf06840bcbfa9de3dbf29fa5d4f56",
+      "repo_sources": [
+        "supabase/migrations/20260821114000_operations_hub_price_v2_fk_indexes.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821063033",
+      "name": "operations_hub_editable_seller_discounts",
+      "statement_count": 1,
+      "body_sha256": "da0c4cef49ed474aa641b91c2634441f45f198e46ffca838dca28c6fa5636caf",
+      "repo_sources": [
+        "supabase/migrations/20260821190000_operations_hub_editable_seller_discounts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260821071206",
+      "name": "disconnect_legacy_listing_component",
+      "statement_count": 1,
+      "body_sha256": "b4088d7c201119e61ad4fd49c1116309bb057f14d6770574df0167ebad7878d5",
+      "repo_sources": [
+        "supabase/migrations/20260821200000_disconnect_legacy_listing_component.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260823083314",
+      "name": "optimize_operations_hub_listing_graph_page_first",
+      "statement_count": 1,
+      "body_sha256": "9305c0df18c3090180d8126ea7ee611591a4544b67e945def91f275b332cba34",
+      "repo_sources": [
+        "supabase/migrations/20260823082547_optimize_operations_hub_listing_graph_page_first.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260824033753",
+      "name": "operations_hub_product_discount_editor",
+      "statement_count": 1,
+      "body_sha256": "0e6e4fef6a428deb0e75100cea0a343143bc3fa216370e328c0c330cda056e15",
+      "repo_sources": [
+        "supabase/migrations/20260824033753_operations_hub_product_discount_editor.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260824043243",
+      "name": "preserve_target_price_when_editing_discounts",
+      "statement_count": 1,
+      "body_sha256": "8393395fd1e49cc8023bb2f70c1c66943e92878a7aa1738f12a5790241b85b28",
+      "repo_sources": [
+        "supabase/migrations/20260824043243_preserve_target_price_when_editing_discounts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260824082310",
+      "name": "production_price_rules_and_tag_gated_discounts",
+      "statement_count": 1,
+      "body_sha256": "d9fd7134f4aeabef6c48730c8045fe2e75a949b5483345f74fcba49ee8f4d765",
+      "repo_sources": [
+        "supabase/migrations/20260824082310_production_price_rules_and_tag_gated_discounts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260824082536",
+      "name": "remove_partial_production_price_rule_assignments",
+      "statement_count": 1,
+      "body_sha256": "d88deb97b7f4911e3bd17692bdfe040b59b566e62fde62b4c5cf8ecf24cef8ae",
+      "repo_sources": [
+        "supabase/migrations/20260824082536_remove_partial_production_price_rule_assignments.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825013259",
+      "name": "reprice_on_sellpia_price_change",
+      "statement_count": 1,
+      "body_sha256": "4b82f82dbddab9c97b45c3f5fcd494d8cbdcf802690a41dabc97363b63d52ff2",
+      "repo_sources": [
+        "supabase/migrations/20260825013259_reprice_on_sellpia_price_change.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825020424",
+      "name": "live_sellpia_override_matrix",
+      "statement_count": 1,
+      "body_sha256": "2d9f7990e2eae516df0014e7df5978a294800ff9aee7e7aa3464b774ad3280be",
+      "repo_sources": [
+        "supabase/migrations/20260825023000_live_sellpia_override_matrix.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825020810",
+      "name": "preserve_matrix_sku_index_order",
+      "statement_count": 1,
+      "body_sha256": "4753a97d629a58aeeb587fe28eabf13f60c504cb4d7c02289bb7e533ab8fedb2",
+      "repo_sources": [
+        "supabase/migrations/20260825024500_preserve_matrix_sku_index_order.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825020939",
+      "name": "flatten_live_matrix_view",
+      "statement_count": 1,
+      "body_sha256": "c9b12de57e5e49ed25e857c0af60164b86db5a5041d6e6c50d9f706193330b2f",
+      "repo_sources": [
+        "supabase/migrations/20260825025500_flatten_live_matrix_view.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825024825",
+      "name": "split_price_and_discount_rule_tags",
+      "statement_count": 1,
+      "body_sha256": "bc82278d5bb729516595fe57332525ba8def813ed45bb17eedd66be82d3bfc20",
+      "repo_sources": [
+        "supabase/migrations/20260825043000_split_price_and_discount_rule_tags.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825025032",
+      "name": "allow_rule_tag_price_version",
+      "statement_count": 1,
+      "body_sha256": "4c76fe66ac2be7c0f61af93a0bc7342afa189eb4042eeaaf6c340609621abfbf",
+      "repo_sources": [
+        "supabase/migrations/20260825044500_allow_rule_tag_price_version.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825030243",
+      "name": "sellpia_procurement_and_actual_inbound_cost",
+      "statement_count": 1,
+      "body_sha256": "ae0a2453108b518187794786b46d8d67fb223406febbc86373f4af7367168abe",
+      "repo_sources": [
+        "supabase/migrations/20260825052000_sellpia_procurement_and_actual_inbound_cost.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825035133",
+      "name": "system_owned_price_stock_and_pricing_reset",
+      "statement_count": 1,
+      "body_sha256": "981c5b0c4ae65b14a63208ec2132d6e71e1c149c48e8fb4d56ed1d8c0f1651b6",
+      "repo_sources": [
+        "supabase/migrations/20260825060000_system_owned_price_stock_and_pricing_reset.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825043751",
+      "name": "representative_price_and_inbound_tags",
+      "statement_count": 1,
+      "body_sha256": "368678a8e7e754ee9b3492a71814796bd41d4353479503a048e057c141b36271",
+      "repo_sources": [
+        "supabase/migrations/20260825060001_representative_price_and_inbound_tags.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825050016",
+      "name": "correct_14k_nobol_tag_name",
+      "statement_count": 1,
+      "body_sha256": "773a4b66c1c12426c9005ab699e8348696eb08f1bae46123312213647dbea09d",
+      "repo_sources": [
+        "supabase/migrations/20260825060002_correct_14k_nobol_tag_name.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825054226",
+      "name": "operations_hub_exact_listing_graph",
+      "statement_count": 1,
+      "body_sha256": "8b74c3fe4105751adbae5456ce4cf1bda69831bce938f433b4241a986c7a9d53",
+      "repo_sources": [
+        "supabase/migrations/20260825054226_operations_hub_exact_listing_graph.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260825062025",
+      "name": "binary_connection_status_filters",
+      "statement_count": 1,
+      "body_sha256": "50a3cb2b1bdbbcfb7348eb41a72c172fcca405b8e45f20227b68a8d9a57d6697",
+      "repo_sources": [
+        "supabase/migrations/20260825070000_binary_connection_status_filters.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827023043",
+      "name": "separate_change_state_from_export_history",
+      "statement_count": 1,
+      "body_sha256": "be6131a67346293b4df3cae73c6665bb888a90136942e84257c9d4c673e73f6f",
+      "repo_sources": [
+        "supabase/migrations/20260827023043_separate_change_state_from_export_history.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827023224",
+      "name": "optimize_cancelled_export_invalidation",
+      "statement_count": 1,
+      "body_sha256": "6b9dcca1f69d393b9169e5838c8715a53c54079baa82f8384389c5785966f344",
+      "repo_sources": [
+        "supabase/migrations/20260827023224_optimize_cancelled_export_invalidation.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827023331",
+      "name": "lock_change_lifecycle_trigger_functions",
+      "statement_count": 1,
+      "body_sha256": "71755ce4d361d9e1fb802b5af652d1e150765f3dc27396b6eac631571a8dbc74",
+      "repo_sources": [
+        "supabase/migrations/20260827023331_lock_change_lifecycle_trigger_functions.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827034629",
+      "name": "fix_operations_hub_link_disconnect",
+      "statement_count": 1,
+      "body_sha256": "09f9f9327aac26b3eaadd0158539290b2ff2ccd7eb95e47009aa64a345803d0a",
+      "repo_sources": [
+        "supabase/migrations/20260827090000_fix_operations_hub_link_disconnect.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827040117",
+      "name": "restore_operations_hub_matrix_system_live_performance",
+      "statement_count": 1,
+      "body_sha256": "a9914fd759fed06517119d34fc9a741f08e9b7ec1357f9467285e9b554ef42c7",
+      "repo_sources": [
+        "supabase/migrations/20260827093000_restore_operations_hub_matrix_system_live_performance.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827044857",
+      "name": "support_sellpia_prefix_code_list_lookup",
+      "statement_count": 1,
+      "body_sha256": "561e012c43bb116030371bc1c5c02b37d235a7c4f5872c9a10619610ecbde23e",
+      "repo_sources": [
+        "supabase/migrations/20260827044857_support_sellpia_prefix_code_list_lookup.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827050243",
+      "name": "optimize_operations_hub_link_mutations",
+      "statement_count": 1,
+      "body_sha256": "48957038cb6cd0a0bea47eaac18b454bf4608cbde7ffb3853460bc7167222b9c",
+      "repo_sources": [
+        "supabase/migrations/20260827103000_optimize_operations_hub_link_mutations.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827050400",
+      "name": "fix_link_cache_upsert_conflict",
+      "statement_count": 1,
+      "body_sha256": "394df44e4ecaa7a08e3c24459937b455e5d7b8e8b991c57894386409dc885f3f",
+      "repo_sources": [
+        "supabase/migrations/20260827103500_fix_link_cache_upsert_conflict.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827050710",
+      "name": "block_browser_full_legacy_cache_refresh",
+      "statement_count": 1,
+      "body_sha256": "fd75837aa543e85cfc9a978438e546710c70cd093cd23518c2e6d06284f2d9e9",
+      "repo_sources": [
+        "supabase/migrations/20260827104000_block_browser_full_legacy_cache_refresh.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827062837",
+      "name": "operations_hub_product_link_drafts",
+      "statement_count": 1,
+      "body_sha256": "b305f7ecf81bde29eb592ef68805e76d3cf2fe5c75a67c3d2a3ce1d42f498404",
+      "repo_sources": [
+        "supabase/migrations/20260827062022_operations_hub_product_link_drafts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827064216",
+      "name": "disconnect_missing_seller_source",
+      "statement_count": 1,
+      "body_sha256": "7dc9a6b7e9bcbec70ca9e1e67c57c3d733195cddcd7e3a31fd15bee469eab43e",
+      "repo_sources": [
+        "supabase/migrations/20260827120000_disconnect_missing_seller_source.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827072519",
+      "name": "operations_hub_relation_organization",
+      "statement_count": 1,
+      "body_sha256": "4c8f652e57976d4e9666f99378b11555f8a68754f2764ca23cd8398abac9c422",
+      "repo_sources": [
+        "supabase/migrations/20260827130000_operations_hub_relation_organization.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827072838",
+      "name": "optimize_relation_matrix_filter",
+      "statement_count": 1,
+      "body_sha256": "771f363fd63b664c10a554027ce7f0a4fc357a0225d88ee512b016ba460bd2da",
+      "repo_sources": [
+        "supabase/migrations/20260827131500_optimize_relation_matrix_filter.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827073143",
+      "name": "enforce_relation_parent_integrity",
+      "statement_count": 1,
+      "body_sha256": "64cda8a54ff36743e0bf6cb835ddc5f3012e1c3d7d54c77a1b092ab13074837a",
+      "repo_sources": [
+        "supabase/migrations/20260827132000_enforce_relation_parent_integrity.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827075522",
+      "name": "organize_sellpia_product_groups",
+      "statement_count": 1,
+      "body_sha256": "d7d4d1e2237019487565be52d68a077dbe4236845789e4a83c45fe52ee452d29",
+      "repo_sources": [
+        "supabase/migrations/20260827075522_organize_sellpia_product_groups.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827075741",
+      "name": "correct_individual_parent_group_memberships",
+      "statement_count": 1,
+      "body_sha256": "e0da2a56f89649f3fd5d51d26cd4a5f4821d00c7d95b63ae3f3648a4b36232c8",
+      "repo_sources": [
+        "supabase/migrations/20260827075741_correct_individual_parent_group_memberships.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827080008",
+      "name": "generalize_relation_node_graph",
+      "statement_count": 1,
+      "body_sha256": "f29feabab16033b4c9537db2f4ffaed486985993bf57a7b45ba0aba289e3cd74",
+      "repo_sources": [
+        "supabase/migrations/20260827080008_generalize_relation_node_graph.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260827085604",
+      "name": "operations_hub_relation_drag_board",
+      "statement_count": 1,
+      "body_sha256": "080670ccdb29477aef106bccba360e17bd7e8cbd00aac3c373490965fd549344",
+      "repo_sources": [
+        "supabase/migrations/20260827085604_operations_hub_relation_drag_board.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831033946",
+      "name": "resolve_relation_import_codes",
+      "statement_count": 1,
+      "body_sha256": "20e73b5f17b89ca2466caed4a911b883d265e67007626209d6b799ac2532459b",
+      "repo_sources": [
+        "supabase/migrations/20260831093000_resolve_relation_import_codes.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831044709",
+      "name": "nested_relation_folders_and_node_archive",
+      "statement_count": 1,
+      "body_sha256": "949d0ea6b7bd0e1f46b318ed9964db50b0c64a46801ee13171b8dfdfae1c2852",
+      "repo_sources": [
+        "supabase/migrations/20260831143000_nested_relation_folders_and_node_archive.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831060438",
+      "name": "operations_hub_matrix_page_v3",
+      "statement_count": 1,
+      "body_sha256": "63190fc3c2a77d3f138bad8406e556adb4f1b26f234a4414fb36046112f85463",
+      "repo_sources": [
+        "supabase/migrations/20260831151000_operations_hub_matrix_page_v3.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831062426",
+      "name": "operations_hub_matrix_metadata_v1",
+      "statement_count": 1,
+      "body_sha256": "8a9c5d613efc9104dc1969f6148e3fd93b0e32c47fbf481aabadd7c9bf515b28",
+      "repo_sources": [
+        "supabase/migrations/20260831162000_operations_hub_matrix_metadata_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831062802",
+      "name": "optimize_matrix_metadata_bundle",
+      "statement_count": 1,
+      "body_sha256": "44802152951bb40d69917d04f1c74e424f7b3d95de3616cf2617ed33a7f7d220",
+      "repo_sources": [
+        "supabase/migrations/20260831164000_optimize_matrix_metadata_bundle.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831064245",
+      "name": "operations_hub_matrix_filtered_v3",
+      "statement_count": 1,
+      "body_sha256": "ce26b922c17f2f30271077c1320d29428749ea4d9df86232b20b8ae670f38d69",
+      "repo_sources": [
+        "supabase/migrations/20260831170000_operations_hub_matrix_filtered_v3.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831064716",
+      "name": "inline_matrix_condition_matcher",
+      "statement_count": 1,
+      "body_sha256": "51ddaa60fd44bf0ecf202fc2f24d7545f17cf4626f92574054a48e4c5f719679",
+      "repo_sources": [
+        "supabase/migrations/20260831171500_inline_matrix_condition_matcher.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831064924",
+      "name": "restore_matrix_condition_matcher",
+      "statement_count": 1,
+      "body_sha256": "6790222be77788c3f1beec4b4cdd43ea68b791236ae7fef0b74a27cb8810b539",
+      "repo_sources": [
+        "supabase/migrations/20260831172000_restore_matrix_condition_matcher.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831065226",
+      "name": "operations_hub_matrix_filtered_v4",
+      "statement_count": 1,
+      "body_sha256": "5836fb178877055176b16ce1b401d05d55a4e4fe2420fa74a8cb67b682a54c9b",
+      "repo_sources": [
+        "supabase/migrations/20260831173500_operations_hub_matrix_filtered_v4.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831071013",
+      "name": "stagger_operations_hub_matrix_refresh",
+      "statement_count": 1,
+      "body_sha256": "d9b489f0e6c2c2cf7896c5adbed41fd2cb712cd368ed5c7aabc8af29dbe1192b",
+      "repo_sources": [
+        "supabase/migrations/20260831180000_stagger_operations_hub_matrix_refresh.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260831081659",
+      "name": "operations_hub_matrix_related_sku_context_v5",
+      "statement_count": 1,
+      "body_sha256": "54243e09df1d2d60a2541ece1b471e116e7b4caf7acac57606faa25a52aa1eff",
+      "repo_sources": [
+        "supabase/migrations/20260831190000_operations_hub_matrix_related_sku_context_v5.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260901043312",
+      "name": "operations_hub_relation_groups_v1",
+      "statement_count": 66,
+      "body_sha256": "72d419d2ff43f2da5f2f27cf0d4b51305a921831fde7eed4a536d39f1dafabb0",
+      "repo_sources": [
+        "supabase/migrations/20260901043312_operations_hub_relation_groups_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260901061940",
+      "name": "operations_hub_canonical_bom_v1",
+      "statement_count": 69,
+      "body_sha256": "0ac0190e14c5f6cf77458b05a68ccae95924f2ff564cd0cd75177118ac103017",
+      "repo_sources": [
+        "supabase/migrations/20260901061940_operations_hub_canonical_bom_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260901064313",
+      "name": "operations_hub_seller_bom_bulk_v1",
+      "statement_count": 13,
+      "body_sha256": "2acfdfeae3f04119e12c95916607ca4bdda459a5fff3d606111509f6826e7468",
+      "repo_sources": [
+        "supabase/migrations/20260901064313_operations_hub_seller_bom_bulk_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260901083020",
+      "name": "operations_hub_matrix_bundle_context_v6",
+      "statement_count": 1,
+      "body_sha256": "6c55dd517b63d9c350a1cb0b7e94850c09574f732210a03c6851d47a9a0d60b8",
+      "repo_sources": [
+        "supabase/migrations/20260901170000_operations_hub_matrix_bundle_context_v6.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903012828",
+      "name": "operations_hub_inventory_draft_timeout",
+      "statement_count": 1,
+      "body_sha256": "811c290e761265bddac10451a9edb291f017392a909e1bddfeb41ba36f05686a",
+      "repo_sources": [
+        "supabase/migrations/20260903094500_operations_hub_inventory_draft_timeout.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903025507",
+      "name": "operations_hub_operational_master_source_refresh_v7",
+      "statement_count": 1,
+      "body_sha256": "21f7b068a5c2742a04a2220341b34324c52236c9acce0b49da3900ad383d54aa",
+      "repo_sources": [
+        "supabase/migrations/20260903021316_operations_hub_operational_master_source_refresh_v7.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903031811",
+      "name": "allow_dashboard_sellpia_photo_delete",
+      "statement_count": 1,
+      "body_sha256": "9d4dc7b0a8d39ad32ebf99347a7fcc7873ae28d86093f361341476b9991d75a9",
+      "repo_sources": [
+        "supabase/image-project-migrations/20260903031502_allow_dashboard_sellpia_photo_delete.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903032816",
+      "name": "operations_hub_storage_retention_v1",
+      "statement_count": 1,
+      "body_sha256": "2b7f4e0f9830e7f9998c66c97dbc5ea21c9efafa7c399d5bd56921906674dee5",
+      "repo_sources": [
+        "supabase/migrations/20260903123000_operations_hub_storage_retention_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903033435",
+      "name": "operations_hub_storage_retention_kst_schedule",
+      "statement_count": 1,
+      "body_sha256": "c1e7da7bc83ac1940593d424c2d89da7be7c93375ab736561ff652cd2c6329eb",
+      "repo_sources": [
+        "supabase/migrations/20260903124500_operations_hub_storage_retention_kst_schedule.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903040432",
+      "name": "operations_hub_price_basis_and_relation_editor_v1",
+      "statement_count": 1,
+      "body_sha256": "307723f23c099a32ad2b97cc13786b357a5f6cf9c1749f4e8d81b62786b1375a",
+      "repo_sources": [
+        "supabase/migrations/20260903035527_operations_hub_price_basis_and_relation_editor_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903040558",
+      "name": "operations_hub_price_basis_positive_price_v2",
+      "statement_count": 1,
+      "body_sha256": "e8030f919980e5267861c98e3d62c1033ae5ec157418ce2e8c841c97edefa800",
+      "repo_sources": [
+        "supabase/migrations/20260903040516_operations_hub_price_basis_positive_price_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903064851",
+      "name": "operations_hub_change_target_safety_v1",
+      "statement_count": 1,
+      "body_sha256": "5b00a1c87f16a2c5b2283cfcc2dc441a79de8b85e0e801b89f24b5768c0946bb",
+      "repo_sources": [
+        "supabase/migrations/20260903055337_operations_hub_change_target_safety_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903064909",
+      "name": "operations_hub_listing_graph_v3",
+      "statement_count": 1,
+      "body_sha256": "56bddc9874da1f2898c3d4222f7647dd4fc3be545dd644fc617ee721e06097fa",
+      "repo_sources": [
+        "supabase/migrations/20260903055347_operations_hub_listing_graph_v3.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903064918",
+      "name": "operations_hub_selected_source_refresh_batch_v1",
+      "statement_count": 1,
+      "body_sha256": "9425d7beee35923f582bf6a3d714700b4c4703ce7f9760a051ea3af2be0dfc83",
+      "repo_sources": [
+        "supabase/migrations/20260903055355_operations_hub_selected_source_refresh_batch_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260903064929",
+      "name": "operations_hub_relation_history_undo_v1",
+      "statement_count": 1,
+      "body_sha256": "994374e69efbac1009e13146d8a0bb91e5d5b16da021e4ab5d4d062337b6a2f5",
+      "repo_sources": [
+        "supabase/migrations/20260903055611_operations_hub_relation_history_undo_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260906151217",
+      "name": "operations_hub_discount_calculation_mode_v1",
+      "statement_count": 1,
+      "body_sha256": "18c5531f69f29e563100012b8c1acca5f2260a3665c21ad86baef46a1c23b3e6",
+      "repo_sources": [
+        "supabase/migrations/20260906151217_operations_hub_discount_calculation_mode_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260908014208",
+      "name": "operations_hub_matrix_draft_lookup_performance_v1",
+      "statement_count": 1,
+      "body_sha256": "81c64fa910a50111a7c70edb5f72484caf1e104b1aa5c40aa3fdc642f3c8d113",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-08-11/https-docs-google-com-spreadsheets-d/work/System_V3/supabase/migrations/20260908014208_operations_hub_matrix_draft_lookup_performance_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260908014208",
+        "name": "operations_hub_matrix_draft_lookup_performance_v1",
+        "file": "supabase/baseline/statements/20260908014208_operations_hub_matrix_draft_lookup_performance_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260908014632",
+      "name": "operations_hub_matrix_page_sort_pruning_v1",
+      "statement_count": 1,
+      "body_sha256": "16e329e01a949deab993ca361404902bbd4ed6a2e604f42b6ef44d97d65684b5",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-08-11/https-docs-google-com-spreadsheets-d/work/System_V3/supabase/migrations/20260908014632_operations_hub_matrix_page_sort_pruning_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260908014632",
+        "name": "operations_hub_matrix_page_sort_pruning_v1",
+        "file": "supabase/baseline/statements/20260908014632_operations_hub_matrix_page_sort_pruning_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260908022047",
+      "name": "operations_hub_cancelled_history_retention_v1",
+      "statement_count": 1,
+      "body_sha256": "46e1594a7248b93f3b7ba425da94737d242537f03bbb0008fdebe80f33eedfcb",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-08-11/https-docs-google-com-spreadsheets-d/work/System_V3/supabase/migrations/20260908022047_operations_hub_cancelled_history_retention_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260908022047",
+        "name": "operations_hub_cancelled_history_retention_v1",
+        "file": "supabase/baseline/statements/20260908022047_operations_hub_cancelled_history_retention_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260908042242",
+      "name": "operations_hub_upload_finalize_budget_v1",
+      "statement_count": 1,
+      "body_sha256": "0f98f30cd4c1be9be69f9336725167168c59c0a8a2fe8619846b7140ac2b9842",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-08-11/https-docs-google-com-spreadsheets-d/work/System_V3/supabase/migrations/20260908042242_operations_hub_upload_finalize_budget_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260908042242",
+        "name": "operations_hub_upload_finalize_budget_v1",
+        "file": "supabase/baseline/statements/20260908042242_operations_hub_upload_finalize_budget_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260908042520",
+      "name": "operations_hub_failed_upload_storage_cleanup_scope",
+      "statement_count": 1,
+      "body_sha256": "5dfdb66eb4f1de8f44f2c5e7a1dde55c76cd1baf77c472fd8ccbd268f7bae90c",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-08-11/https-docs-google-com-spreadsheets-d/work/System_V3/supabase/migrations/20260908042520_operations_hub_failed_upload_storage_cleanup_scope.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260908042520",
+        "name": "operations_hub_failed_upload_storage_cleanup_scope",
+        "file": "supabase/baseline/statements/20260908042520_operations_hub_failed_upload_storage_cleanup_scope.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260908042524",
+      "name": "operations_hub_failed_upload_storage_cleanup_scope_remove",
+      "statement_count": 1,
+      "body_sha256": "a1986875765947018d96be994d68c37fb92cfe2d9b8010c527c35185615067e9",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-08-11/https-docs-google-com-spreadsheets-d/work/System_V3/supabase/migrations/20260908042524_operations_hub_failed_upload_storage_cleanup_scope_remove.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260908042524",
+        "name": "operations_hub_failed_upload_storage_cleanup_scope_remove",
+        "file": "supabase/baseline/statements/20260908042524_operations_hub_failed_upload_storage_cleanup_scope_remove.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260908042806",
+      "name": "operations_hub_export_rpc_timeout_budget_v1",
+      "statement_count": 1,
+      "body_sha256": "9d3c14d8ce962f69661251502061ec330c58c9f7e7f884cdedb2392befe7d85e",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-08-11/https-docs-google-com-spreadsheets-d/work/System_V3/supabase/migrations/20260908042806_operations_hub_export_rpc_timeout_budget_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260908042806",
+        "name": "operations_hub_export_rpc_timeout_budget_v1",
+        "file": "supabase/baseline/statements/20260908042806_operations_hub_export_rpc_timeout_budget_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260908053005",
+      "name": "operations_hub_export_validation_safety_guard_v1",
+      "statement_count": 1,
+      "body_sha256": "69c7b9dbacab6ad1200c8ec73080742c445f60507501dabbc7606f13a2a4314c",
+      "repo_sources": [
+        "supabase/migrations/20260908053005_operations_hub_export_validation_safety_guard_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260908080141",
+      "name": "operations_hub_manual_order_stock_v1",
+      "statement_count": 1,
+      "body_sha256": "8d3c2c32b5f0d31ed6925711aeddd5d9200cb434754415ecc4679fd7ed28612a",
+      "repo_sources": [
+        "supabase/migrations/20260908075123_operations_hub_manual_order_stock_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260908080543",
+      "name": "operations_hub_order_stock_private_policies",
+      "statement_count": 1,
+      "body_sha256": "ff724a82d8daca903c2c96283fae539ecb182ce328d1fdf2da276c33336e27d4",
+      "repo_sources": [
+        "supabase/migrations/20260908080507_operations_hub_order_stock_private_policies.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260908082517",
+      "name": "cancel_order_stock_integration",
+      "statement_count": 1,
+      "body_sha256": "ed9d7df2473a1ea9236bb2ea01cd9c177c86edccf62fbf06d00c7adab3e3ecf6",
+      "repo_sources": [
+        "supabase/migrations/20260908082306_cancel_order_stock_integration.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910014232",
+      "name": "operations_hub_saved_combinations_and_tag_formulas",
+      "statement_count": 1,
+      "body_sha256": "3a08289a3dcc20308370b5190f9a41715704a9157f7c5c4c11f778ecacf95488",
+      "repo_sources": [
+        "supabase/migrations/20260910014232_operations_hub_saved_combinations_and_tag_formulas.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910014458",
+      "name": "hub_work_documents_unique_formulas",
+      "statement_count": 1,
+      "body_sha256": "4262a02912801b3550c2c0de5f4b3055e658edb65a05ad054a673e9925329523",
+      "repo_sources": [
+        "supabase/migrations/20260910014458_hub_work_documents_unique_formulas.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910031047",
+      "name": "hub_field_dependencies",
+      "statement_count": 1,
+      "body_sha256": "1a22c814a4ba655e4fa2e6fda50ddb2753bdb4de317e5ea253b3f462a9ce1c41",
+      "repo_sources": [
+        "supabase/migrations/20260910031047_hub_field_dependencies.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910031709",
+      "name": "hub_platform_stage_inputs",
+      "statement_count": 1,
+      "body_sha256": "56e8050a74cfd278630157e1ad834f1b77488dc6df4070749e423872845b52ec",
+      "repo_sources": [
+        "supabase/migrations/20260910031709_hub_platform_stage_inputs.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910041347",
+      "name": "hub_platform_rule_group_save",
+      "statement_count": 1,
+      "body_sha256": "02717ca2ea5c1a66089e8412853a964b53c9a3be9ef644c10bf665cd681ef737",
+      "repo_sources": [
+        "supabase/migrations/20260910041347_hub_platform_rule_group_save.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910042908",
+      "name": "hub_filtered_sku_targets",
+      "statement_count": 1,
+      "body_sha256": "bfd57e54ea89f95cec951bbf7c6442a411ff19e8db2cfa08444aa5d5dbcc62ca",
+      "repo_sources": [
+        "supabase/migrations/20260910042908_hub_filtered_sku_targets.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910043254",
+      "name": "hub_tag_rule_assignments",
+      "statement_count": 1,
+      "body_sha256": "c3d59942572b1787cc3abce4b5514e3311783f1c0b82b3c77fb298f1887ad7bc",
+      "repo_sources": [
+        "supabase/migrations/20260910043254_hub_tag_rule_assignments.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910044039",
+      "name": "hub_tag_rule_query_optimization",
+      "statement_count": 1,
+      "body_sha256": "447f2634f92448b5ea78aa385eb9d4f050e618be444e2ba80909f04662cd2586",
+      "repo_sources": [
+        "supabase/migrations/20260910044039_hub_tag_rule_query_optimization.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910044403",
+      "name": "hub_current_tag_filters",
+      "statement_count": 1,
+      "body_sha256": "a286251a854b2027f8a71800abf12dc805e715194e72fba5f961b5ffa65267c6",
+      "repo_sources": [
+        "supabase/migrations/20260910044403_hub_current_tag_filters.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910045516",
+      "name": "hub_rule_registry_compact_list",
+      "statement_count": 1,
+      "body_sha256": "96e0b941aa842903e4eac76101430df350b1ca8a27d0ef9e060a86ce4dfbd0fc",
+      "repo_sources": [
+        "supabase/migrations/20260910045516_hub_rule_registry_compact_list.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910050448",
+      "name": "hub_tag_apply_performance",
+      "statement_count": 1,
+      "body_sha256": "7edcfd9e62ad6f65cbf067cafecf5d58e19e84b69da596cfc82138bf6651d167",
+      "repo_sources": [
+        "supabase/migrations/20260910050448_hub_tag_apply_performance.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910052346",
+      "name": "hub_filtered_sku_read_budget",
+      "statement_count": 1,
+      "body_sha256": "a4e359a98f5ec62f2b1c5a94aaddef206e596078ba409ad7fb1e203382aef3c0",
+      "repo_sources": [
+        "supabase/migrations/20260910052346_hub_filtered_sku_read_budget.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910065602",
+      "name": "hub_calculated_results",
+      "statement_count": 1,
+      "body_sha256": "f3957ece1692d2901137a0d449f555241cac849478bbd03b5eded833f55340a8",
+      "repo_sources": [
+        "supabase/migrations/20260910065602_hub_calculated_results.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910065806",
+      "name": "hub_calculated_results_generation_index",
+      "statement_count": 1,
+      "body_sha256": "f0c5c3e77933688d1755fe7883719ba842914b479b12fa6468b2f41d9cdcc914",
+      "repo_sources": [
+        "supabase/migrations/20260910065806_hub_calculated_results_generation_index.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910072424",
+      "name": "hub_calculated_results_fast_identity",
+      "statement_count": 1,
+      "body_sha256": "dfc45b8a32d50d0153e819836db7819817b6cd74dae0712599f3c207798412e4",
+      "repo_sources": [
+        "supabase/migrations/20260910072424_hub_calculated_results_fast_identity.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910074910",
+      "name": "hub_dashboard_seller_unmatched_metrics",
+      "statement_count": 1,
+      "body_sha256": "709e24a44cd11839f4aa9ab51a6e0b24d4d564de00e5471df3c5870a1533e4e3",
+      "repo_sources": [
+        "supabase/migrations/20260910084000_hub_dashboard_seller_unmatched_metrics.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910081034",
+      "name": "hub_seller_unmatched_templates",
+      "statement_count": 1,
+      "body_sha256": "ce76f3fd3fd7c2adfc2a2837087f6948e6c9429976f264445d79066e7dd12648",
+      "repo_sources": [
+        "supabase/migrations/20260910090000_hub_seller_unmatched_templates.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910081506",
+      "name": "hub_dashboard_seller_unmatched_breakdown",
+      "statement_count": 1,
+      "body_sha256": "8eec7902124d89dfbb16793fe980861903e246b6e6c6c192d85dcd783460aadb",
+      "repo_sources": [
+        "supabase/migrations/20260910093000_hub_dashboard_seller_unmatched_breakdown.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910081540",
+      "name": "hub_calculated_export_stream",
+      "statement_count": 1,
+      "body_sha256": "3cc15ca04aa97fdebe9e6d2c1d934c7c5412da1366886132fbde0529bfc7dbd2",
+      "repo_sources": [
+        "supabase/migrations/20260910090000_hub_calculated_export_stream.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910081647",
+      "name": "hub_seller_unmatched_template_cache",
+      "statement_count": 1,
+      "body_sha256": "ce3470fb3e390d56fa1a61fe5702180163021578694a31a7089754b5cebcdb2d",
+      "repo_sources": [
+        "supabase/migrations/20260910095000_hub_seller_unmatched_template_cache.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910091228",
+      "name": "hub_rule_destination_reassignment",
+      "statement_count": 1,
+      "body_sha256": "525b4d351b75bf2261a2eeb79a7804d78c9de8aba4ed81d66c46558a63364d17",
+      "repo_sources": [
+        "supabase/migrations/20260910113000_hub_rule_destination_reassignment.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260910123002",
+      "name": "hub_tag_excel_import",
+      "statement_count": 1,
+      "body_sha256": "9c9f9eec7569702bc0cba56852a20553150b3683247ef12c6773b9d36ef83571",
+      "repo_sources": [
+        "supabase/migrations/20260910123002_hub_tag_excel_import.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260912122347",
+      "name": "hub_tag_bulk_sync",
+      "statement_count": 1,
+      "body_sha256": "6a5b2589207d66f85630000ae42fb75dbc930e1a3cef99931c200170826c9e5a",
+      "repo_sources": [
+        "supabase/migrations/20260912211000_hub_tag_bulk_sync.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260912125200",
+      "name": "hub_tag_manager_v2",
+      "statement_count": 1,
+      "body_sha256": "f62616360855d49ed3717ee5c73d2b37d4e3a4efc65a1ba8db5a43b04862c176",
+      "repo_sources": [
+        "supabase/migrations/20260912213000_hub_tag_manager_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260912134652",
+      "name": "hub_auxiliary_seller_files_v1",
+      "statement_count": 1,
+      "body_sha256": "3a672041c0749caf1931a6f6b929b892f661a6c6a065ba54ed023e0884eab1bf",
+      "repo_sources": [
+        "supabase/migrations/20260912220000_hub_auxiliary_seller_files_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260912141656",
+      "name": "seller_inventory_blank_stock_policy_v2",
+      "statement_count": 1,
+      "body_sha256": "ff20253bcffc834c58b963a78fc1f5ad1bb76a61fd3e1813479c5da30a1a5a3e",
+      "repo_sources": [
+        "supabase/migrations/20260912231500_seller_inventory_blank_stock_policy_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260912144006",
+      "name": "seller_inventory_blank_stock_policy_constraint_fix",
+      "statement_count": 1,
+      "body_sha256": "f606bc8becfc81acc3a8efe5c85e76487021e1361c93cc4f465fe2b28861d7f9",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": {
+        "version": "20260912144006",
+        "name": "seller_inventory_blank_stock_policy_constraint_fix",
+        "file": "supabase/baseline/statements/20260912144006_seller_inventory_blank_stock_policy_constraint_fix.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260913100740",
+      "name": "operations_hub_reliability_v1",
+      "statement_count": 1,
+      "body_sha256": "cba3c7bccc3337c1f0298c81f9e546c45f5550b42197ce1f9ce406d0536ba1d5",
+      "repo_sources": [
+        "supabase/migrations/20260913190000_operations_hub_reliability_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260913101827",
+      "name": "blank_stock_constraint_compat",
+      "statement_count": 1,
+      "body_sha256": "d32bc52747b080dcd19f3190e57b63014b6e67a97623a48cca629efc1878dc99",
+      "repo_sources": [
+        "supabase/migrations/20260913185500_blank_stock_constraint_compat.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260913153013",
+      "name": "matrix_export_snapshot_v1",
+      "statement_count": 1,
+      "body_sha256": "52bec6787240324eb9067bddd166c82e0b7b69e5f4cb2f377d8b297a0578545b",
+      "repo_sources": [
+        "supabase/migrations/20260913153013_matrix_export_snapshot_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260913153104",
+      "name": "matrix_export_snapshot_v2",
+      "statement_count": 1,
+      "body_sha256": "c7d016e36cce56e554684b5d05573b1135b26e62521e62f843d29ea4a47b7ffc",
+      "repo_sources": [
+        "supabase/migrations/20260913153104_matrix_export_snapshot_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260913153230",
+      "name": "matrix_export_snapshot_v3",
+      "statement_count": 1,
+      "body_sha256": "8b7219edf161450b674f98586234eac08cbf8b1813ad1d08fc74480f077e82cd",
+      "repo_sources": [
+        "supabase/migrations/20260913153230_matrix_export_snapshot_v3.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260914032904",
+      "name": "matrix_export_snapshot_v4_live_drafts",
+      "statement_count": 1,
+      "body_sha256": "9316e91f2d5d4f0d6ef6294903a397256208d3a6921a00af25e7173b99acf17c",
+      "repo_sources": [
+        "supabase/migrations/20260914032904_matrix_export_snapshot_v4_live_drafts.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260914060946",
+      "name": "promote_formula_rules_to_tags",
+      "statement_count": 1,
+      "body_sha256": "199b8ea68ff0301e3dcd9f25dfd2feb05ecd2728675e1808676db0398ed221ac",
+      "repo_sources": [
+        "supabase/migrations/20260914060946_promote_formula_rules_to_tags.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260914071617",
+      "name": "promote_legacy_saved_formulas_to_tags",
+      "statement_count": 1,
+      "body_sha256": "b3557aad830fb77a6d63a95abf72fd86387fef51d6ed8103feada81e9b2598c6",
+      "repo_sources": [
+        "supabase/migrations/20260914150000_promote_legacy_saved_formulas_to_tags.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260914072139",
+      "name": "strengthen_makeshop_discount_rule_constraint",
+      "statement_count": 1,
+      "body_sha256": "3387b4f25037fe5bb0d8e0bf8032416874fd1cf195483e8c31ad94ce478a7c9a",
+      "repo_sources": [
+        "supabase/migrations/20260914153000_strengthen_makeshop_discount_rule_constraint.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260915025016",
+      "name": "hub_work_document_get_title",
+      "statement_count": 1,
+      "body_sha256": "dc5ebceb52c2311923a178b378ae7005248fd1e1430799d29260c2b2f7b7006c",
+      "repo_sources": [
+        "supabase/migrations/20260915113000_hub_work_document_get_title.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260915044001",
+      "name": "optimize_mapping_sync_status",
+      "statement_count": 1,
+      "body_sha256": "d762ba6aa02a3b9edc30fe1acaaf3a43f5d5e7a9c3d772a3f02988eedac62944",
+      "repo_sources": [
+        "supabase/migrations/20260915134000_optimize_mapping_sync_status.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260915052327",
+      "name": "stabilize_source_upload_price_refresh",
+      "statement_count": 1,
+      "body_sha256": "f9c53420e7c155807a760ea2948af172e71d20bd1842661fc9d9850c5d2f66fd",
+      "repo_sources": [
+        "supabase/migrations/20260915051920_stabilize_source_upload_price_refresh.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260915052954",
+      "name": "target_seller_source_price_refresh",
+      "statement_count": 1,
+      "body_sha256": "cef9da1e136007de98ba75a237e58f329d6e47bc3ac0c9009ad3d64862aef03a",
+      "repo_sources": [
+        "supabase/migrations/20260915052736_target_seller_source_price_refresh.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260917022910",
+      "name": "carrier_scoped_targets_read",
+      "statement_count": 1,
+      "body_sha256": "bde6fb20d8ce239cf4f5aa03417b85d8c33d92be2bf816145ac1422c4e669a72",
+      "repo_sources": [
+        "supabase/migrations/20260917022748_carrier_scoped_targets_read.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260917024326",
+      "name": "carrier_seller_product_lookup_indexes",
+      "statement_count": 1,
+      "body_sha256": "6d9bb83106fe3a10db72a9aadd0d3cc1d2ff8baf720f0834e5f0e22eee4af54b",
+      "repo_sources": [
+        "supabase/migrations/20260917024240_carrier_seller_product_lookup_indexes.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260917043247",
+      "name": "hub_baseline_shadow_v1",
+      "statement_count": 1,
+      "body_sha256": "2f47cbb25073018a51105c2f49d790fd5ec5cded19acfdb8424d2d911fb650b5",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917043247_hub_baseline_shadow_v1.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-09-17/codex-repo-codex-threads-01a09ddb-503f/work/phase4-control/supabase/migrations/20260917043247_hub_baseline_shadow_v1.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-09-17/codex-repo-codex-threads-01a09ddb-503f/work/phase3-control/supabase/migrations/20260917043247_hub_baseline_shadow_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917043247",
+        "name": "hub_baseline_shadow_v1",
+        "file": "supabase/baseline/statements/20260917043247_hub_baseline_shadow_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917053337",
+      "name": "hub_matrix_shadow_metadata_v1",
+      "statement_count": 1,
+      "body_sha256": "3fcec13c82dcb7f327fc8ab5ab462225ea3994af03004f336e3bf227db3c159c",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917053337_hub_matrix_shadow_metadata_v1.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-09-17/codex-repo-codex-threads-01a09ddb-503f/work/phase4-control/supabase/migrations/20260917053337_hub_matrix_shadow_metadata_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917053337",
+        "name": "hub_matrix_shadow_metadata_v1",
+        "file": "supabase/baseline/statements/20260917053337_hub_matrix_shadow_metadata_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917053443",
+      "name": "hub_matrix_shadow_rule_versions_v1",
+      "statement_count": 1,
+      "body_sha256": "32399618a4530eb410f0c2e00c76e06877c5d724f7fd6049ca71ff321867f04f",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917053443_hub_matrix_shadow_rule_versions_v1.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-09-17/codex-repo-codex-threads-01a09ddb-503f/work/phase4-control/supabase/migrations/20260917053443_hub_matrix_shadow_rule_versions_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917053443",
+        "name": "hub_matrix_shadow_rule_versions_v1",
+        "file": "supabase/baseline/statements/20260917053443_hub_matrix_shadow_rule_versions_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917053533",
+      "name": "hub_matrix_shadow_legacy_evidence_v1",
+      "statement_count": 1,
+      "body_sha256": "e1dfb9bf135d8e2f745eaee22c834351501037742f0951d3ddb119d3fd90dc39",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917053533_hub_matrix_shadow_legacy_evidence_v1.sql",
+        "C:/Users/hihi0/Documents/Codex/2026-09-17/codex-repo-codex-threads-01a09ddb-503f/work/phase4-control/supabase/migrations/20260917053533_hub_matrix_shadow_legacy_evidence_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917053533",
+        "name": "hub_matrix_shadow_legacy_evidence_v1",
+        "file": "supabase/baseline/statements/20260917053533_hub_matrix_shadow_legacy_evidence_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917060901",
+      "name": "hub_baseline_commit_canary_v1",
+      "statement_count": 1,
+      "body_sha256": "8e2b05cea895cb132fe9191ac96ea7c52552fd3d1468c99225be2666a1374d1c",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917060901_hub_baseline_commit_canary_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917060901",
+        "name": "hub_baseline_commit_canary_v1",
+        "file": "supabase/baseline/statements/20260917060901_hub_baseline_commit_canary_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917061108",
+      "name": "hub_canary_operation_validation_fix_v1",
+      "statement_count": 1,
+      "body_sha256": "4b721b9920aaa2ad73e9408a3464ccfa050195f65d886235c83deac42a4b8ba5",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917061108_hub_canary_operation_validation_fix_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917061108",
+        "name": "hub_canary_operation_validation_fix_v1",
+        "file": "supabase/baseline/statements/20260917061108_hub_canary_operation_validation_fix_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917062445",
+      "name": "hub_baseline_compensation_admin_v1",
+      "statement_count": 1,
+      "body_sha256": "8b047504c21a1d1f99a944654852184ea93edba2e3cd6c6fadd340bb3d94ad50",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917062445_hub_baseline_compensation_admin_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917062445",
+        "name": "hub_baseline_compensation_admin_v1",
+        "file": "supabase/baseline/statements/20260917062445_hub_baseline_compensation_admin_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917062914",
+      "name": "hub_baseline_frozen_plan_guards_v1",
+      "statement_count": 1,
+      "body_sha256": "a44eed4184fcfa71ccdd1fbb72be38acb3653cea6f7ad62119b4f0c9cc9cb756",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917062914_hub_baseline_frozen_plan_guards_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917062914",
+        "name": "hub_baseline_frozen_plan_guards_v1",
+        "file": "supabase/baseline/statements/20260917062914_hub_baseline_frozen_plan_guards_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917063343",
+      "name": "hub_baseline_export_job_idempotency_v1",
+      "statement_count": 1,
+      "body_sha256": "11b31877a6a9f63a18c2f59f7e07bf457850aaca6d26de6f9f7668d295173b11",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917063343_hub_baseline_export_job_idempotency_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917063343",
+        "name": "hub_baseline_export_job_idempotency_v1",
+        "file": "supabase/baseline/statements/20260917063343_hub_baseline_export_job_idempotency_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917063716",
+      "name": "hub_baseline_calculated_tuple_proof_v1",
+      "statement_count": 1,
+      "body_sha256": "66a5b68385d0ccd5c8e5c589c2244171ee795bd775ab19202a2059dce247c8c2",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917063716_hub_baseline_calculated_tuple_proof_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917063716",
+        "name": "hub_baseline_calculated_tuple_proof_v1",
+        "file": "supabase/baseline/statements/20260917063716_hub_baseline_calculated_tuple_proof_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917070215",
+      "name": "hub_source_lifecycle_preview_fingerprints_v1",
+      "statement_count": 1,
+      "body_sha256": "4ce26eee8ffd9b75fab1e654ec2142106b43ea28a9cbefe713deabf412aae758",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917070215_hub_source_lifecycle_preview_fingerprints_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917070215",
+        "name": "hub_source_lifecycle_preview_fingerprints_v1",
+        "file": "supabase/baseline/statements/20260917070215_hub_source_lifecycle_preview_fingerprints_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917070842",
+      "name": "hub_input_fingerprint_precise_fields_v1",
+      "statement_count": 1,
+      "body_sha256": "13b64d3c990152ef124d7b31953639f72d0aeab882e63cff800defd36b63fd6a",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917070842_hub_input_fingerprint_precise_fields_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917070842",
+        "name": "hub_input_fingerprint_precise_fields_v1",
+        "file": "supabase/baseline/statements/20260917070842_hub_input_fingerprint_precise_fields_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917071554",
+      "name": "hub_reconcile_effective_pending_targets_v1",
+      "statement_count": 1,
+      "body_sha256": "d4615d4ce758859547a2fa4175d28e4d17b00cb044c2093c8be39c2b2cda9a5d",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917071554_hub_reconcile_effective_pending_targets_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917071554",
+        "name": "hub_reconcile_effective_pending_targets_v1",
+        "file": "supabase/baseline/statements/20260917071554_hub_reconcile_effective_pending_targets_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917073630",
+      "name": "hub_canary_verified_rule_lineage_v1",
+      "statement_count": 1,
+      "body_sha256": "23abe90f3d52d520f46350b190bed8f6f7204f181ade150f93a00c17e2612f51",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917073630_hub_canary_verified_rule_lineage_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917073630",
+        "name": "hub_canary_verified_rule_lineage_v1",
+        "file": "supabase/baseline/statements/20260917073630_hub_canary_verified_rule_lineage_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917075408",
+      "name": "hub_shadow_parent_lineage_metadata_v1",
+      "statement_count": 1,
+      "body_sha256": "185084e47f966b2196792e9dac7a148b2407fb4730a0cde609d4385e8dcd5957",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917075408_hub_shadow_parent_lineage_metadata_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917075408",
+        "name": "hub_shadow_parent_lineage_metadata_v1",
+        "file": "supabase/baseline/statements/20260917075408_hub_shadow_parent_lineage_metadata_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917075835",
+      "name": "hub_input_scope_exact_column_lookup_v1",
+      "statement_count": 1,
+      "body_sha256": "4b35b2121b8a303330416589f3e5fb27a516ace8ae29537b759851df727e2334",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917075835_hub_input_scope_exact_column_lookup_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917075835",
+        "name": "hub_input_scope_exact_column_lookup_v1",
+        "file": "supabase/baseline/statements/20260917075835_hub_input_scope_exact_column_lookup_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917084105",
+      "name": "hub_price_facts_provenance_verification_v2",
+      "statement_count": 1,
+      "body_sha256": "206c6262f3dbc589216a2d6cecd9ee626d5bbd9c10ed4536073978ddd618de62",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917084105_hub_price_facts_provenance_verification_v2.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917084105",
+        "name": "hub_price_facts_provenance_verification_v2",
+        "file": "supabase/baseline/statements/20260917084105_hub_price_facts_provenance_verification_v2.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917084300",
+      "name": "hub_price_proof_verification_rpc_acl_v2",
+      "statement_count": 1,
+      "body_sha256": "849c1dfe21a50139efc050d4aad924feb7ae0aa4d64a4bde745b3d88aa49e7f0",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917084300_hub_price_proof_verification_rpc_acl_v2.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917084300",
+        "name": "hub_price_proof_verification_rpc_acl_v2",
+        "file": "supabase/baseline/statements/20260917084300_hub_price_proof_verification_rpc_acl_v2.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917085449",
+      "name": "hub_tag_rename_output_ownership_v1",
+      "statement_count": 1,
+      "body_sha256": "ef6b6ccd8d6ad02873a3c06d97354438af5850afc3e003c330a84a1f5b0365f3",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917085449_hub_tag_rename_output_ownership_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917085449",
+        "name": "hub_tag_rename_output_ownership_v1",
+        "file": "supabase/baseline/statements/20260917085449_hub_tag_rename_output_ownership_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917090912",
+      "name": "hub_tag_metadata_private_write_boundary_v1",
+      "statement_count": 1,
+      "body_sha256": "68772ce32046c57cf6a220b9f6652370d91a44d4be2da938ac8f0746a8856d49",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917090912_hub_tag_metadata_private_write_boundary_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917090912",
+        "name": "hub_tag_metadata_private_write_boundary_v1",
+        "file": "supabase/baseline/statements/20260917090912_hub_tag_metadata_private_write_boundary_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917120255",
+      "name": "hub_product_representative_price_v1",
+      "statement_count": 1,
+      "body_sha256": "5296619a6fdb69ca02421c719de6413109867004ae1f6de3ecf650cc6770c46f",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917120255_hub_product_representative_price_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917120255",
+        "name": "hub_product_representative_price_v1",
+        "file": "supabase/baseline/statements/20260917120255_hub_product_representative_price_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917121200",
+      "name": "hub_representative_inactive_history_read_guard_v1",
+      "statement_count": 1,
+      "body_sha256": "a50a3f8a101c3b19bfe16a3e445d64da395102cba01477670103cacc81049664",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917121200_hub_representative_inactive_history_read_guard_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917121200",
+        "name": "hub_representative_inactive_history_read_guard_v1",
+        "file": "supabase/baseline/statements/20260917121200_hub_representative_inactive_history_read_guard_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917121618",
+      "name": "hub_representative_generation_retry_guard_v1",
+      "statement_count": 1,
+      "body_sha256": "420ebc470f0e81815cbabbecd85c682e04122bd7745ad35f38320a65b140f1df",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917121618_hub_representative_generation_retry_guard_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917121618",
+        "name": "hub_representative_generation_retry_guard_v1",
+        "file": "supabase/baseline/statements/20260917121618_hub_representative_generation_retry_guard_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917121709",
+      "name": "hub_representative_retry_cas_order_v1",
+      "statement_count": 1,
+      "body_sha256": "9e574af7bd2096c04c440c5326c8936718103b90f1cfa0fa28a974084ab4d16a",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917121709_hub_representative_retry_cas_order_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917121709",
+        "name": "hub_representative_retry_cas_order_v1",
+        "file": "supabase/baseline/statements/20260917121709_hub_representative_retry_cas_order_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917121947",
+      "name": "hub_representative_inactive_assignment_review_v1",
+      "statement_count": 1,
+      "body_sha256": "97afe89af6f79476577d888cf8a761221d46d1bfdd59c051dae5d48ec914166e",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/System_V3/supabase/migrations/20260917121947_hub_representative_inactive_assignment_review_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260917121947",
+        "name": "hub_representative_inactive_assignment_review_v1",
+        "file": "supabase/baseline/statements/20260917121947_hub_representative_inactive_assignment_review_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260917131356",
+      "name": "hub_representative_members_alias_guard_v1",
+      "statement_count": 1,
+      "body_sha256": "39e5280e71b7192930fe60df9bd20c8a5f0c46c1f5ea5ac7b37c515ba6c3b9bd",
+      "repo_sources": [
+        "supabase/migrations/20260917131303_hub_representative_members_alias_guard_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918061127",
+      "name": "hub_tag_row_partial_apply_v2",
+      "statement_count": 1,
+      "body_sha256": "e1c3909ad3f7f5c521ed60596d5bfb6b02ed9f5493547e1fae826be23ac80fe8",
+      "repo_sources": [
+        "supabase/migrations/20260918060019_hub_tag_row_partial_apply_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918061333",
+      "name": "hub_tag_partial_private_boundary_v2",
+      "statement_count": 1,
+      "body_sha256": "419ad5f3e921cdeb57bd62e5d93e5d6da57ac1a712c5a104c502bff71c0cc5f4",
+      "repo_sources": [
+        "supabase/migrations/20260918061313_hub_tag_partial_private_boundary_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918070014",
+      "name": "hub_matrix_typed_search_mvp",
+      "statement_count": 1,
+      "body_sha256": "301160f4cacafd221fc10a7fb973baabb9a93f53491ff461a6c59b279c5da401",
+      "repo_sources": [
+        "supabase/migrations/20260918065132_hub_matrix_typed_search_mvp.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918073338",
+      "name": "hub_sellpia_independent_read_mvp",
+      "statement_count": 1,
+      "body_sha256": "871db3b9bc415531164fd24b9420686c029d6672f3ce0af0dfec18fe8cafe60a",
+      "repo_sources": [
+        "supabase/migrations/20260918073338_hub_sellpia_independent_read_mvp.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918075108",
+      "name": "hub_sellpia_patch_owner_proof",
+      "statement_count": 1,
+      "body_sha256": "a724b79ca7c4ef18ee28578066caea656ee27b01cef9faa785018c15b118bd0d",
+      "repo_sources": [
+        "supabase/migrations/20260918075108_hub_sellpia_patch_owner_proof.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918081116",
+      "name": "hub_typed_search_page_keys",
+      "statement_count": 1,
+      "body_sha256": "108c939d263d0520e426168b6a153be6e642247e9c6712723a6a5c01b126576f",
+      "repo_sources": [
+        "supabase/migrations/20260918081116_hub_typed_search_page_keys.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918143111",
+      "name": "hub_matrix_shadow_batch_read",
+      "statement_count": 1,
+      "body_sha256": "b41038c8576d1acfd8317d0144f627ee223794ad133bc444ae625b7303c1dda7",
+      "repo_sources": [
+        "supabase/migrations/20260918144000_hub_matrix_shadow_batch_read.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918144245",
+      "name": "hub_matrix_shadow_direct_scope_read",
+      "statement_count": 1,
+      "body_sha256": "53459c66cdfe3925909e527bb1a846e30ab12148c3076df623a9656b3c6bf8cc",
+      "repo_sources": [
+        "supabase/migrations/20260918144500_hub_matrix_shadow_direct_scope_read.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918145437",
+      "name": "hub_matrix_batch_read_no_jit",
+      "statement_count": 1,
+      "body_sha256": "c6096eb9cd94f64d7c53421c4bbd8ef62d556f3851b883893cf2de9eb684447a",
+      "repo_sources": [
+        "supabase/migrations/20260918145000_hub_matrix_batch_read_no_jit.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918150204",
+      "name": "hub_matrix_price_components_custom_read",
+      "statement_count": 1,
+      "body_sha256": "7e287b0318384461c462119541018f2f6effe0352b7c00c13a3205e216cbdd0d",
+      "repo_sources": [
+        "supabase/migrations/20260918145500_hub_matrix_price_components_custom_read.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918150521",
+      "name": "hub_matrix_shadow_custom_plan",
+      "statement_count": 1,
+      "body_sha256": "2ec1849b54d975d019f5873dc53e59e058f74f2ee30785506b2b7d432fd64e2e",
+      "repo_sources": [
+        "supabase/migrations/20260918150000_hub_matrix_shadow_custom_plan.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918151011",
+      "name": "hub_matrix_compact_shadow_read",
+      "statement_count": 1,
+      "body_sha256": "f8032482b6d4906b771ae107746eaa0db76d6eee2046fc72a80f2954b457bfad",
+      "repo_sources": [
+        "supabase/migrations/20260918150500_hub_matrix_compact_shadow_read.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918151839",
+      "name": "hub_matrix_current_rows_custom_read",
+      "statement_count": 1,
+      "body_sha256": "ceb8100359bc12cb0a83eee1539ba68d4c66273d7d3a2982c2bdd1a60143faef",
+      "repo_sources": [
+        "supabase/migrations/20260918151000_hub_matrix_current_rows_custom_read.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918152048",
+      "name": "hub_matrix_nested_read_custom_plans",
+      "statement_count": 1,
+      "body_sha256": "17d958cfc86c6b628735f525c0c25b7b3891c24473ea378a6c253d1109f7f0a5",
+      "repo_sources": [
+        "supabase/migrations/20260918151500_hub_matrix_nested_read_custom_plans.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918152521",
+      "name": "hub_matrix_link_badges_custom_read",
+      "statement_count": 1,
+      "body_sha256": "f5008850ec0e4be8144faa6c6fac4b290448d932c5545470f30261e25afb2e87",
+      "repo_sources": [
+        "supabase/migrations/20260918152000_hub_matrix_link_badges_custom_read.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260918153315",
+      "name": "hub_matrix_rest_read_budget",
+      "statement_count": 1,
+      "body_sha256": "735b47ca63131b21474499988de68ac6ed7d99d55a044cc6264c508db5d625da",
+      "repo_sources": [
+        "supabase/migrations/20260918152500_hub_matrix_rest_read_budget.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260919122245",
+      "name": "optimize_carrier_scoped_targets_v2",
+      "statement_count": 1,
+      "body_sha256": "d45f8450d44f461bfe49ce28b31583269d4aed2cdf47d68fc67e47805c4ee6be",
+      "repo_sources": [
+        "supabase/migrations/20260919122245_optimize_carrier_scoped_targets_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920025225",
+      "name": "operations_hub_original_upload_boundary_v1",
+      "statement_count": 1,
+      "body_sha256": "db35505b566c56eeaa7d9e06b09695f94718ba37131b1b671cf0af48dfda0573",
+      "repo_sources": [
+        "supabase/migrations/20260920025225_operations_hub_original_upload_boundary_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920025356",
+      "name": "operations_hub_original_upload_boundary_acl_v1",
+      "statement_count": 1,
+      "body_sha256": "5a2894b65acdbba50e7b9027c35f3938ede8457ea6b0f2f580de6895dbf34c1a",
+      "repo_sources": [
+        "supabase/migrations/20260920025356_operations_hub_original_upload_boundary_acl_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920051920",
+      "name": "hub_matrix_grid_feed_v1",
+      "statement_count": 1,
+      "body_sha256": "81e55346a7a752376a5d769a1af298f1b7a65126495e545233b7abc072a6e805",
+      "repo_sources": [
+        "supabase/migrations/20260920051920_hub_matrix_grid_feed_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920062818",
+      "name": "fix_hub_matrix_grid_feed_json_chunks",
+      "statement_count": 1,
+      "body_sha256": "ae1980667cad812ee72acc70cd9af5d20d8d8c6d79752c4fe32dba76a0e33c4e",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-09-20/system-v3-matrix-grid-feed/supabase/migrations/20260920062818_fix_hub_matrix_grid_feed_json_chunks.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260920062818",
+        "name": "fix_hub_matrix_grid_feed_json_chunks",
+        "file": "supabase/baseline/statements/20260920062818_fix_hub_matrix_grid_feed_json_chunks.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260920063610",
+      "name": "optimize_hub_matrix_grid_feed_v2",
+      "statement_count": 1,
+      "body_sha256": "47088177d7487ce89b7fdd1112b663f5e11ad561062bd3907730ea193f8fb5d4",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-09-20/system-v3-matrix-grid-feed/supabase/migrations/20260920063610_optimize_hub_matrix_grid_feed_v2.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260920063610",
+        "name": "optimize_hub_matrix_grid_feed_v2",
+        "file": "supabase/baseline/statements/20260920063610_optimize_hub_matrix_grid_feed_v2.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260920064001",
+      "name": "cap_hub_matrix_grid_feed_chunks_v3",
+      "statement_count": 1,
+      "body_sha256": "b93e6c72836bc55e8ecb9990db2b0d78c1eacb7d46aed819a25d287089724e7d",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-09-20/system-v3-matrix-grid-feed/supabase/migrations/20260920064001_cap_hub_matrix_grid_feed_chunks_v3.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260920064001",
+        "name": "cap_hub_matrix_grid_feed_chunks_v3",
+        "file": "supabase/baseline/statements/20260920064001_cap_hub_matrix_grid_feed_chunks_v3.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260920064458",
+      "name": "compact_hub_matrix_grid_feed_v4",
+      "statement_count": 1,
+      "body_sha256": "839586489b04236dd6d6cd5d71a34e9395bfac892e5acf8608af42ef73ee6b2c",
+      "repo_sources": [],
+      "repo_source_equivalence": "NO_COMPANY_SOURCE_BY_NAME",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-09-20/system-v3-matrix-grid-feed/supabase/migrations/20260920064458_compact_hub_matrix_grid_feed_v4.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20260920064458",
+        "name": "compact_hub_matrix_grid_feed_v4",
+        "file": "supabase/baseline/statements/20260920064458_compact_hub_matrix_grid_feed_v4.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20260920073813",
+      "name": "hub_sellpia_carrier_snapshot_read_v2",
+      "statement_count": 1,
+      "body_sha256": "57b9f8276195011af24d2ca5f8ce7b65e2cf1d424ae115a21fb420ea418d5654",
+      "repo_sources": [
+        "supabase/migrations/20260920083000_hub_sellpia_carrier_snapshot_read_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920120656",
+      "name": "carrier_effective_inputs_read_v1",
+      "statement_count": 1,
+      "body_sha256": "a5a8072dda3372611e2f3957c5fddf41ec34e1c0582e5dba836d1a7b7f98773b",
+      "repo_sources": [
+        "supabase/migrations/20260920114728_carrier_effective_inputs_read_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920120838",
+      "name": "optimize_carrier_effective_inputs_read_v1",
+      "statement_count": 1,
+      "body_sha256": "009dfcae1d7bedd2caedb6983f43433fb4894bd2fa301933ae89d65ee7663f79",
+      "repo_sources": [
+        "supabase/migrations/20260920121100_optimize_carrier_effective_inputs_read_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920143340",
+      "name": "hub_matrix_grid_feed_v2",
+      "statement_count": 1,
+      "body_sha256": "77adff510a65f9be9d4c7eefa3904126ecae7d045b776b51e0b09aee7e632e17",
+      "repo_sources": [
+        "supabase/migrations/20260920143340_hub_matrix_grid_feed_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-09-20/system-v3-matrix-grid-feed/supabase/migrations/20260920063610_optimize_hub_matrix_grid_feed_v2.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": null
+    },
+    {
+      "version": "20260920144902",
+      "name": "fix_hub_matrix_grid_feed_v2_json_chunks",
+      "statement_count": 1,
+      "body_sha256": "6a16460febba7653bbe9cba35be24f54b79ef32523f784e68a61710e4b2cd914",
+      "repo_sources": [
+        "supabase/migrations/20260920144902_fix_hub_matrix_grid_feed_v2_json_chunks.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920151923",
+      "name": "hub_matrix_grid_feed_v3",
+      "statement_count": 1,
+      "body_sha256": "e8bb2060ad45ddfa94971ffb8a601acef96a0a214e26b48de1c84f912ee4a05f",
+      "repo_sources": [
+        "supabase/migrations/20260920151322_hub_matrix_grid_feed_v3.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920153324",
+      "name": "hub_matrix_grid_feed_v4",
+      "statement_count": 1,
+      "body_sha256": "370ad8e03e498c6fc3727dd48ce55e167ec9fd484024b2fdc32a9d7f7eb838ea",
+      "repo_sources": [
+        "supabase/migrations/20260920152623_hub_matrix_grid_feed_v4.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-09-20/system-v3-matrix-grid-feed/supabase/migrations/20260920064458_compact_hub_matrix_grid_feed_v4.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": null
+    },
+    {
+      "version": "20260920154231",
+      "name": "hub_matrix_grid_feed_v5",
+      "statement_count": 1,
+      "body_sha256": "e65f4bf048352b71d1a522f461139199833b22ee57d9d74716a1a97059443611",
+      "repo_sources": [
+        "supabase/migrations/20260921101200_hub_matrix_grid_feed_v5.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920154941",
+      "name": "optimize_hub_matrix_grid_feed_v5_snapshot_lookup",
+      "statement_count": 1,
+      "body_sha256": "a9bbe08c386880bcc12ef3f0933543b99280affc7bdbf4566b5640d28044ae7a",
+      "repo_sources": [
+        "supabase/migrations/20260921103800_optimize_hub_matrix_grid_feed_v5_snapshot_lookup.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920155331",
+      "name": "tune_hub_matrix_grid_feed_v5_pages",
+      "statement_count": 1,
+      "body_sha256": "0e6cf7fd241a947e00c1b8bfb6eef95823a1a02b781863edd033e9e4b48d0e0f",
+      "repo_sources": [
+        "supabase/migrations/20260921105200_tune_hub_matrix_grid_feed_v5_pages.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260920155851",
+      "name": "stabilize_hub_matrix_grid_feed_v5_pages",
+      "statement_count": 1,
+      "body_sha256": "ef3638b0f39b9e0c5e4a52aed1ee95603d9623aff5386f398bac07d4dc04d485",
+      "repo_sources": [
+        "supabase/migrations/20260921111500_stabilize_hub_matrix_grid_feed_v5_pages.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260921025302",
+      "name": "read_bulk_source_refresh_affected_skus",
+      "statement_count": 1,
+      "body_sha256": "8370957e38c6505d56924504da47fb5540b42cacdcb444a95e0a80f794a5026a",
+      "repo_sources": [
+        "supabase/migrations/20260921025302_read_bulk_source_refresh_affected_skus.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260921032052",
+      "name": "recover_bulk_source_price_calculation_scope",
+      "statement_count": 1,
+      "body_sha256": "32be9680b254ba5f186514055cc1ad22773cacfb766fea2b033467ac5623c194",
+      "repo_sources": [
+        "supabase/migrations/20260921032052_recover_bulk_source_price_calculation_scope.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260921040758",
+      "name": "pending_purchase_price_recalculation_v2",
+      "statement_count": 1,
+      "body_sha256": "1f5787d098bc188e282a8a7fde582d45c597672cfe20f34a0560bb648d4da9e3",
+      "repo_sources": [
+        "supabase/migrations/20260921133000_pending_purchase_price_recalculation_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260921064352",
+      "name": "hub_product_tag_retire_cascade_v2",
+      "statement_count": 1,
+      "body_sha256": "ba876b41588df51de3352737213f2fb9b3182852a038fb2e0bf3f783dd97cf2d",
+      "repo_sources": [
+        "supabase/migrations/20260921064352_hub_product_tag_retire_cascade_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260921064415",
+      "name": "hub_tag_member_search_v2",
+      "statement_count": 1,
+      "body_sha256": "955cf0434dad3eb6c681ffe796d40ee43f0ad433c53d192cafd25c42a7a7b8a5",
+      "repo_sources": [
+        "supabase/migrations/20260921064415_hub_tag_member_search_v2.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260921142718",
+      "name": "hub_matrix_grid_rows_v5",
+      "statement_count": 5,
+      "body_sha256": "9070e1915cce1e33757db428d3b1ec21b668577bf01ba33af226d91a1b6dbb6b",
+      "repo_sources": [
+        "supabase/migrations/20260921142718_hub_matrix_grid_rows_v5.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260921143034",
+      "name": "hub_sellpia_carrier_current_read_v3",
+      "statement_count": 7,
+      "body_sha256": "92177ca2ec48ae36e306abb80ab8ecb1bc3071c7680db4303fdb1c7152d6097b",
+      "repo_sources": [
+        "supabase/migrations/20260921143034_hub_sellpia_carrier_current_read_v3.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260921143346",
+      "name": "hub_product_tag_safe_delete_v1",
+      "statement_count": 4,
+      "body_sha256": "393503a99081d960389d92d6cc4a225154a4b63c01a2855b5246218c5afa6480",
+      "repo_sources": [
+        "supabase/migrations/20260921143346_hub_product_tag_safe_delete_v1.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260922053841",
+      "name": "split_hub_matrix_grid_manifest_badges",
+      "statement_count": 1,
+      "body_sha256": "7443f1f00e4e8edb542fe32564f62dfcb734675a7a5963ad9f3089f34e4c810f",
+      "repo_sources": [
+        "supabase/migrations/20260922053841_split_hub_matrix_grid_manifest_badges.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20260922053853",
+      "name": "optimize_carrier_seller_identity_lookup",
+      "statement_count": 1,
+      "body_sha256": "94c42b643ef2ac89794702ddff07e487a22adb6442875a7a1c9c8e7dcbfe6b5a",
+      "repo_sources": [
+        "supabase/migrations/20260922053853_optimize_carrier_seller_identity_lookup.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    },
+    {
+      "version": "20261001031840",
+      "name": "remove_legacy_matrix_refresh_crons_v1",
+      "statement_count": 1,
+      "body_sha256": "1d32a035a7436e27746a111af5778848c06f97a165b26ef4137d60ea30d25de1",
+      "repo_sources": [
+        "supabase/migrations/20261001031840_remove_legacy_matrix_refresh_crons_v1.sql"
+      ],
+      "repo_source_equivalence": "APPROVED_SOURCE_46023A6_COPIED_EOL_NORMALIZED_LIVE_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-10-01/system-v3-supabase-retention-lifecycle/supabase/migrations/20261001031840_remove_legacy_matrix_refresh_crons_v1.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20261001031840",
+        "name": "remove_legacy_matrix_refresh_crons_v1",
+        "file": "supabase/baseline/statements/20261001031840_remove_legacy_matrix_refresh_crons_v1.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20261001031902",
+      "name": "operations_hub_retention_lifecycle_v2",
+      "statement_count": 1,
+      "body_sha256": "2995460bfe7668806fdf1e01faeb3aec5a20a1df609ae904d05c6bc5b67767ca",
+      "repo_sources": [
+        "supabase/migrations/20261001031902_operations_hub_retention_lifecycle_v2.sql"
+      ],
+      "repo_source_equivalence": "APPROVED_SOURCE_46023A6_COPIED_EOL_NORMALIZED_LIVE_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-10-01/system-v3-supabase-retention-lifecycle/supabase/migrations/20261001031902_operations_hub_retention_lifecycle_v2.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20261001031902",
+        "name": "operations_hub_retention_lifecycle_v2",
+        "file": "supabase/baseline/statements/20261001031902_operations_hub_retention_lifecycle_v2.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20261001032134",
+      "name": "activate_operations_hub_safe_retention_v2",
+      "statement_count": 1,
+      "body_sha256": "9f2c84ee266b0f0f0d10a941272f880da7be77c322ec98fd521fccd87e4ec8ac",
+      "repo_sources": [
+        "supabase/migrations/20261001032134_activate_operations_hub_safe_retention_v2.sql"
+      ],
+      "repo_source_equivalence": "APPROVED_SOURCE_46023A6_COPIED_EOL_NORMALIZED_LIVE_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [
+        "C:/Users/hihi0/Documents/Codex/2026-10-01/system-v3-supabase-retention-lifecycle/supabase/migrations/20261001032134_activate_operations_hub_safe_retention_v2.sql"
+      ],
+      "recovery_source_equivalence": "FILENAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "archive": {
+        "version": "20261001032134",
+        "name": "activate_operations_hub_safe_retention_v2",
+        "file": "supabase/baseline/statements/20261001032134_activate_operations_hub_safe_retention_v2.statements.json",
+        "original_statement_count": 1,
+        "retained_statement_count": 1,
+        "omitted_statement_indexes": [],
+        "status": "LIVE_LEDGER_ARCHIVED_NOT_RUNNABLE"
+      }
+    },
+    {
+      "version": "20261001054710",
+      "name": "sellpia_inventory_count_stock_sources",
+      "statement_count": 1,
+      "body_sha256": "a48cd7daf904ddf805eb86a065759f32a72bb276f27aa545ff5894bc90855710",
+      "repo_sources": [
+        "supabase/migrations/20261001153000_sellpia_inventory_count_stock_sources.sql"
+      ],
+      "repo_source_equivalence": "NAME_MATCH_ONLY_BODY_EQUIVALENCE_UNPROVEN",
+      "recovery_candidates": [],
+      "recovery_source_equivalence": "NO_FILENAME_SOURCE_LOCATED",
+      "archive": null
+    }
+  ],
+  "security_review": {
+    "status": "SANITIZED_NEEDS_REVIEW",
+    "initial_secret_scan": "Insufficient: missed import secret constant and SQL p_secret comparison. Expanded scan performed before publishing.",
+    "withheld_sensitive_history_versions": [
+      "20260729070553"
+    ],
+    "statement_archive_count": 67,
+    "complete_statement_archive_count": 65,
+    "partial_statement_archive_count": 2
+  }
+}
+

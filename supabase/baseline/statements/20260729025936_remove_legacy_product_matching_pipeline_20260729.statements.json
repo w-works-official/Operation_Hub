@@ -1,0 +1,13 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260729025936",
+  "name": "remove_legacy_product_matching_pipeline_20260729",
+  "statements": [
+    {
+      "index": 0,
+      "text": "begin;\n\n-- Legacy public views\nDROP VIEW IF EXISTS public.mapping_matrix_review_full_v3;\nDROP VIEW IF EXISTS public.mapping_matrix_review_full_v2;\nDROP VIEW IF EXISTS public.match_candidate_details_full;\nDROP VIEW IF EXISTS public.match_candidate_queue_full;\n\n-- Legacy channel mapping/import pipeline\nDROP VIEW IF EXISTS public.channel_sku_mappings_active;\nDROP TABLE IF EXISTS public.channel_sku_mappings CASCADE;\nDROP TABLE IF EXISTS public.mapping_import_payload_chunks CASCADE;\nDROP TABLE IF EXISTS public.mapping_import_hashes CASCADE;\nDROP TABLE IF EXISTS public.mapping_import_hash_chunks CASCADE;\nDROP TABLE IF EXISTS public.mapping_import_combos CASCADE;\nDROP TABLE IF EXISTS public.mapping_import_bloom_filters CASCADE;\nDROP TABLE IF EXISTS public.mapping_import_bloom_chunks CASCADE;\nDROP TABLE IF EXISTS public.mapping_import_batches CASCADE;\n\n-- Legacy candidate matching tables\nDROP TABLE IF EXISTS review.match_candidate_details CASCADE;\nDROP TABLE IF EXISTS review.match_candidate_queue CASCADE;\n\ncommit;"
+    }
+  ]
+}
+

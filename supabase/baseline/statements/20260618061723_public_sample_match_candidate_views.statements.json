@@ -1,0 +1,25 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618061723",
+  "name": "public_sample_match_candidate_views",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- Public read-only views for the local HTML sample review app.\n--\n-- These views expose only the prepared 200-row sample batches through the\n-- default Supabase REST schema. They do not expose full review tables and do\n-- not allow decision writes.\n\ncreate or replace view public.match_candidate_queue_sample\nwith (security_invoker = true)\nas\nselect\n  queue_id,\n  source_batch_id,\n  source_channel,\n  source_row_no,\n  channel_product_code,\n  channel_option_code,\n  channel_product_name,\n  channel_option_name,\n  channel_seller_code,\n  channel_stock,\n  channel_status,\n  best_sellpia_product_code,\n  best_sellpia_sku_code,\n  best_sellpia_product_name,\n  best_sellpia_option_name,\n  match_tier,\n  match_score,\n  match_reason,\n  duplicate_candidate_count,\n  duplicate_risk,\n  review_required,\n  recommended_action,\n  source_candidate_key,\n  created_at,\n  updated_at\nfrom review.match_candidate_queue\nwhere source_batch_id in ('sample_smartstore_100', 'sample_makeshop_100')"
+    },
+    {
+      "index": 1,
+      "text": "create or replace view public.match_candidate_details_sample\nwith (security_invoker = true)\nas\nselect\n  d.detail_id,\n  d.queue_id,\n  d.candidate_rank,\n  d.sellpia_product_code,\n  d.sellpia_sku_code,\n  d.sellpia_product_name,\n  d.sellpia_option_name,\n  d.match_score,\n  d.match_reason,\n  d.risk_flags,\n  d.created_at\nfrom review.match_candidate_details d\njoin review.match_candidate_queue q\n  on q.queue_id = d.queue_id\nwhere q.source_batch_id in ('sample_smartstore_100', 'sample_makeshop_100')"
+    },
+    {
+      "index": 2,
+      "text": "grant select on public.match_candidate_queue_sample to anon, authenticated"
+    },
+    {
+      "index": 3,
+      "text": "grant select on public.match_candidate_details_sample to anon, authenticated"
+    }
+  ]
+}
+

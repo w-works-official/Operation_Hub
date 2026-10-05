@@ -1,0 +1,181 @@
+{
+  "warning": "HISTORICAL LIVE LEDGER ARCHIVE. NOT A MIGRATION. NEVER AUTO-APPLY. Original statement indexes retained; top-level data writes withheld. No schema equivalence with repository source asserted.",
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "version": "20260618051611",
+  "name": "system_v1_initial_review_schema",
+  "statements": [
+    {
+      "index": 0,
+      "text": "-- System_v1 initial review schema\n--\n-- Purpose:\n--   Supabase-backed review database for product-code matching,\n--   Smartstore/Sellpia stock comparison, manual option decisions,\n--   and local export workflow.\n--\n-- Safety:\n--   - Stage/current source rows are append-only by convention.\n--   - Manual review writes go only to decision tables.\n--   - Seller upload and automatic reflection are outside this schema.\n--   - Browser clients must use anon/publishable keys with RLS.\n\ncreate extension if not exists pgcrypto with schema extensions"
+    },
+    {
+      "index": 1,
+      "text": "create schema if not exists stage"
+    },
+    {
+      "index": 2,
+      "text": "create schema if not exists review"
+    },
+    {
+      "index": 3,
+      "text": "create schema if not exists decision"
+    },
+    {
+      "index": 4,
+      "text": "create schema if not exists export"
+    },
+    {
+      "index": 5,
+      "text": "-- ---------------------------------------------------------------------------\n-- Common batch registry\n-- ---------------------------------------------------------------------------\n\ncreate table if not exists stage.import_batches (\n  batch_id text primary key,\n  source_channel text not null,\n  source_file_name text,\n  row_count integer,\n  imported_by text,\n  import_status text not null default 'draft',\n  notes text,\n  created_at timestamptz not null default now(),\n  completed_at timestamptz\n)"
+    },
+    {
+      "index": 6,
+      "text": "-- ---------------------------------------------------------------------------\n-- Stage: Sellpia and channel current exports\n-- ---------------------------------------------------------------------------\n\ncreate table if not exists stage.sellpia_stock_stage (\n  id bigserial primary key,\n  batch_id text not null references stage.import_batches(batch_id) on update cascade on delete restrict,\n  source_row_no integer,\n  sellpia_product_code text,\n  sellpia_sku_code text,\n  sellpia_product_name text,\n  sellpia_option_name text,\n  own_sku text,\n  stock integer,\n  available_stock integer,\n  integrated_available_stock integer,\n  safety_stock integer,\n  raw_payload jsonb not null default '{}'::jsonb,\n  created_at timestamptz not null default now()\n)"
+    },
+    {
+      "index": 7,
+      "text": "create index if not exists ix_sellpia_stock_stage_batch\n  on stage.sellpia_stock_stage(batch_id)"
+    },
+    {
+      "index": 8,
+      "text": "create index if not exists ix_sellpia_stock_stage_sku\n  on stage.sellpia_stock_stage(sellpia_sku_code)"
+    },
+    {
+      "index": 9,
+      "text": "create table if not exists stage.smartstore_current_option_stage (\n  id bigserial primary key,\n  batch_id text not null references stage.import_batches(batch_id) on update cascade on delete restrict,\n  source_row_no integer,\n  smartstore_product_no text,\n  smartstore_seller_product_code text,\n  smartstore_product_name text,\n  smartstore_option_group_name text,\n  smartstore_option_code text,\n  smartstore_option_name text,\n  smartstore_option_price numeric,\n  smartstore_option_stock integer,\n  smartstore_option_use text,\n  option_index integer,\n  explode_warning text,\n  raw_payload jsonb not null default '{}'::jsonb,\n  created_at timestamptz not null default now()\n)"
+    },
+    {
+      "index": 10,
+      "text": "create index if not exists ix_smartstore_current_batch\n  on stage.smartstore_current_option_stage(batch_id)"
+    },
+    {
+      "index": 11,
+      "text": "create index if not exists ix_smartstore_current_product_no\n  on stage.smartstore_current_option_stage(smartstore_product_no)"
+    },
+    {
+      "index": 12,
+      "text": "create index if not exists ix_smartstore_current_option_code\n  on stage.smartstore_current_option_stage(smartstore_option_code)"
+    },
+    {
+      "index": 13,
+      "text": "create table if not exists stage.channel_option_stage (\n  id bigserial primary key,\n  batch_id text not null references stage.import_batches(batch_id) on update cascade on delete restrict,\n  source_channel text not null,\n  source_row_no text,\n  channel_product_code text,\n  channel_option_code text,\n  channel_product_name text,\n  channel_option_name text,\n  channel_seller_code text,\n  channel_stock integer,\n  channel_status text,\n  raw_payload jsonb not null default '{}'::jsonb,\n  created_at timestamptz not null default now()\n)"
+    },
+    {
+      "index": 14,
+      "text": "create index if not exists ix_channel_option_stage_channel_option\n  on stage.channel_option_stage(source_channel, channel_option_code)"
+    },
+    {
+      "index": 15,
+      "text": "create index if not exists ix_channel_option_stage_seller_code\n  on stage.channel_option_stage(source_channel, channel_seller_code)"
+    },
+    {
+      "index": 16,
+      "text": "-- ---------------------------------------------------------------------------\n-- Review queue: materialized rows for fast local HTML/Supabase UI\n-- ---------------------------------------------------------------------------\n\ncreate table if not exists review.stock_compare_queue (\n  queue_id bigserial primary key,\n  batch_id text not null,\n  source_channel text not null,\n  source_row_no text,\n  sellpia_product_code text,\n  sellpia_sku_code text,\n  sellpia_product_name text,\n  sellpia_option_name text,\n  sellpia_stock integer,\n  sellpia_available_stock integer,\n  sellpia_integrated_available_stock integer,\n  sellpia_safety_stock integer,\n  channel_product_code text,\n  channel_option_code text,\n  channel_product_name text,\n  channel_option_name text,\n  channel_stock integer,\n  channel_status text,\n  stock_diff integer,\n  stock_compare_status text not null,\n  auto_approval_tier text,\n  auto_approval_score numeric,\n  risk_reason text,\n  recommended_action text,\n  evidence_json jsonb not null default '{}'::jsonb,\n  created_at timestamptz not null default now(),\n  updated_at timestamptz not null default now()\n)"
+    },
+    {
+      "index": 17,
+      "text": "create index if not exists ix_stock_compare_queue_channel_status\n  on review.stock_compare_queue(source_channel, stock_compare_status)"
+    },
+    {
+      "index": 18,
+      "text": "create index if not exists ix_stock_compare_queue_channel_option\n  on review.stock_compare_queue(source_channel, channel_option_code)"
+    },
+    {
+      "index": 19,
+      "text": "create index if not exists ix_stock_compare_queue_sellpia_sku\n  on review.stock_compare_queue(sellpia_sku_code)"
+    },
+    {
+      "index": 20,
+      "text": "create index if not exists ix_stock_compare_queue_auto_tier\n  on review.stock_compare_queue(source_channel, auto_approval_tier)"
+    },
+    {
+      "index": 21,
+      "text": "create index if not exists ix_stock_compare_queue_abs_diff\n  on review.stock_compare_queue(source_channel, abs(stock_diff))"
+    },
+    {
+      "index": 22,
+      "text": "-- ---------------------------------------------------------------------------\n-- Manual decisions: active row plus full audit trail\n-- ---------------------------------------------------------------------------\n\ncreate table if not exists decision.option_match_decisions (\n  decision_id bigserial primary key,\n  source_channel text not null,\n  decision_scope text not null default 'option_match',\n  decision_status text not null,\n  reviewer text not null,\n  memo text,\n  sellpia_product_code text,\n  sellpia_sku_code text,\n  sellpia_option_code text,\n  channel_product_code text,\n  channel_option_code text,\n  channel_seller_code text,\n  queue_id bigint,\n  evidence_snapshot jsonb not null default '{}'::jsonb,\n  is_current boolean not null default true,\n  superseded_by bigint,\n  superseded_at timestamptz,\n  created_at timestamptz not null default now(),\n  updated_at timestamptz not null default now(),\n  constraint ck_option_match_decision_scope\n    check (decision_scope in ('option_match', 'disconnect_match')),\n  constraint ck_option_match_decision_status\n    check (decision_status in (\n      'option_match_approved',\n      'option_match_hold',\n      'option_match_rejected',\n      'option_match_unlinked',\n      'option_match_cancelled'\n    ))\n)"
+    },
+    {
+      "index": 23,
+      "text": "create index if not exists ix_option_decisions_current_channel\n  on decision.option_match_decisions(source_channel, decision_scope, decision_status)\n  where is_current = true"
+    },
+    {
+      "index": 24,
+      "text": "create index if not exists ix_option_decisions_queue_id\n  on decision.option_match_decisions(queue_id)\n  where is_current = true"
+    },
+    {
+      "index": 25,
+      "text": "create unique index if not exists ux_option_decisions_current_key\n  on decision.option_match_decisions (\n    source_channel,\n    decision_scope,\n    coalesce(sellpia_sku_code, ''),\n    coalesce(channel_product_code, ''),\n    coalesce(channel_option_code, '')\n  )\n  where is_current = true"
+    },
+    {
+      "index": 26,
+      "text": "-- ---------------------------------------------------------------------------\n-- Export jobs: local tool audit metadata, not seller upload logs\n-- ---------------------------------------------------------------------------\n\ncreate table if not exists export.review_export_jobs (\n  export_job_id bigserial primary key,\n  source_channel text not null,\n  export_type text not null,\n  requested_by text,\n  filter_json jsonb not null default '{}'::jsonb,\n  row_count integer,\n  output_file_name text,\n  job_status text not null default 'created',\n  notes text,\n  created_at timestamptz not null default now(),\n  completed_at timestamptz\n)"
+    },
+    {
+      "index": 27,
+      "text": "-- ---------------------------------------------------------------------------\n-- Read views for local HTML UI\n-- ---------------------------------------------------------------------------\n\ncreate or replace view review.v_stock_compare_with_decision\nwith (security_invoker = true)\nas\nselect\n  q.*,\n  d.decision_id as manual_decision_id,\n  d.decision_status as manual_decision_status,\n  d.reviewer as manual_decision_reviewer,\n  d.memo as manual_decision_memo,\n  d.created_at as manual_decision_at\nfrom review.stock_compare_queue q\nleft join decision.option_match_decisions d\n  on d.is_current = true\n and d.decision_scope = 'option_match'\n and d.source_channel = q.source_channel\n and coalesce(d.sellpia_sku_code, '') = coalesce(q.sellpia_sku_code, '')\n and coalesce(d.channel_product_code, '') = coalesce(q.channel_product_code, '')\n and coalesce(d.channel_option_code, '') = coalesce(q.channel_option_code, '')"
+    },
+    {
+      "index": 28,
+      "text": "-- ---------------------------------------------------------------------------\n-- RLS policies\n-- ---------------------------------------------------------------------------\n\nalter table stage.import_batches enable row level security"
+    },
+    {
+      "index": 29,
+      "text": "alter table stage.sellpia_stock_stage enable row level security"
+    },
+    {
+      "index": 30,
+      "text": "alter table stage.smartstore_current_option_stage enable row level security"
+    },
+    {
+      "index": 31,
+      "text": "alter table stage.channel_option_stage enable row level security"
+    },
+    {
+      "index": 32,
+      "text": "alter table review.stock_compare_queue enable row level security"
+    },
+    {
+      "index": 33,
+      "text": "alter table decision.option_match_decisions enable row level security"
+    },
+    {
+      "index": 34,
+      "text": "alter table export.review_export_jobs enable row level security"
+    },
+    {
+      "index": 35,
+      "text": "create policy \"stage import batches readable\"\n  on stage.import_batches\n  for select\n  to authenticated\n  using (true)"
+    },
+    {
+      "index": 36,
+      "text": "create policy \"sellpia stock stage readable\"\n  on stage.sellpia_stock_stage\n  for select\n  to authenticated\n  using (true)"
+    },
+    {
+      "index": 37,
+      "text": "create policy \"smartstore current option stage readable\"\n  on stage.smartstore_current_option_stage\n  for select\n  to authenticated\n  using (true)"
+    },
+    {
+      "index": 38,
+      "text": "create policy \"channel option stage readable\"\n  on stage.channel_option_stage\n  for select\n  to authenticated\n  using (true)"
+    },
+    {
+      "index": 39,
+      "text": "create policy \"stock compare queue readable\"\n  on review.stock_compare_queue\n  for select\n  to authenticated\n  using (true)"
+    },
+    {
+      "index": 40,
+      "text": "create policy \"option decisions readable\"\n  on decision.option_match_decisions\n  for select\n  to authenticated\n  using (true)"
+    },
+    {
+      "index": 41,
+      "text": "create policy \"option decisions insertable by reviewer\"\n  on decision.option_match_decisions\n  for insert\n  to authenticated\n  with check (\n    reviewer is not null\n    and btrim(reviewer) <> ''\n    and decision_scope in ('option_match', 'disconnect_match')\n    and decision_status in (\n      'option_match_approved',\n      'option_match_hold',\n      'option_match_rejected',\n      'option_match_unlinked',\n      'option_match_cancelled'\n    )\n  )"
+    },
+    {
+      "index": 42,
+      "text": "create policy \"export jobs readable\"\n  on export.review_export_jobs\n  for select\n  to authenticated\n  using (true)"
+    }
+  ]
+}
+
