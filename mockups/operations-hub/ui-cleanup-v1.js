@@ -89,7 +89,7 @@
 
   function ensureExportHub(){
     const page=byId('jobs');
-    if(!page||page.querySelector('.export-hub')||page.querySelector('#export-workflow-v2'))return;
+    if(!page||page.querySelector('.export-hub')||byId('export-workflow-v2'))return;
     const anchor=page.querySelector('.queue-batch-workspace,.queue-summary');
     if(!anchor)return;
     const pageTitle=page.querySelector('.page-head h2');

@@ -71,9 +71,9 @@
    <label>대상 범위<select data-seller-scope-mode="${source}"><option value="all">파일에서 매칭되는 전체 SKU</option><option value="manual">SKU 직접 입력</option><option value="tag">태그 적용 SKU</option></select></label>
    <label class="seller-card-scope-detail" data-seller-scope-manual-wrap="${source}" hidden>SKU 목록<textarea data-seller-scope-manual="${source}" placeholder="10000-1&#10;10000-2"></textarea></label>
    <label class="seller-card-scope-detail" data-seller-scope-tag-wrap="${source}" hidden>태그<select data-seller-scope-tag="${source}"><option value="">태그 선택</option></select></label>
-   ${['smartstore','makeshop'].includes(source)?`<label>내보낼 항목<select data-standard-field-mode="${source}"><option value="price_stock">가격 + 재고 (기존)</option><option value="price_only">가격만</option><option value="stock_only">재고만</option></select></label><label data-standard-stock-source-wrap="${source}" hidden>재고 내보내기 기준<select data-standard-stock-source="${source}"><option value="available_stock">가용재고</option><option value="stock">재고</option></select></label>`:''}
-   ${source==='ably'?`<label>옵션가 + 재고 파일 항목<select data-ably-field-mode><option value="option_stock">옵션가 + 재고 (기존)</option><option value="price_only">옵션가만</option><option value="stock_only">재고만</option></select></label><label data-ably-stock-source-wrap hidden>재고 내보내기 기준<select data-ably-stock-source><option value="available_stock">가용재고</option><option value="stock">재고</option></select></label>`:''}
-   ${['smartstore','makeshop'].includes(source)?`<label>가격 계산<select data-standard-price-mode="${source}"><option value="rules">수식 적용 (기본)</option><option value="sellpia_source">셀피아 판매가 기준</option></select></label>`:source==='ably'?`<label>판매가 + 옵션가 가격 계산<select data-standard-price-mode="ably"><option value="rules">수식 적용 (기본)</option><option value="sellpia_source">셀피아 판매가 기준</option></select></label>`:''}
+   ${['smartstore','makeshop'].includes(source)?`<label class="seller-field-mode-label">내보낼 항목<select data-standard-field-mode="${source}"><option value="price_stock">가격 + 재고 (기존)</option><option value="price_only">가격만</option><option value="stock_only">재고만</option></select></label><label class="seller-stock-source-label" data-standard-stock-source-wrap="${source}" hidden>재고 내보내기 기준<select data-standard-stock-source="${source}"><option value="available_stock">가용재고</option><option value="stock">재고</option></select></label>`:''}
+   ${source==='ably'?`<label class="seller-field-mode-label">옵션가 + 재고 파일 항목<select data-ably-field-mode><option value="option_stock">옵션가 + 재고 (기존)</option><option value="price_only">옵션가만</option><option value="stock_only">재고만</option></select></label><label class="seller-stock-source-label" data-ably-stock-source-wrap hidden>재고 내보내기 기준<select data-ably-stock-source><option value="available_stock">가용재고</option><option value="stock">재고</option></select></label>`:''}
+   ${['smartstore','makeshop'].includes(source)?`<label class="seller-price-mode-label">가격 계산<select data-standard-price-mode="${source}"><option value="rules">수식 적용 (기본)</option><option value="sellpia_source">셀피아 판매가 기준</option></select></label>`:source==='ably'?`<label class="seller-price-mode-label">판매가 + 옵션가 가격 계산<select data-standard-price-mode="ably"><option value="rules">수식 적용 (기본)</option><option value="sellpia_source">셀피아 판매가 기준</option></select></label>`:''}
    <small data-seller-scope-summary="${source}">파일에서 매칭되는 전체 SKU</small>
   </div>`;
  }
@@ -134,13 +134,79 @@
  }
 
  function bindExportPresets(section){
-  section.querySelectorAll('[data-export-field-preset]').forEach(button=>button.onclick=()=>{
-   const mode=button.dataset.exportFieldPreset;
-   section.querySelectorAll('[data-standard-field-mode]').forEach(select=>{select.value=mode;select.dispatchEvent(new Event('change',{bubbles:true}));});
-   const ably=section.querySelector('[data-ably-field-mode]');if(ably){ably.value=mode==='price_stock'?'option_stock':mode;ably.dispatchEvent(new Event('change',{bubbles:true}));}
-   updateExportPresetState(section);
-  });
+  section.querySelectorAll('[data-export-field-preset]').forEach(button=>button.onclick=()=>applyExportFieldPreset(section,button.dataset.exportFieldPreset));
   updateExportPresetState(section);
+ }
+
+ function applyExportFieldPreset(section,mode,{onlyWhenChanged=false}={}){
+  if(!section)return;
+  section.querySelectorAll('[data-standard-field-mode]').forEach(select=>{const changed=select.value!==mode;select.value=mode;if(!onlyWhenChanged||changed)select.dispatchEvent(new Event('change',{bubbles:true}));});
+  const ably=section.querySelector('[data-ably-field-mode]');if(ably){const value=mode==='price_stock'?'option_stock':mode,changed=ably.value!==value;ably.value=value;if(!onlyWhenChanged||changed)ably.dispatchEvent(new Event('change',{bubbles:true}));}
+  updateExportPresetState(section);
+ }
+
+ let exportPageContext='jobs',inventoryTransferTimer=0;
+ function exportTransferBusy(){
+  return Boolean(global.__systemV3DirectExportBusy||state.ablyJob?.running||standardUiJobs.size||document.querySelector('[data-standard-carrier-run][aria-busy="true"]'));
+ }
+ function applyInventoryTargetVisibility(section,inInventory){
+  section.querySelectorAll('.export-channel-card').forEach(card=>{
+   const source=card.dataset.sellerSource;
+   const hidden=Boolean(inInventory&&source&&!document.querySelector(`[data-inventory-target="${source}"]`)?.checked);
+   if(card.hidden!==hidden)card.hidden=hidden;
+  });
+ }
+ function bindInventoryControls(section){
+  const targets=[...document.querySelectorAll('[data-inventory-target]')],lastTargets=new Map(targets.map(input=>[input.dataset.inventoryTarget,input.checked]));
+  targets.forEach(input=>input.onchange=()=>{
+   if(exportTransferBusy()){input.checked=lastTargets.get(input.dataset.inventoryTarget)??true;return;}
+   lastTargets.set(input.dataset.inventoryTarget,input.checked);applyInventoryTargetVisibility(section,true);
+  });
+  const stockRadios=[...document.querySelectorAll('input[name="inventory-stock-source"]')];let lastStock=stockRadios.find(input=>input.checked)?.value||'available_stock';
+  stockRadios.forEach(radio=>radio.onchange=()=>{
+   if(!radio.checked)return;
+   if(exportTransferBusy()){radio.checked=false;const previous=stockRadios.find(input=>input.value===lastStock);if(previous)previous.checked=true;return;}
+   lastStock=radio.value;
+   section.querySelectorAll('[data-standard-stock-source],[data-ably-stock-source]').forEach(select=>{select.value=lastStock;select.dispatchEvent(new Event('change',{bubbles:true}));});
+  });
+ }
+ function transferExportWorkspace(){
+  const pageId=document.querySelector('.content-area .page.active-page')?.id;
+  if(pageId!=='jobs'&&pageId!=='inventory')return;
+  const section=document.getElementById('export-workflow-v2'),inventory=document.getElementById('inventory'),host=document.getElementById('inventory-export-host'),jobs=document.getElementById('jobs'),jobsHead=jobs?.querySelector('.page-head'),wait=document.getElementById('inventory-transfer-status');
+  if(!section||!inventory||!host||!jobsHead)return;
+  const context=pageId==='inventory'?'inventory':'jobs',busy=exportTransferBusy();
+  const enteringInventory=context==='inventory'&&exportPageContext!=='inventory';
+  if(enteringInventory&&busy){
+   if(wait){if(wait.hidden)wait.hidden=false;const message='현재 판매처 파일 작업이 끝나면 재고 화면으로 전환합니다. 처리 중에는 재고 설정을 바꾸지 않습니다.';if(wait.textContent!==message)wait.textContent=message;}
+   document.querySelectorAll('[data-inventory-target],input[name="inventory-stock-source"]').forEach(input=>input.disabled=true);
+   if(!inventoryTransferTimer)inventoryTransferTimer=global.setTimeout(()=>{inventoryTransferTimer=0;queueMicrotask(tick);},300);
+   return;
+  }
+  if(context==='jobs'&&exportPageContext==='inventory'&&busy){
+   if(wait&&!wait.hidden)wait.hidden=true;
+   if(!inventoryTransferTimer)inventoryTransferTimer=global.setTimeout(()=>{inventoryTransferTimer=0;queueMicrotask(tick);},300);
+   return;
+  }
+  if(inventoryTransferTimer){global.clearTimeout(inventoryTransferTimer);inventoryTransferTimer=0;}
+  if(wait&&!wait.hidden)wait.hidden=true;
+  document.querySelectorAll('[data-inventory-target],input[name="inventory-stock-source"]').forEach(input=>input.disabled=false);
+  if(context!==exportPageContext){
+   if(context==='inventory'){
+    const ablyPriceMode=section.querySelector('[data-standard-price-mode="ably"]');
+    if(ablyPriceMode&&ablyPriceMode.value!=='rules'){ablyPriceMode.value='rules';ablyPriceMode.dispatchEvent(new Event('change',{bubbles:true}));}
+    applyExportFieldPreset(section,'stock_only',{onlyWhenChanged:true});
+    const stock=document.querySelector('input[name="inventory-stock-source"]:checked')?.value||'available_stock';
+    section.querySelectorAll('[data-standard-stock-source],[data-ably-stock-source]').forEach(select=>{const changed=select.value!==stock;select.value=stock;if(changed)select.dispatchEvent(new Event('change',{bubbles:true}));});
+   }else applyInventoryTargetVisibility(section,false);
+   exportPageContext=context;
+  }
+  const hideAblyProduct=Boolean(context==='inventory'&&state.preview?.role==='playauto_product');
+  if(section.classList.contains('inventory-hide-ably-product-preview')!==hideAblyProduct)section.classList.toggle('inventory-hide-ably-product-preview',hideAblyProduct);
+  if(context==='inventory'){
+   if(section.parentElement!==host)host.append(section);
+   applyInventoryTargetVisibility(section,true);
+  }else if(section.parentElement!==jobs||jobsHead.nextElementSibling!==section)jobsHead.insertAdjacentElement('afterend',section);
  }
 
  function setStatus(text,kind=''){
@@ -300,6 +366,7 @@
 
   for(const source of ['smartstore','makeshop','ably'])bindSellerScope(section,source);
   bindExportPresets(section);
+  bindInventoryControls(section);
   if(!section.dataset.progressBound){section.dataset.progressBound='1';global.addEventListener('system-v3-seller-export-progress',event=>{const d=event.detail||{};if(d.source)standardProgress(d.source,d.percent,d.title,d.detail,d.percent>=100?'done':'running');});}
   section.querySelectorAll('[data-standard-full-preview]').forEach(btn=>btn.onclick=()=>{const source=btn.dataset.standardFullPreview;standardLastActions.set(source,()=>previewStandard(source,'full_original'));void previewStandard(source,'full_original');});
   section.querySelectorAll('[data-standard-full-run]').forEach(btn=>btn.onclick=()=>{const source=btn.dataset.standardFullRun;standardLastActions.set(source,()=>runStandard(source,'full_original'));void runStandard(source,'full_original');});
@@ -804,7 +871,7 @@
   }
  }
 
- function tick(){ensureUpload();ensureExport();renameLegacyExportUi();}
+ function tick(){ensureUpload();ensureExport();transferExportWorkspace();renameLegacyExportUi();}
  const observer=new MutationObserver(()=>queueMicrotask(tick));observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class']});
  global.addEventListener('load',tick);tick();
 })(window);
