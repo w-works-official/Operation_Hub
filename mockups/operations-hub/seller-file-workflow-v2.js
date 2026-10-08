@@ -145,70 +145,6 @@
   updateExportPresetState(section);
  }
 
- let exportPageContext='jobs',inventoryTransferTimer=0;
- function exportTransferBusy(){
-  return Boolean(global.__systemV3DirectExportBusy||state.ablyJob?.running||standardUiJobs.size||document.querySelector('[data-standard-carrier-run][aria-busy="true"]'));
- }
- function applyInventoryTargetVisibility(section,inInventory){
-  section.querySelectorAll('.export-channel-card').forEach(card=>{
-   const source=card.dataset.sellerSource;
-   const hidden=Boolean(inInventory&&source&&!document.querySelector(`[data-inventory-target="${source}"]`)?.checked);
-   if(card.hidden!==hidden)card.hidden=hidden;
-  });
- }
- function bindInventoryControls(section){
-  const targets=[...document.querySelectorAll('[data-inventory-target]')],lastTargets=new Map(targets.map(input=>[input.dataset.inventoryTarget,input.checked]));
-  targets.forEach(input=>input.onchange=()=>{
-   if(exportTransferBusy()){input.checked=lastTargets.get(input.dataset.inventoryTarget)??true;return;}
-   lastTargets.set(input.dataset.inventoryTarget,input.checked);applyInventoryTargetVisibility(section,true);
-  });
-  const stockRadios=[...document.querySelectorAll('input[name="inventory-stock-source"]')];let lastStock=stockRadios.find(input=>input.checked)?.value||'available_stock';
-  stockRadios.forEach(radio=>radio.onchange=()=>{
-   if(!radio.checked)return;
-   if(exportTransferBusy()){radio.checked=false;const previous=stockRadios.find(input=>input.value===lastStock);if(previous)previous.checked=true;return;}
-   lastStock=radio.value;
-   section.querySelectorAll('[data-standard-stock-source],[data-ably-stock-source]').forEach(select=>{select.value=lastStock;select.dispatchEvent(new Event('change',{bubbles:true}));});
-  });
- }
- function transferExportWorkspace(){
-  const pageId=document.querySelector('.content-area .page.active-page')?.id;
-  if(pageId!=='jobs'&&pageId!=='inventory')return;
-  const section=document.getElementById('export-workflow-v2'),inventory=document.getElementById('inventory'),host=document.getElementById('inventory-export-host'),jobs=document.getElementById('jobs'),jobsHead=jobs?.querySelector('.page-head'),wait=document.getElementById('inventory-transfer-status');
-  if(!section||!inventory||!host||!jobsHead)return;
-  const context=pageId==='inventory'?'inventory':'jobs',busy=exportTransferBusy();
-  const enteringInventory=context==='inventory'&&exportPageContext!=='inventory';
-  if(enteringInventory&&busy){
-   if(wait){if(wait.hidden)wait.hidden=false;const message='현재 판매처 파일 작업이 끝나면 재고 화면으로 전환합니다. 처리 중에는 재고 설정을 바꾸지 않습니다.';if(wait.textContent!==message)wait.textContent=message;}
-   document.querySelectorAll('[data-inventory-target],input[name="inventory-stock-source"]').forEach(input=>input.disabled=true);
-   if(!inventoryTransferTimer)inventoryTransferTimer=global.setTimeout(()=>{inventoryTransferTimer=0;queueMicrotask(tick);},300);
-   return;
-  }
-  if(context==='jobs'&&exportPageContext==='inventory'&&busy){
-   if(wait&&!wait.hidden)wait.hidden=true;
-   if(!inventoryTransferTimer)inventoryTransferTimer=global.setTimeout(()=>{inventoryTransferTimer=0;queueMicrotask(tick);},300);
-   return;
-  }
-  if(inventoryTransferTimer){global.clearTimeout(inventoryTransferTimer);inventoryTransferTimer=0;}
-  if(wait&&!wait.hidden)wait.hidden=true;
-  document.querySelectorAll('[data-inventory-target],input[name="inventory-stock-source"]').forEach(input=>input.disabled=false);
-  if(context!==exportPageContext){
-   if(context==='inventory'){
-    const ablyPriceMode=section.querySelector('[data-standard-price-mode="ably"]');
-    if(ablyPriceMode&&ablyPriceMode.value!=='rules'){ablyPriceMode.value='rules';ablyPriceMode.dispatchEvent(new Event('change',{bubbles:true}));}
-    applyExportFieldPreset(section,'stock_only',{onlyWhenChanged:true});
-    const stock=document.querySelector('input[name="inventory-stock-source"]:checked')?.value||'available_stock';
-    section.querySelectorAll('[data-standard-stock-source],[data-ably-stock-source]').forEach(select=>{const changed=select.value!==stock;select.value=stock;if(changed)select.dispatchEvent(new Event('change',{bubbles:true}));});
-   }else applyInventoryTargetVisibility(section,false);
-   exportPageContext=context;
-  }
-  const hideAblyProduct=Boolean(context==='inventory'&&state.preview?.role==='playauto_product');
-  if(section.classList.contains('inventory-hide-ably-product-preview')!==hideAblyProduct)section.classList.toggle('inventory-hide-ably-product-preview',hideAblyProduct);
-  if(context==='inventory'){
-   if(section.parentElement!==host)host.append(section);
-   applyInventoryTargetVisibility(section,true);
-  }else if(section.parentElement!==jobs||jobsHead.nextElementSibling!==section)jobsHead.insertAdjacentElement('afterend',section);
- }
-
  function setStatus(text,kind=''){
   for(const id of ['seller-file-status','export-workflow-status']){const el=document.getElementById(id);if(el){el.className=`${id} ${kind}`.trim();el.textContent=text;}}
   const exportStatus=document.getElementById('export-workflow-status');
@@ -366,7 +302,7 @@
 
   for(const source of ['smartstore','makeshop','ably'])bindSellerScope(section,source);
   bindExportPresets(section);
-  bindInventoryControls(section);
+
   if(!section.dataset.progressBound){section.dataset.progressBound='1';global.addEventListener('system-v3-seller-export-progress',event=>{const d=event.detail||{};if(d.source)standardProgress(d.source,d.percent,d.title,d.detail,d.percent>=100?'done':'running');});}
   section.querySelectorAll('[data-standard-full-preview]').forEach(btn=>btn.onclick=()=>{const source=btn.dataset.standardFullPreview;standardLastActions.set(source,()=>previewStandard(source,'full_original'));void previewStandard(source,'full_original');});
   section.querySelectorAll('[data-standard-full-run]').forEach(btn=>btn.onclick=()=>{const source=btn.dataset.standardFullRun;standardLastActions.set(source,()=>runStandard(source,'full_original'));void runStandard(source,'full_original');});
@@ -680,15 +616,10 @@
     const prepared=await job.mapRows(sourceRows,item=>{
      const sku=item.resolution?.sku,row=sku?targetMap.get(sku):null,inScope=sku?chosenSet.has(`${item.source_row_no}|${item.option_index??''}|${sku}`):!scope;
      const out={...item,resolution:item.resolution,_inScope:inScope,_status:'ready',_error:'',_changedFields:[]};
-     if(item.carrier_identity_error){out._status='ambiguous';out._error=item.carrier_identity_error;return out;}
      if(stockOnly){
-      if(!sku){out._status=item.resolution?.method==='unresolved'?'warn_keep_original':'ambiguous';out._error=item.resolution?.error||'SKU를 정확히 찾지 못했습니다.';return out;}
-      const stockTarget=global.HubCurrentPriceExport?.matrixStockTarget(row,stockSource);
-      if(inScope&&item.sales_quantity==null)out._blankStockPreserved=true;
-      else if(inScope&&stockTarget!==null&&stockTarget!==undefined&&Number.isSafeInteger(Number(stockTarget)))out.target_stock=Number(stockTarget);
-      else if(inScope){out._status='warn_keep_original';out._error=`${stockSource==='stock'?'재고':'가용재고'} target 없음 → 이 행 원본 유지`;}
-      return out;
+      return A().prepareStockOnlyRow(out,row,{stockSource,inScope});
      }
+     if(item.carrier_identity_error){out._status='ambiguous';out._error=item.carrier_identity_error;return out;}
      if(priceMode==='sellpia_source'){
       if(inScope&&sku)targetFinalBySku.set(sku,Number(sellpiaPrices?.get(sku)));
       return out;
@@ -871,7 +802,7 @@
   }
  }
 
- function tick(){ensureUpload();ensureExport();transferExportWorkspace();renameLegacyExportUi();}
+ function tick(){ensureUpload();ensureExport();renameLegacyExportUi();}
  const observer=new MutationObserver(()=>queueMicrotask(tick));observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class']});
  global.addEventListener('load',tick);tick();
 })(window);

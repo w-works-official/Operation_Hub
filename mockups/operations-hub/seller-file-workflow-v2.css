@@ -39,33 +39,6 @@
 .seller-export-history>summary{cursor:pointer;font-size:13px;font-weight:800;color:#52647a}
 .seller-export-history[open]>summary{margin-bottom:14px}
 #export-workflow-v2>#export-workflow-status[hidden]{display:none!important}
-.inventory-export-config{margin:0 0 14px;padding:14px}
-.inventory-config-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.inventory-config-grid fieldset{display:flex;flex-wrap:wrap;gap:10px 16px;margin:0;padding:10px 12px;border:1px solid #d9e4f2;border-radius:9px;background:#fbfcfe}
-.inventory-config-grid legend{padding:0 5px;font-size:11px;font-weight:800;color:#294b78}
-.inventory-config-grid label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:#52647a}
-.inventory-config-grid input{margin:0;accent-color:#2f6fec}
-.inventory-export-guidance{margin:11px 0 0;color:#52647a;font-size:11px;line-height:1.55}
-.inventory-transfer-status{margin:10px 0 0;padding:9px 10px;border-radius:8px;background:#fff8e7;color:#805b08;font-size:11px;line-height:1.5}
-.inventory-transfer-status[hidden]{display:none!important}
-.inventory-page #export-workflow-v2 .seller-export-field-presets,
-.inventory-page #export-workflow-v2 .seller-field-mode-label,
-.inventory-page #export-workflow-v2 .seller-stock-source-label,
-.inventory-page #export-workflow-v2 .seller-price-mode-label,
-.inventory-page #export-workflow-v2 [data-standard-recalculate],
-.inventory-page #export-workflow-v2 [data-standard-carrier-pick],
-.inventory-page #export-workflow-v2 [data-standard-carrier-run],
-.inventory-page #export-workflow-v2 [data-standard-carrier-input],
-.inventory-page #export-workflow-v2 .seller-selected-file,
-.inventory-page #export-workflow-v2 #sellpia-patch-panel,
-.inventory-page #export-workflow-v2 [data-export-file="playauto_product"],
-.inventory-page #export-workflow-v2 [data-carrier-pick="playauto_product"],
-.inventory-page #export-workflow-v2 [data-carrier-input="playauto_product"],
-.inventory-page #export-workflow-v2>header p,
-.inventory-page #export-workflow-v2 .seller-export-controls>p{display:none!important}
-.inventory-page #export-workflow-v2 .export-channel-card[hidden]{display:none!important}
-#export-workflow-v2.inventory-hide-ably-product-preview #export-preview-v2{display:none!important}
-@media(max-width:700px){.inventory-config-grid{grid-template-columns:1fr}}
 @media(max-width:900px){.export-channel-card{grid-template-columns:1fr}.seller-export-panel{border-left:0;border-top:1px solid #dfe6ef;padding:15px 0 0}}
 @media(max-width:700px){.seller-export-field-presets{align-items:flex-start;flex-direction:column}}
 .export-channel-card header{display:flex;align-items:center;justify-content:space-between;gap:8px}

@@ -20,7 +20,8 @@
     <link rel="stylesheet" href="./rule-workspace.css?v=20260914-legacy-formulas-v2">
       <link rel="stylesheet" href="./ui-cleanup-v1.css?v=20260912-queue-count-clarity-v1">
       <link rel="stylesheet" href="./tag-management-v2.css?v=20260929-ably-carrier-policy-v1">
-      <link rel="stylesheet" href="./seller-file-workflow-v2.css?v=20261007-inventory-tab-v1">
+      <link rel="stylesheet" href="./seller-file-workflow-v2.css?v=20261008-inventory-batch-v1">
+      <link rel="stylesheet" href="./inventory-batch.css?v=20261008-inventory-batch-v1">
   </head>
   <body class="operations-auth-locked">
     <section id="operations-auth-gate" class="operations-auth-gate" aria-labelledby="operations-auth-title">
@@ -565,24 +566,30 @@
           </div>
           <div id="inventory" class="page inventory-page">
             <div class="page-head">
-              <div><h2>재고 관리</h2><p>판매처별 재고-only 파일을 미리 확인하고 생성합니다.</p></div>
+              <div><h2>재고 관리</h2><p>판매처 재고 파일 4개를 한 번에 생성합니다.</p></div>
             </div>
             <section class="panel inventory-export-config" aria-label="재고 내보내기 설정">
               <div class="inventory-config-grid">
-                <fieldset class="inventory-targets"><legend>내보낼 판매처</legend>
-                  <label><input type="checkbox" data-inventory-target="smartstore" checked> 스마트스토어</label>
-                  <label><input type="checkbox" data-inventory-target="makeshop" checked> 메이크샵</label>
-                  <label><input type="checkbox" data-inventory-target="ably" checked> 에이블리</label>
-                </fieldset>
                 <fieldset class="inventory-stock-source"><legend>재고 기준</legend>
                   <label><input type="radio" name="inventory-stock-source" value="available_stock" checked> 가용재고</label>
                   <label><input type="radio" name="inventory-stock-source" value="stock"> 재고</label>
                 </fieldset>
               </div>
-              <p class="inventory-export-guidance">스마트스토어·메이크샵은 최신 보관 원본에서 변경분 또는 전체 원본을 만들고, 에이블리는 공식 PlayAuto 옵션가 + 재고 파일을 선택해 변환합니다. 가용재고가 음수이면 판매처 파일에는 0으로 반영합니다. 변경 없는 값은 원본 그대로 유지됩니다.</p>
-              <p id="inventory-transfer-status" class="inventory-transfer-status" role="status" aria-live="polite" hidden></p>
+              <div class="inventory-file-picker">
+                <label for="inventory-ably-file">에이블리 PlayAuto 원본</label>
+                <input id="inventory-ably-file" type="file" accept=".xlsx" aria-describedby="inventory-file-hint inventory-file-status">
+                <small id="inventory-file-hint">PlayAuto 옵션 + 재고 XLSX를 선택해주세요.</small>
+                <p id="inventory-file-status" role="status" aria-live="polite">선택한 파일 없음</p>
+              </div>
+              <p class="inventory-export-guidance">전체 매칭 SKU의 재고를 반영합니다. 스마트스토어와 메이크샵은 최신 보관 원본을 사용하며, 원본의 모든 행과 가격·기타 값은 유지됩니다.</p>
+              <button id="inventory-batch-run" class="btn primary" type="button">재고 파일 4개 ZIP 생성</button>
+              <div id="inventory-batch-status" class="inventory-batch-status" role="status" aria-live="polite" hidden>
+                <b id="inventory-batch-title"></b>
+                <progress id="inventory-batch-progress" max="100" value="0" aria-label="재고 파일 생성 진행률" hidden></progress>
+                <p id="inventory-batch-detail"></p>
+              </div>
+              <div id="inventory-batch-result" class="inventory-batch-result" hidden></div>
             </section>
-            <div id="inventory-export-host"></div>
           </div>
           <div id="jobs" class="page queue-page">
             <div class="page-head"><div><h2>내보내기 준비·감사 로그</h2><p>시스템에 저장된 판매처 내보내기 대상을 검증하고 취소·재시도하며 전체 상태 이력을 확인합니다.</p></div><div id="queue-live-status" class="live-data-badge loading">DB 조회 중</div></div>
@@ -1023,13 +1030,13 @@
     <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./app.js?v=20261001-matrix-multilisting-v1"></script>
+  <script src="./app.js?v=20261008-inventory-batch-v1"></script>
     <script src="./mapping-import.js?v=20260910-rule-destination-v111"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
     <script src="./ably-stock-export.js?v=20260917-ably-stock-x-v1"></script>
     <script src="./ably-price-projection.js?v=20260929-ably-carrier-policy-v1"></script>
-    <script src="./ably-playauto-export.js?v=20260929-ably-carrier-policy-v1"></script>
+    <script src="./ably-playauto-export.js?v=20261008-inventory-batch-v1"></script>
     <script src="./ably-combinations.js?v=20260917-ably-stock-x-v1"></script>
     <script src="./ably-combination-lab.js?v=20260910-rule-destination-v111"></script>
     <script src="./ably-pair-generator.js?v=20260917-ably-stock-x-v1"></script>
@@ -1046,6 +1053,7 @@
 <script src="./rule-workspace.js?v=20260918-tag-partial-v2"></script>
       <script src="./ui-cleanup-v1.js?v=20261007-inventory-tab-v1"></script>
       <script src="./tag-management-v2.js?v=20260929-ably-carrier-policy-v1"></script>
-      <script src="./seller-file-workflow-v2.js?v=20261007-inventory-tab-v1"></script>
+      <script src="./seller-file-workflow-v2.js?v=20261008-inventory-batch-v1"></script>
+      <script src="./inventory-batch-ui.js?v=20261008-inventory-batch-v1"></script>
   </body>
 </html>

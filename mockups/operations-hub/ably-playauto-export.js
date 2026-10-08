@@ -147,6 +147,18 @@
 
   function resolveRows(items,catalog,mappings=[],options={}){return (items||[]).map(item=>({...item,resolution:resolveSellpiaSku(item,catalog,mappings,options)}));}
 
+  function prepareStockOnlyRow(item,row,{stockSource,inScope=true}={}){
+    const out={...item,_inScope:Boolean(inScope),_status:'ready',_error:'',_changedFields:[]};
+    if(item.carrier_identity_error){out._status='ambiguous';out._error=item.carrier_identity_error;return out;}
+    const sku=item.resolution?.sku;
+    if(!sku){out._status=item.resolution?.method==='unresolved'?'warn_keep_original':'ambiguous';out._error=item.resolution?.error||'SKU를 정확히 찾지 못했습니다.';return out;}
+    const stockTarget=global.HubCurrentPriceExport?.matrixStockTarget(row,stockSource);
+    if(inScope&&item.sales_quantity==null)out._blankStockPreserved=true;
+    else if(inScope&&stockTarget!==null&&stockTarget!==undefined&&Number.isSafeInteger(Number(stockTarget)))out.target_stock=Number(stockTarget);
+    else if(inScope){out._status='warn_keep_original';out._error=`${stockSource==='stock'?'재고':'가용재고'} target 없음 → 이 행 원본 유지`;}
+    return out;
+  }
+
   function isNoBallAnchor(value){
     return /(?:^|[^\p{L}\p{N}])(?:no[\s_-]*ball|노볼)(?=$|[^\p{L}\p{N}])/iu.test(clean(value));
   }
@@ -233,7 +245,7 @@
   global.AblyPlayautoExport={
     PRODUCT_SHEET,OPTION_SHEET,PRODUCT_REQUIRED,OPTION_REQUIRED,
     PRODUCT_BASE_PRICE_COLUMN,PRODUCT_OPTION_PRICE_COLUMN,OPTION_PRICE_COLUMN,OPTION_STOCK_COLUMN,OPTION_SALES_QUANTITY_COLUMN,
-    detect,productOptionLines,parseProductRows,parseOptionRows,resolveSellpiaSku,resolveRows,isNoBallAnchor,prepareSellpiaSourceProductRows,readTemplate,
+    detect,productOptionLines,parseProductRows,parseOptionRows,resolveSellpiaSku,resolveRows,prepareStockOnlyRow,isNoBallAnchor,prepareSellpiaSourceProductRows,readTemplate,
     buildProductPriceOption,buildOptionPriceStock,sellerProductCode,stripSellpiaPrefix,normalize
   };
 })(typeof window==='undefined'?globalThis:window);
