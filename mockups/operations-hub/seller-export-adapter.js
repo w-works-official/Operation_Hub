@@ -525,7 +525,7 @@
       scoped=result.sheetXml;
       highlights=remapHighlights(appliedHighlights,result.rowMap);
     }
-    const highlighted=applyChangeHighlights(scoped,stylesXml,highlights);
+    const highlighted=applyChangeHighlights(expandWorksheetDimension(scoped),stylesXml,highlights);
     assertWorksheetXmlWellFormed(highlighted.sheetXml);
     zip.file(sheetPath,highlighted.sheetXml); zip.file(stylesPath,highlighted.stylesXml); return zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
   }
@@ -563,6 +563,32 @@
   function scopeWorksheetRows(sheetXml,dataRowNumbers,keepOnlyRows){
     return scopeWorksheetRowsWithMap(sheetXml,dataRowNumbers,keepOnlyRows).sheetXml;
   }
+  function expandWorksheetDimension(sheetXml){
+    const xml=String(sheetXml),dimension=xml.match(/<dimension\b[^>]*\bref="([^"]+)"[^>]*\/?>(?:<\/dimension>)?/i);
+    const point=reference=>{
+      const match=String(reference).match(/^\$?([A-Z]+)\$?(\d+)$/i);
+      if(!match)return null;
+      let column=0;for(const letter of match[1].toUpperCase())column=column*26+letter.charCodeAt(0)-64;
+      return {column,row:Number(match[2])};
+    };
+    const declared=dimension?.[1].split(':').map(point);
+    if(dimension&&(!declared?.length||declared.some(value=>!value)))throw new Error('XLSX worksheet 범위를 읽을 수 없어 파일 생성을 중단했습니다.');
+    let minColumn=declared?.[0].column??Infinity,minRow=declared?.[0].row??Infinity;
+    let maxColumn=declared?.at(-1).column??0,maxRow=declared?.at(-1).row??0;
+    for(const match of xml.matchAll(/<c\b[^>]*\br="([A-Z]+\d+)"/gi)){
+      const cell=point(match[1]);
+      minColumn=Math.min(minColumn,cell.column);minRow=Math.min(minRow,cell.row);
+      maxColumn=Math.max(maxColumn,cell.column);maxRow=Math.max(maxRow,cell.row);
+    }
+    if(!maxColumn||!maxRow)return xml;
+    const columnName=value=>{let result='';while(value){value--;result=String.fromCharCode(65+value%26)+result;value=Math.floor(value/26);}return result;};
+    const first=columnName(minColumn)+minRow,last=columnName(maxColumn)+maxRow,reference=first===last?first:first+':'+last;
+    if(dimension)return reference===dimension[1]?xml:xml.replace(dimension[0],dimension[0].replace(/\bref="[^"]+"/,'ref="'+reference+'"'));
+    // Worksheet dimension follows sheetPr when present; every other package part is retained.
+    const properties=xml.match(/<sheetPr\b[^>]*(?:\/>|>[\s\S]*?<\/sheetPr>)/);
+    if(properties)return xml.replace(properties[0],properties[0]+'<dimension ref="'+reference+'"/>');
+    return xml.replace(/<worksheet\b[^>]*>/,opening=>opening+'<dimension ref="'+reference+'"/>');
+  }
   function remapHighlights(highlights,rowMap){
     if(!rowMap)return highlights;
     return highlights.map(highlight=>{
@@ -592,9 +618,11 @@
   async function transformSellerFile(file,items,options={}){
     const skippedItems=[],appliedItems=[];
     if(!Array.isArray(items)||!items.length){
-      if(options.dataRowNumbers&&options.keepOnlyRows){
-        const parts=await xlsxParts(file),scoped=scopeWorksheetRows(parts.sheetXml,options.dataRowNumbers,options.keepOnlyRows);
-        assertWorksheetXmlWellFormed(scoped);parts.zip.file(parts.sheetPath,scoped);
+      if(options.dataRowNumbers&&options.keepOnlyRows||options.repairRange){
+        const parts=await xlsxParts(file),scoped=expandWorksheetDimension(options.dataRowNumbers&&options.keepOnlyRows?scopeWorksheetRows(parts.sheetXml,options.dataRowNumbers,options.keepOnlyRows):parts.sheetXml);
+        assertWorksheetXmlWellFormed(scoped);
+        if(!(options.dataRowNumbers&&options.keepOnlyRows)&&scoped===parts.sheetXml)return {blob:new Blob([await file.arrayBuffer()],{type:file.type||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),skippedItems,appliedItems};
+        parts.zip.file(parts.sheetPath,scoped);
         return {blob:await parts.zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'}),skippedItems,appliedItems};
       }
       return {blob:new Blob([await file.arrayBuffer()],{type:file.type||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),skippedItems,appliedItems};
@@ -635,7 +663,7 @@
       const row=rowMap?.get(Number(change.row))||Number(change.row);
       return `${clean(change.column).toUpperCase()}${row}`;
     });
-    const highlighted=applyChangeHighlights(sheetXml,parts.stylesXml,highlights);
+    const highlighted=applyChangeHighlights(expandWorksheetDimension(sheetXml),parts.stylesXml,highlights);
     assertWorksheetXmlWellFormed(highlighted.sheetXml);
     parts.zip.file(parts.sheetPath,highlighted.sheetXml);parts.zip.file(parts.stylesPath,highlighted.stylesXml);
     const blob=await parts.zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE',compressionOptions:{level:6}});
@@ -666,7 +694,7 @@
       references.push(...carrierWarningReferences(source,row,parents));
     }
     if(!references.length)return file;
-    const marked=applyChangeHighlights(parts.sheetXml,parts.stylesXml,references,{fillColor:'FFFFC7CE',preserveText:true});
+    const marked=applyChangeHighlights(expandWorksheetDimension(parts.sheetXml),parts.stylesXml,references,{fillColor:'FFFFC7CE',preserveText:true});
     parts.zip.file(parts.sheetPath,marked.sheetXml);parts.zip.file(parts.stylesPath,marked.stylesXml);
     return parts.zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',compression:'DEFLATE'});
   }
@@ -734,5 +762,5 @@
   }
   function downloadBlob(blob,name){const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=name;document.body.appendChild(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
 
-  global.SystemV3SellerExport=Object.freeze({cellValue,setCellValue,applyChangeHighlights,carrierWarningReferences,markCarrierWarnings,preflightSharedPriceGroups,patchSmartstoreRow,patchMakeshopRow,scopeWorksheetRows,readMakeshopPhysicalProductRows,patchXlsxFile,transformSellerFile,transformTabularXlsx,patchCsvFile,buildExportArchive,downloadBlob,outputName,auditCsv,conflictCsv,discountTermsFingerprint});
+  global.SystemV3SellerExport=Object.freeze({cellValue,setCellValue,applyChangeHighlights,carrierWarningReferences,markCarrierWarnings,preflightSharedPriceGroups,patchSmartstoreRow,patchMakeshopRow,scopeWorksheetRows,expandWorksheetDimension,readMakeshopPhysicalProductRows,patchXlsxFile,transformSellerFile,transformTabularXlsx,patchCsvFile,buildExportArchive,downloadBlob,outputName,auditCsv,conflictCsv,discountTermsFingerprint});
 })(typeof window!=='undefined'?window:globalThis);

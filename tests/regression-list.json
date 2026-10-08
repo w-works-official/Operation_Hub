@@ -62,5 +62,6 @@
   "operationsHubSellerExportModesV1.mock.test.mjs",
   "operationsHubAblyMappingScaleDatabase.test.mjs",
   "operationsHubIntegratedMappingExport.test.mjs",
-  "operationsHubAblyMappingPrefetchFixtureDatabase.test.mjs"
+  "operationsHubAblyMappingPrefetchFixtureDatabase.test.mjs",
+  "operationsHubWorksheetDimension.test.mjs"
 ]

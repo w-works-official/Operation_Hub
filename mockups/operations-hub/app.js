@@ -8514,7 +8514,7 @@ async function prepareStandardCarrierExport(source,file,{isCurrent=()=>true}={})
 }
 
 async function transformStandardCarrierExport(plan,{download=false}={}){
-  const transformed=await sellerExport.transformSellerFile(plan.file,plan.operations||plan.items||[]);
+  const transformed=await sellerExport.transformSellerFile(plan.file,plan.operations||plan.items||[],{repairRange:true});
   if(transformed.skippedItems.length)throw Error(`수정 셀/원본값 검증 실패 → 파일 생성 차단: ${transformed.skippedItems[0].reason||'serializer가 수정 위치를 확정하지 못했습니다.'}`);
   const blob=await sellerExport.markCarrierWarnings(transformed.blob,plan.source,plan.preview);
   const skipped=[...plan.excludedItems,...transformed.skippedItems];
@@ -8646,7 +8646,7 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
       if(source==='makeshop'&&rows.size)rows.add(2);
       return rows;
     };
-    const transformOptions=items=>mode==='changed_only'?{dataRowNumbers:allDataRows,keepOnlyRows:keepRowsForItems(items)}:mode==='target_all'?{dataRowNumbers:allDataRows,keepOnlyRows:keepRowsForTargetAll()}:{};
+    const transformOptions=items=>mode==='changed_only'?{dataRowNumbers:allDataRows,keepOnlyRows:keepRowsForItems(items),repairRange:true}:mode==='target_all'?{dataRowNumbers:allDataRows,keepOnlyRows:keepRowsForTargetAll(),repairRange:true}:{repairRange:true};
     onProgress?.(`${includePrice?'엑셀 가격·옵션':'엑셀 재고'} 일괄 반영 중 · 변경 ${formatNumber(fileItems.length)}건`);
     await new Promise(resolve=>globalThis.setTimeout(resolve,0));
     mark=clock();
