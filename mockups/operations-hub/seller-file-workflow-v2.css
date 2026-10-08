@@ -23,6 +23,17 @@
 .seller-card-scope textarea{min-height:58px;resize:vertical}
 .seller-card-scope small{color:#315fca;font-size:10px;font-weight:800;line-height:1.4}
 .seller-card-scope-detail[hidden]{display:none!important}
+.seller-card-scope select[hidden]{display:none!important}
+.seller-choice-field{min-inline-size:0;margin:0;padding:0;border:0}
+.seller-choice-field legend{padding:0;margin-bottom:5px;font-size:11px;font-weight:800;color:#52647a}
+.seller-choice-options{display:flex;flex-wrap:wrap;gap:6px}
+.seller-card-scope .seller-choice-options label{display:flex;flex:1 1 90px;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 8px;border:1px solid #d5dfec;border-radius:7px;background:#f8fafc;color:#475569;line-height:1.4;cursor:pointer}
+.seller-choice-options input[type=radio]{flex:none;width:13px;height:13px;margin:0;accent-color:#2563eb}
+.seller-choice-options label:has(input:checked){border-color:#6797ef;background:#edf4ff;color:#174ea6}
+.seller-choice-options label:has(input:focus-visible){outline:2px solid #2563eb;outline-offset:2px}
+.seller-choice-field:disabled .seller-choice-options label{opacity:.55;cursor:default}
+.seller-card-scope .seller-setting-help{color:#68778c;font-weight:400;line-height:1.5}
+.seller-card-scope [data-seller-scope-summary]{padding:7px 8px;border-radius:6px;background:#f2f6fc;line-height:1.5}
 .seller-output-mode-label{display:grid;gap:5px;font-size:10px;font-weight:800;color:#52647a}
 .seller-output-mode-label select{width:100%;box-sizing:border-box;border:1px solid #cbd7e7;border-radius:7px;background:#fff;padding:7px;font:inherit;color:#1e293b}
 .seller-output-contract,.seller-scope-summary{display:block;color:#68778c;font-size:10px;line-height:1.45}

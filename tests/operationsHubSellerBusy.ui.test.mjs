@@ -6,6 +6,7 @@ import test from 'node:test';
 const require=createRequire(process.env.CODEX_NODE_MODULES?`${process.env.CODEX_NODE_MODULES}/seller-busy.cjs`:import.meta.url);
 const {chromium}=require('playwright');
 const workflow=fs.readFileSync(new URL('../mockups/operations-hub/seller-file-workflow-v2.js',import.meta.url),'utf8');
+const chooseRadio=(page,selector,value)=>page.locator(selector).locator('..').locator(`.seller-choice-options input[type="radio"][value="${value}"]`).check();
 let browser;
 test.before(async()=>{browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH}:process.platform==='win32'?{channel:'msedge'}:{})});});
 test.after(async()=>{await browser?.close();});
@@ -93,26 +94,26 @@ test('Ably ordinary actions stay visible, use both compatible price-only roles, 
  assert.equal(await ordinaryPreview.count(),3);assert.equal(await ordinaryRun.count(),3);assert.equal(await page.locator('[data-ably-standard-preview]').evaluate(node=>node.closest('details')===null),true);
  await page.locator('[data-ably-standard-preview]').click();assert.match(await page.locator('[data-ably-action-status]').innerText(),/공식 파일이 없습니다.*고급 기능/);
  assert.equal(await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open),true);
- await page.locator('[data-ably-field-mode]').selectOption('price_only');await page.locator('[data-carrier-input="playauto_product"]').setInputFiles(carrierFile('product.xlsx'));
+ await chooseRadio(page,'[data-ably-field-mode]','price_only');await page.locator('[data-carrier-input="playauto_product"]').setInputFiles(carrierFile('product.xlsx'));
  await page.waitForFunction(()=>document.querySelector('[data-ably-action-status]').textContent.includes('판매가 + 옵션가 미리보기 완료'));
- await page.locator('[data-ably-field-mode]').selectOption('stock_only');const productReadCount=await page.evaluate(()=>ablyReads.length);
+ await chooseRadio(page,'[data-ably-field-mode]','stock_only');const productReadCount=await page.evaluate(()=>ablyReads.length);
  await page.locator('[data-carrier-input="playauto_product"]').setInputFiles(carrierFile('product-stock-unsupported.xlsx'));
  assert.equal(await page.evaluate(()=>ablyReads.length),productReadCount,'stock-only never reads a product-price carrier');
  assert.match(await page.locator('[data-ably-action-status]').innerText(),/현재 선택한 필드 모드에 맞지 않습니다/);
  await page.locator('[data-ably-standard-preview]').click();assert.match(await page.locator('[data-ably-action-status]').innerText(),/옵션가 \+ 재고 공식 파일이 없습니다/);
- await page.locator('[data-ably-field-mode]').selectOption('price_only');
+ await chooseRadio(page,'[data-ably-field-mode]','price_only');
  await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile('option.xlsx'));await page.waitForFunction(()=>document.querySelector('[data-ably-action-status]').textContent.includes('옵션가 + 재고 미리보기 완료'));
  await page.locator('[data-ably-standard-preview]').click();await page.waitForFunction(()=>ablyReads.length===3);
  assert.deepEqual(await page.evaluate(()=>ablyReads),['product.xlsx','option.xlsx','option.xlsx']);
  await page.waitForFunction(()=>document.querySelector('[data-ably-progress]').dataset.state==='done');
- await page.locator('[data-ably-field-mode]').selectOption('stock_only');
+ await chooseRadio(page,'[data-ably-field-mode]','stock_only');
  await page.locator('[data-ably-standard-run]').click();assert.equal(await page.evaluate(()=>downloads.length),0,'criteria invalidation removes the previous compatible preview');
  assert.match(await page.locator('[data-ably-action-status]').innerText(),/미리보기를 먼저 확인/);
  assert.equal(await ordinaryPreview.count(),3);assert.equal(await ordinaryRun.count(),3);
 });
 
 test('Ably ordinary generation rechecks the stock snapshot and blocks a changed preview before serialization or download',async t=>{
- const page=await fixture(t);await page.locator('[data-ably-field-mode]').selectOption('stock_only');
+ const page=await fixture(t);await chooseRadio(page,'[data-ably-field-mode]','stock_only');
  await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open=true);
  await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile('option.xlsx'));await page.waitForFunction(()=>document.querySelector('[data-ably-action-status]').textContent.includes('미리보기 완료'));
  assert.equal(await page.locator('#export-preview-generate').isDisabled(),false);assert.equal(await page.evaluate(()=>ablyReads.length),1);
@@ -123,7 +124,7 @@ test('Ably ordinary generation rechecks the stock snapshot and blocks a changed 
 
 test('shared field presets remain locked until both standard seller previews and the pending Ably file job finish',async t=>{
  const page=await fixture(t),presets=page.locator('[data-export-field-preset]');
- await page.locator('[data-ably-field-mode]').selectOption('stock_only');await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open=true);
+ await chooseRadio(page,'[data-ably-field-mode]','stock_only');await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open=true);
  await page.evaluate(()=>window.deferAblyReads=true);await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile('option.xlsx'));
  await page.waitForFunction(()=>pendingAblyReads.length===1);assert.deepEqual(await presets.evaluateAll(nodes=>nodes.map(node=>node.disabled)),[true,true,true]);
  await page.locator(primary('smartstore','preview')).click();await page.locator(primary('makeshop','preview')).click();await page.waitForFunction(()=>pendingPreviews.length===2);

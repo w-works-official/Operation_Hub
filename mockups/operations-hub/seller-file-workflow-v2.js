@@ -95,32 +95,59 @@
 
  function sellerScopeMarkup(source){
   return `<div class="seller-card-scope" data-seller-scope="${source}">
-   <label>대상 범위<select data-seller-scope-mode="${source}"><option value="all">파일에서 매칭되는 전체 SKU</option><option value="manual">SKU 직접 입력</option><option value="tag">태그 적용 SKU</option></select></label>
+   <label>대상 SKU<select data-seller-scope-mode="${source}"><option value="all">전체 매칭 SKU</option><option value="manual">SKU 직접 입력</option><option value="tag">태그로 선택</option></select></label>
    <label class="seller-card-scope-detail" data-seller-scope-manual-wrap="${source}" hidden>SKU 목록<textarea data-seller-scope-manual="${source}" placeholder="10000-1&#10;10000-2"></textarea></label>
    <label class="seller-card-scope-detail" data-seller-scope-tag-wrap="${source}" hidden>태그<select data-seller-scope-tag="${source}"><option value="">태그 선택</option></select></label>
+   <small class="seller-setting-help">어떤 SKU를 처리할지 고릅니다. 값이 같아도 선택 대상에 포함됩니다.</small>
+   <label class="seller-output-mode-label">${source==='ably'?'미리보기 표시':'파일에 담을 상품'}<select data-standard-output-mode="${source}">${source==='ably'?'<option value="target_all">전체 평가 항목</option><option value="changed_only">변경·검토 항목만</option>':'<option value="target_all">선택한 SKU 모두</option><option value="changed_only">변경된 상품만</option>'}</select></label>
+   <small class="seller-setting-help" data-seller-output-help="${source}"></small>
    ${['smartstore','makeshop'].includes(source)?`<label class="seller-field-mode-label">내보낼 항목<select data-standard-field-mode="${source}"><option value="price_stock">가격 + 재고</option><option value="price_only">가격만</option><option value="stock_only">재고만</option></select></label><label class="seller-stock-source-label" data-standard-stock-source-wrap="${source}">재고 반영 기준<select data-standard-stock-source="${source}"><option value="available_stock">가용재고</option><option value="stock">재고</option></select></label>`:''}
    ${source==='ably'?`<label class="seller-field-mode-label">내보낼 항목<select data-ably-field-mode><option value="option_stock">가격 + 재고</option><option value="price_only">가격만</option><option value="stock_only">재고만</option></select></label><label class="seller-stock-source-label" data-ably-stock-source-wrap>재고 반영 기준<select data-ably-stock-source><option value="available_stock">가용재고</option><option value="stock">재고</option></select></label>`:''}
-   ${source==='ably'?`<small class="seller-output-contract">PlayAuto 공식 양식의 전체 행은 유지하고, 선택 대상의 실제 변경 셀만 겹쳐 씁니다.</small>`:''}
    ${['smartstore','makeshop'].includes(source)?`<label class="seller-price-mode-label">가격 계산<select data-standard-price-mode="${source}"><option value="rules">수식 적용 (기본)</option><option value="sellpia_source">셀피아 판매가 기준</option></select></label>`:source==='ably'?`<label class="seller-price-mode-label">판매가 + 옵션가 가격 계산<select data-standard-price-mode="ably"><option value="rules">수식 적용 (기본)</option><option value="sellpia_source">셀피아 판매가 기준</option></select></label>`:''}
-   <label class="seller-output-mode-label">출력 범위<select data-standard-output-mode="${source}"><option value="target_all">대상 전체</option><option value="changed_only">실제 변경분만</option></select></label>
-   <small data-seller-scope-summary="${source}">파일에서 매칭되는 전체 SKU</small>
+   <small data-seller-scope-summary="${source}" aria-live="polite"></small>
   </div>`;
+ }
+
+ function showSellerChoices(section){
+  for(const select of section.querySelectorAll('.seller-card-scope select:not([data-seller-scope-tag])')){
+   const original=select.parentElement,group=document.createElement('fieldset'),legend=document.createElement('legend'),choices=document.createElement('div');
+   for(const attribute of original.attributes)group.setAttribute(attribute.name,attribute.value);
+   group.classList.add('seller-choice-field');choices.className='seller-choice-options';
+   legend.textContent=[...original.childNodes].filter(node=>node.nodeType===3).map(node=>node.textContent).join('').trim();
+   const binding=[...select.attributes].find(attribute=>attribute.name.startsWith('data-'));
+   const source=select.closest('[data-seller-scope]')?.dataset.sellerScope;
+   const name=`seller-choice-${source}-${binding.name}`;legend.id=name;
+   select.hidden=true;select.tabIndex=-1;select.setAttribute('aria-hidden','true');select.setAttribute('aria-labelledby',name);
+   group.append(legend,select,choices);original.replaceWith(group);
+   for(const option of select.options){
+    const label=document.createElement('label'),radio=document.createElement('input'),text=document.createElement('span');
+    radio.type='radio';radio.name=name;radio.value=option.value;radio.checked=option.selected;text.textContent=option.textContent;
+    radio.onchange=()=>{if(!radio.checked||select.disabled)return;select.value=radio.value;select.dispatchEvent(new Event('change',{bubbles:true}));};
+    label.append(radio,text);choices.append(label);
+   }
+   const sync=()=>{group.disabled=select.disabled;for(const radio of choices.querySelectorAll('input'))radio.checked=radio.value===select.value;updateSellerScopeSummary(source);};
+   select.addEventListener('change',sync);
+   new MutationObserver(sync).observe(select,{attributes:true,attributeFilter:['disabled']});
+   sync();
+  }
  }
 
  function updateSellerScopeSummary(source){
   const mode=document.querySelector(`[data-seller-scope-mode="${source}"]`)?.value||'all',summary=document.querySelector(`[data-seller-scope-summary="${source}"]`);
   if(!summary)return;
+  const changed=document.querySelector(`[data-standard-output-mode="${source}"]`)?.value==='changed_only';
+  const help=document.querySelector(`[data-seller-output-help="${source}"]`);
+  if(help)help.textContent=source==='ably'?(changed?'변경·검토 항목만 표시합니다.':'평가한 항목을 모두 표시합니다.')+' PlayAuto 파일의 전체 원본 행은 항상 유지합니다.':changed?'선택한 SKU 중 내보낼 항목의 값이 달라진 상품만 담습니다.':'선택한 SKU의 매칭 상품을 담습니다. 값이 같은 상품도 포함합니다.';
+  let target='전체 매칭 SKU';
   if(mode==='manual'){
    const values=String(document.querySelector(`[data-seller-scope-manual="${source}"]`)?.value||'').split(/[,\s]+/).map(value=>value.trim()).filter(Boolean);
-   summary.textContent=values.length?`직접 입력 ${n(new Set(values).size)} SKU`:'SKU를 입력해주세요.';
-   return;
+   target=values.length?`직접 입력 ${n(new Set(values).size)} SKU`:'SKU 입력 필요';
   }
   if(mode==='tag'){
    const select=document.querySelector(`[data-seller-scope-tag="${source}"]`),option=select?.selectedOptions?.[0];
-   summary.textContent=select?.value?(option?.textContent||'선택 태그'):'태그를 선택해주세요.';
-   return;
+   target=select?.value?`태그 ${option?.textContent||'선택 태그'}`:'태그 선택 필요';
   }
-  summary.textContent='파일에서 매칭되는 전체 SKU';
+  summary.textContent=`대상: ${target} · ${source==='ably'?'표시: '+(changed?'변경·검토 항목만':'전체 평가 항목'):'파일: '+(changed?'변경된 상품만':'동일값 포함')}`;
  }
 
 function bindSellerScope(section,source){
@@ -143,7 +170,7 @@ function bindSellerScope(section,source){
   if(manual)manual.oninput=()=>{invalidate();updateSellerScopeSummary(source);};
   if(tag)tag.onchange=()=>{invalidate();updateSellerScopeSummary(source);};
   const outputMode=section.querySelector(`[data-standard-output-mode="${source}"]`);
-  if(outputMode)outputMode.onchange=()=>invalidate('출력 범위가 바뀌었습니다. 미리보기를 다시 실행하세요.');
+  if(outputMode)outputMode.onchange=()=>{invalidate(`${source==='ably'?'미리보기 표시':'파일에 담을 상품'}가 바뀌었습니다. 미리보기를 다시 실행하세요.`);updateSellerScopeSummary(source);};
   const priceMode=section.querySelector(`[data-standard-price-mode="${source}"]`);
   if(priceMode)priceMode.onchange=()=>invalidate('가격 계산 방식이 바뀌었습니다. 미리보기를 다시 실행하세요.');
   const fieldMode=section.querySelector(`[data-standard-field-mode="${source}"]`),stockSource=section.querySelector(`[data-standard-stock-source="${source}"]`),stockWrap=section.querySelector(`[data-standard-stock-source-wrap="${source}"]`);
@@ -332,7 +359,7 @@ function formatScopeSummary(summary={}){
   if(!page||!head||document.getElementById('export-workflow-v2'))return;
   page.querySelector('.export-hub')?.remove();
   const section=document.createElement('section');section.id='export-workflow-v2';section.className='export-workflow-v2';
-  section.innerHTML=`<header><h3>판매처 파일 내보내기</h3><p>각 판매처 카드에서 전체·직접 입력·태그 적용 SKU를 고르고, 대상 범위와 필드를 정한 뒤 미리보기와 XLSX 생성을 진행합니다.</p></header>
+  section.innerHTML=`<header><h3>판매처 파일 내보내기</h3><p>처리할 SKU와 파일에 담을 상품을 고른 뒤, 가격·재고 기준을 정하고 미리보기와 XLSX 생성을 진행합니다.</p></header>
     <div class="seller-export-field-presets" aria-label="판매처 내보내기 필드 빠른 선택"><div><b>내보낼 필드 빠른 선택</b><span>모든 판매처 카드에 같은 모드를 적용합니다. 카드별로 다시 바꿀 수도 있습니다.</span></div><div><button class="btn active" type="button" data-export-field-preset="price_stock" aria-pressed="true">가격 + 재고</button><button class="btn" type="button" data-export-field-preset="price_only" aria-pressed="false">가격만</button><button class="btn" type="button" data-export-field-preset="stock_only" aria-pressed="false">재고만</button></div></div>
     <div class="export-channel-grid">
       <article class="export-channel-card" data-standard-source="smartstore"><header><h4>스마트스토어</h4><span>원본 양식</span></header><p>매트릭스 가격·재고와 최신 보관 원본을 대조합니다.</p><div class="export-role-status" data-standard-status="smartstore">원본 상태 확인 중…</div><div class="export-role-status matrix-stock-state" data-matrix-stock-status="smartstore">재고 상태 확인 전 · 새 수정안을 계산하지 않습니다.</div>${sellerScopeMarkup('smartstore')}<div class="direct-export-actions"><button class="btn" type="button" data-standard-preview="smartstore">변경사항 미리보기</button><button class="btn primary" type="button" data-standard-run="smartstore">XLSX 생성</button></div><details class="seller-advanced"><summary>고급 기능 · 공식 수정파일 / 전체 원본</summary><input type="file" data-standard-carrier-input="smartstore" accept=".xlsx,.xls"><div class="direct-export-actions"><button class="btn" type="button" data-standard-full-preview="smartstore">전체 원본 미리보기</button><button class="btn primary" type="button" data-standard-full-run="smartstore">전체 원본 XLSX 생성</button><button class="btn" type="button" data-standard-carrier-pick="smartstore">수정파일 선택</button><button class="btn primary" type="button" data-standard-carrier-run="smartstore" aria-disabled="true">선택 파일 변환</button></div></details><details class="seller-recalculate"><summary>가격 재계산</summary><p>선택 범위의 내부 가격과 판매처 활성 Rule 계산 결과를 다시 저장합니다.</p><button class="btn wide" type="button" data-standard-recalculate="smartstore">선택 범위 가격 재계산</button></details><div class="direct-export-progress" data-standard-progress="smartstore" hidden><div class="direct-export-progress-head"><b data-progress-title>파일 생성 준비</b><span data-progress-percent>0%</span></div><div class="direct-export-progress-track"><i data-progress-bar style="width:0%"></i></div><small data-progress-detail>대상 범위와 원본을 확인합니다.</small></div><div class="direct-export-preview" data-standard-result="smartstore">변경사항 미리보기를 실행하세요.</div></article>
@@ -354,6 +381,7 @@ function formatScopeSummary(summary={}){
   // UI preview release: canary controls are not mounted, including URL opt-in.
   document.getElementById('export-workflow-status').hidden=true;
 
+  showSellerChoices(section);
   for(const source of ['smartstore','makeshop','ably'])bindSellerScope(section,source);
   bindExportPresets(section);
 
@@ -519,7 +547,7 @@ async function previewStandard(source,mode=null){
    const stock=document.querySelector('[data-matrix-stock-status="'+source+'"]');if(stock){stock.className='export-role-status matrix-stock-state ready';stock.textContent='carrier 대상 '+n(result.diagnostics?.sku_count)+' SKU · DB 조회 '+n(result.diagnostics?.query_count)+'회 · 전체 snapshot 없음';}
    if(selection.stockOnly){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,kind:'stock_only'});renderStockOnlyPreview(source,result);}
    else if(selection.priceMode==='sellpia_source'){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,kind:'sellpia_source'});renderSourcePricePreview(source,result);}
-   else{state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,kind:'price'});standardResult(source,[`출력 범위 ${mode==='target_all'?'대상 전체':'실제 변경분만'}`,formatScopeSummary(result.scopeSummary),result.count,result.detail,selection.priceOnly?'재고 변경 0건 · 판매처 원본 재고 보존':`재고 기준 ${selection.stockSource==='stock'?'재고':'가용재고'}`,'현재 가격 결정과 최신 매핑을 생성 직전에 다시 검증합니다.'].filter(Boolean).join(' · '),'success');}
+   else{state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,kind:'price'});standardResult(source,[`파일에 담을 상품 ${mode==='full_original'?'원본 전체 행 유지':mode==='target_all'?'선택한 SKU 모두':'변경된 상품만'}`,formatScopeSummary(result.scopeSummary),result.count,result.detail,selection.priceOnly?'재고 변경 0건 · 판매처 원본 재고 보존':`재고 기준 ${selection.stockSource==='stock'?'재고':'가용재고'}`,'현재 가격 결정과 최신 매핑을 생성 직전에 다시 검증합니다.'].filter(Boolean).join(' · '),'success');}
    setStatus((source==='smartstore'?'스마트스토어':'메이크샵')+(mode==='target_all'?' 대상 전체 미리보기 완료':mode==='full_original'?' 전체 원본 미리보기 완료':' 변경분 미리보기 완료'),'success');
   }catch(error){if(!isStandardRequestCurrent(source,request))return;standardResult(source,error?.message||String(error),'error');setStatus('미리보기 실패: '+(error?.message||error),'error');}
   finally{finishStandardRequest(source,request);}
@@ -855,7 +883,7 @@ async function runStandard(source,mode=null){
   const policyLabels={legacy_rules:'legacy (Rule platformBase)',lowest:'lowest',lower_middle:'lower_middle',preserve_existing_base:'preserve_existing_base'};
   const policyText=(p.policySummaries||[]).map(policy=>`${policyLabels[policy.strategy]||policy.strategy} · ${policy.sourceLabel||policy.source}`).join(' / ');
   const partialNotice=p.role==='playauto_product'&&p.counts.pricePreserved?` 공통 I 변경에 맞춰 같은 PlayAuto 상품 행 전체 T를 다시 계산하며, 미선택 ${n(p.counts.pricePreserved)}개 sibling의 기존 최종가는 보존합니다.`:'';
-  document.getElementById('export-preview-copy').textContent=(p.role==='playauto_product'?`Price source: ${p.priceMode}. Resolved Ably policy: ${policyText||'legacy fallback'}.${partialNotice}${p.priceMode==='sellpia_source'?' 판매처 외부 할인은 이 양식에 없어 반영하지 않습니다.':''}`:p.stockOnly?`재고-only · 기준 ${p.stockSource==='stock'?'재고':'가용재고'}. X *판매수량만 변경하며 V 옵션 추가금액, W 판매가능재고와 나머지 셀은 보존합니다.${p.stockSource==='available_stock'?' 음수 가용재고는 DB 원값을 유지하고 판매처에는 0으로 내보냅니다.':''}`:p.priceOnly?'가격-only · V 옵션 추가금액만 변경하며 X *판매수량과 W 판매가능재고, 나머지 셀은 보존합니다.':`가격 + 재고 · ${p.stockSource==='stock'?'재고':'가용재고'} 기준으로 V 추가 금액과 X *판매수량만 반영하며 W 판매가능재고와 나머지 셀은 보존합니다.${p.stockSource==='available_stock'?' 음수 가용재고는 DB 원값을 유지하고 판매처에는 0으로 내보냅니다.':''}`)+` 출력 범위: ${p.outputMode==='target_all'?'대상 전체':'실제 변경분 미리보기'} · PlayAuto 공식 XLSX의 전체 원본 행은 유지하며 실제 변경 셀만 반영합니다.`+(p.policyDownloadBlocked?' lower_middle은 계산 미리보기만 제공하며 실제 다운로드는 현재 차단됩니다.':'')+' 변경 셀 노랑 / 원본 유지 경고 셀 빨강.';
+  document.getElementById('export-preview-copy').textContent=(p.role==='playauto_product'?`Price source: ${p.priceMode}. Resolved Ably policy: ${policyText||'legacy fallback'}.${partialNotice}${p.priceMode==='sellpia_source'?' 판매처 외부 할인은 이 양식에 없어 반영하지 않습니다.':''}`:p.stockOnly?`재고-only · 기준 ${p.stockSource==='stock'?'재고':'가용재고'}. X *판매수량만 변경하며 V 옵션 추가금액, W 판매가능재고와 나머지 셀은 보존합니다.${p.stockSource==='available_stock'?' 음수 가용재고는 DB 원값을 유지하고 판매처에는 0으로 내보냅니다.':''}`:p.priceOnly?'가격-only · V 옵션 추가금액만 변경하며 X *판매수량과 W 판매가능재고, 나머지 셀은 보존합니다.':`가격 + 재고 · ${p.stockSource==='stock'?'재고':'가용재고'} 기준으로 V 추가 금액과 X *판매수량만 반영하며 W 판매가능재고와 나머지 셀은 보존합니다.${p.stockSource==='available_stock'?' 음수 가용재고는 DB 원값을 유지하고 판매처에는 0으로 내보냅니다.':''}`)+` 미리보기 표시: ${p.outputMode==='target_all'?'전체 평가 항목':'변경·검토 항목만'} · PlayAuto 공식 XLSX의 전체 원본 행은 유지하며 실제 변경 셀만 반영합니다.`+(p.policyDownloadBlocked?' lower_middle은 계산 미리보기만 제공하며 실제 다운로드는 현재 차단됩니다.':'')+' 변경 셀 노랑 / 원본 유지 경고 셀 빨강.';
   const c=p.counts,counts=document.getElementById('export-preview-counts');
   counts.innerHTML=`<span>원본 ${n(c.template)}</span><span>매칭 ${n(c.matched)}</span>${p.priceMode==='sellpia_source'?`<span>선택 SKU ${n(c.selected)}</span>${previewFilterButton('all','가격 계획',p.output.length)}`:previewFilterButton('all','선택',c.selected)}${c.pricePreserved?`<span>미선택 옵션 가격 보존 ${n(c.pricePreserved)}</span>`:''}${c.mappingOverrides?`<span>파일 SKU 우선 ${n(c.mappingOverrides)}</span>`:''}${previewFilterButton('ready','생성 가능',c.ready,'good')}${previewFilterButton('changed','변경',c.changed,'good')}${previewFilterButton('unchanged','변경 없음',c.unchanged)}${previewFilterButton('warned','원본 유지 경고',c.warned,'warn')}${previewFilterButton('unresolved','미확정',c.unresolved,'warn')}${c.preserved?previewFilterButton('preserved','원본 blank 유지',c.preserved):''}${previewFilterButton('blocked','치명적 차단',c.blocked,c.blocked?'bad':'')}`;
   let shadowBox=document.getElementById('export-shadow-provenance');
