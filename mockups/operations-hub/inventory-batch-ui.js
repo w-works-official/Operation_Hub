@@ -37,8 +37,8 @@
  }
  function invalidateRetry(){state.retryAvailable=false;state.retrySignature='';}
  function invalidatePreview(){state.requestId+=1;state.previewStatus='idle';state.preview=null;state.previewSignature='';state.previewError='';}
- async function refreshMappingReadiness(){
-  if(state.busy)return;
+ async function refreshMappingReadiness({duringRun=false}={}){
+  if(state.busy&&!duringRun)return;
   const request=++state.mappingRequest,bridge=global.SystemV3SellerExportBridge;
   state.mappingStatus='checking';state.mapping=null;state.mappingError='';renderMappingStatus();updateAction();
   try{
@@ -79,13 +79,13 @@
   if(previewHasBlockers()){showStatus('재고 반영 중단','미리보기의 중복 충돌 또는 오류 행을 먼저 해결해주세요.','error');return;}
   if(global.__systemV3DirectExportBusy){showStatus('재고 반영 대기','진행 중인 판매처 내보내기가 끝난 뒤 다시 실행해주세요.');return;}
   const bridge=global.SystemV3SellerExportBridge;
-  try{await refreshMappingReadiness();}catch{}
-  if(!mappingsReady()){showStatus('재고 반영 중단',state.mappingError||state.mapping?.reason||'에이블리 재고 매핑을 확인해주세요.','error');return;}
   const files=selectedSellpiaFiles(),expectedPreview=state.preview,source=stockSource(),retry=retryCurrent(),method=retry?'retryInventoryBatchExport':'runInventoryUpdateBatch';
   if(!bridge?.[method]){showStatus('재고 반영 중단','재고 반영 기능을 불러오지 못했습니다. 새로고침 후 다시 실행해주세요.','error');return;}
   state.busy=true;lock(true);progress.value=0;progress.hidden=false;
   showStatus(retry?'판매처 파일 다시 생성 중…':'재고 반영 및 ZIP 생성 중…','작업 전 최종 조건을 확인합니다.','processing');
   try{
+   await refreshMappingReadiness({duringRun:true});
+   if(!mappingsReady()){showStatus('재고 반영 중단',state.mappingError||state.mapping?.reason||'에이블리 재고 매핑을 확인해주세요.','error');return;}
    const output=retry?await bridge.retryInventoryBatchExport({stockSource:source,onProgress:progressUpdate}):await bridge.runInventoryUpdateBatch({files,expectedPreview,stockSource:source,onProgress:progressUpdate});
    try{downloadOutput(output);}catch(error){if(output?.uploaded===true){error.uploaded=true;error.retryAvailable=true;}throw error;}
    invalidateRetry();progress.value=100;progress.hidden=true;const changed=Number(expectedPreview.summary?.changedSkuCount||0);
@@ -101,6 +101,11 @@
  button.addEventListener('click',()=>{void startWork();});
  document.addEventListener('click',event=>{if(event.target.closest?.('[data-page="inventory"]'))void refreshMappingReadiness();});
  global.addEventListener('ably-inventory-mappings-changed',()=>{if(!state.busy){invalidateRetry();clearResult();void refreshMappingReadiness();}});
- const authObserver=new MutationObserver(()=>{if(!document.body.classList.contains('operations-auth-locked'))void refreshMappingReadiness();});authObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
+ let authLocked=document.body.classList.contains('operations-auth-locked');
+ const authObserver=new MutationObserver(()=>{
+  const locked=document.body.classList.contains('operations-auth-locked');
+  if(locked===authLocked)return;
+  authLocked=locked;if(!locked)void refreshMappingReadiness();
+ });authObserver.observe(document.body,{attributes:true,attributeFilter:['class']});
  renderFileStatus();renderPreview();renderMappingStatus();updateAction();void refreshMappingReadiness();
 })(window);

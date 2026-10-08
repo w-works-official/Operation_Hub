@@ -9,7 +9,7 @@
   "scripts": {
     "check": "node scripts/check.mjs",
     "test": "node scripts/run-tests.mjs",
-    "test:browser": "node scripts/browser-smoke.mjs && node --test tests/operationsHubInventoryFiles.browser.test.mjs tests/operationsHubInventoryCountFiles.ui.test.mjs tests/operationsHubPriceDecisionWorkspace.ui.test.mjs tests/operationsHubCurrentPriceDecisionSmartStoreRoundtrip.ui.test.mjs tests/operationsHubSellerWorkflowModes.ui.test.mjs tests/operationsHubExportFieldModes.ui.test.mjs tests/operationsHubAblyMappingManagement.ui.test.mjs tests/operationsHubSellerBusy.ui.test.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs && node --test tests/operationsHubInventoryFiles.browser.test.mjs tests/operationsHubInventoryCountFiles.ui.test.mjs tests/operationsHubPriceDecisionWorkspace.ui.test.mjs tests/operationsHubCurrentPriceDecisionSmartStoreRoundtrip.ui.test.mjs tests/operationsHubSellerWorkflowModes.ui.test.mjs tests/operationsHubExportFieldModes.ui.test.mjs tests/operationsHubAblyMappingManagement.ui.test.mjs tests/operationsHubSellerBusy.ui.test.mjs tests/operationsHubInventoryPreflight.ui.test.mjs",
     "build": "node scripts/build-pages.mjs"
   },
   "devDependencies": {
