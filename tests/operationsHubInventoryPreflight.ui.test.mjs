@@ -41,7 +41,7 @@ async function fixture(t,{initial=true,deferMappings=true,supported=true,persist
    async runInventoryUpdateBatch(args){window.batchCalls++;window.timeline.push('batch');window.batchArgs={fingerprint:args.expectedPreview.fingerprint,stockSource:args.stockSource};return new Promise(resolve=>window.pendingBatches.push(()=>resolve(window.makeBatchOutput())));},
    async retryInventoryBatchExport(){window.retryCalls++;window.timeline.push('retry');return window.makeBatchOutput();}
   };
-  window.HubInventoryFileDownloads={async loadDestination(){return {supported:options.supported,persistent:options.persistent,configured:options.configured,name:options.configured?'QA folder':'브라우저 기본 다운로드 폴더'};},async prepareDestination(){window.prepareCalls++;window.timeline.push('prepare');if(window.denyPermission)throw Error('쓰기 권한 거부');if(window.deferPermission)await new Promise(resolve=>window.resolvePermission=resolve);return {kind:options.configured?'directory':'browser'};},async saveFiles(files){window.savedBatches.push(files.map(file=>file.fileName||file.name));window.timeline.push('save');if(window.failSaves>0){window.failSaves--;throw Error('synthetic disk full');}window.downloadCalls+=files.length;}};
+  window.HubInventoryFileDownloads={async loadDestination(){return {supported:options.supported,persistent:options.persistent,configured:options.configured,name:options.configured?'QA folder':'브라우저 기본 다운로드 폴더'};},async prepareDestination(){window.prepareCalls++;window.timeline.push('prepare');if(window.denyPermission)throw Error('쓰기 권한 거부');if(window.deferPermission)await new Promise(resolve=>window.resolvePermission=resolve);return {kind:options.configured?'directory':'browser'};},async saveFiles(files){window.savedBatches.push(files.map(file=>file.fileName||file.name));window.timeline.push('save');if(window.failSaves>0){window.failSaves--;throw Error('synthetic disk full');}window.downloadCalls+=files.length;return {destination:options.configured?'directory':'browser',savedCount:files.length};}};
   HTMLAnchorElement.prototype.click=function(){window.downloadCalls++;};
   document.getElementById('inventory-batch-run').addEventListener('click',()=>window.nativeBatchClicks++);
  },{supported,persistent,configured,uploaded,failSaves});
@@ -50,7 +50,7 @@ async function fixture(t,{initial=true,deferMappings=true,supported=true,persist
  await page.evaluate(value=>window.deferMappings=value,deferMappings);
  return page;
 }
-async function allLocked(page){assert.equal(await page.locator('#inventory-sellpia-files,input[name="inventory-stock-source"],#inventory-batch-run,#inventory-sellpia-clear-files,#inventory-choose-destination,#inventory-clear-destination,#inventory-blocked-preview-download,[data-remove-file]').evaluateAll(nodes=>nodes.every(node=>node.disabled)),true);}
+async function allLocked(page){assert.deepEqual(await page.locator('#inventory-sellpia-files,input[name="inventory-stock-source"],#inventory-batch-run,#inventory-sellpia-clear-files,#inventory-choose-destination,#inventory-clear-destination,#inventory-blocked-preview-download,[data-remove-file]').evaluateAll(nodes=>nodes.filter(node=>!node.disabled).map(node=>node.id||node.name||node.dataset.removeFile)),[],'pending work keeps every source, file, destination and report control locked');}
 async function settle(page){await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)));}
 
 test('actual shared mouseup class mutation cannot swallow the native inventory batch click',async t=>{
@@ -62,7 +62,7 @@ test('actual shared mouseup class mutation cannot swallow the native inventory b
  await page.evaluate(()=>pendingMappings[0](mappingValue()));await page.waitForFunction(()=>batchCalls===1);
  assert.deepEqual(await page.evaluate(()=>batchArgs),{fingerprint:await page.evaluate(()=>lastPreview.fingerprint),stockSource:'available_stock'});
  await page.evaluate(()=>pendingBatches[0]());await page.waitForFunction(()=>document.getElementById('inventory-batch-result').hidden===false);
- assert.equal(await page.evaluate(()=>downloadCalls),4);assert.equal(await page.locator('#inventory-batch-title').textContent(),'변경 없이 판매처 파일 생성 완료');
+ assert.equal(await page.evaluate(()=>downloadCalls),0);assert.equal(await page.evaluate(()=>savedBatches.length),0);assert.equal(await page.locator('[data-redownload-index]').count(),4);assert.equal(await page.locator('#inventory-batch-title').textContent(),'변경 없이 판매처 파일 생성 완료');
 });
 
 test('pending preflight locks all criteria, blocks duplicates and ignores unrelated body class changes',async t=>{
@@ -89,7 +89,7 @@ test('mapping refresh observes the actual authentication unlock transition and i
 });
 
 test('directory permission resolves before mapping or write and pending permission locks every input against duplicate actions',async t=>{
- const page=await fixture(t),baseline=await page.evaluate(()=>mappingCalls);
+ const page=await fixture(t,{configured:true}),baseline=await page.evaluate(()=>mappingCalls);
  await page.evaluate(()=>window.deferPermission=true);await page.locator('#inventory-batch-run').click();await page.waitForFunction(()=>!!window.resolvePermission);
  await allLocked(page);assert.equal(await page.evaluate(()=>mappingCalls),baseline);assert.equal(await page.evaluate(()=>batchCalls),0);
  await page.locator('#inventory-batch-run').evaluate(node=>node.dispatchEvent(new MouseEvent('click',{bubbles:true})));assert.equal(await page.evaluate(()=>prepareCalls),1);
@@ -100,7 +100,7 @@ test('directory permission resolves before mapping or write and pending permissi
 });
 
 test('permission denial prevents mapping preflight and the inventory bridge and leaves the confirmed preview reusable',async t=>{
- const page=await fixture(t,{deferMappings:false}),baseline=await page.evaluate(()=>mappingCalls);
+ const page=await fixture(t,{deferMappings:false,configured:true}),baseline=await page.evaluate(()=>mappingCalls);
  await page.evaluate(()=>window.denyPermission=true);await page.locator('#inventory-batch-run').click();await page.waitForFunction(()=>document.getElementById('inventory-batch-status').dataset.state==='error');
  assert.equal(await page.evaluate(()=>mappingCalls),baseline);assert.equal(await page.evaluate(()=>batchCalls),0);
  assert.match(await page.locator('#inventory-batch-detail').textContent(),/쓰기 권한 거부/);assert.equal(await page.locator('#inventory-batch-run').isDisabled(),false);
@@ -118,8 +118,9 @@ test('selection adds files cumulatively, retains distinct files with identical m
  await page.locator('#inventory-blocked-preview-download').click();await page.waitForFunction(()=>window.downloadCalls===1);
  assert.deepEqual(await page.evaluate(()=>savedBatches[0]),['재고_차단목록.xlsx']);assert.equal(await page.evaluate(()=>batchCalls),0);
  await page.locator('#inventory-batch-run').click();await page.waitForFunction(()=>batchCalls===1);await page.evaluate(()=>pendingBatches[0]());await page.waitForFunction(()=>document.getElementById('inventory-batch-result').hidden===false);
- assert.deepEqual(await page.evaluate(()=>savedBatches[1]),['SS1.xlsx','SS2.xlsx','MS.xlsx','AB.xlsx','재고_차단목록.xlsx']);
- assert.match(await page.locator('#inventory-batch-result').textContent(),/차단 목록 XLSX 다운로드 요청 · 2개 행/);
+ assert.equal(await page.evaluate(()=>savedBatches.length),1,'default generation does not save the full bundle automatically');
+ assert.deepEqual(await page.locator('[data-redownload-index]').evaluateAll(nodes=>nodes.map(node=>node.download)),['SS1.xlsx','SS2.xlsx','MS.xlsx','AB.xlsx','재고_차단목록.xlsx']);
+ assert.match(await page.locator('#inventory-batch-result').textContent(),/차단 목록 XLSX 다운로드 준비 · 2개 행/);
 });
 
 test('drop and picker share the cumulative ten-file cap, per-file removal and clear invalidate the previous preview',async t=>{
@@ -148,7 +149,7 @@ test('pending preview prevents selection and drop mutation until the current res
 });
 
 test('a file-save failure after committed upload offers export-only retry and never resubmits the inventory bridge',async t=>{
- const page=await fixture(t,{deferMappings:false,uploaded:true,failSaves:1});await page.locator('#inventory-batch-run').click();await page.waitForFunction(()=>batchCalls===1);await page.evaluate(()=>pendingBatches[0]());
+ const page=await fixture(t,{deferMappings:false,configured:true,uploaded:true,failSaves:1});await page.locator('#inventory-batch-run').click();await page.waitForFunction(()=>batchCalls===1);await page.evaluate(()=>pendingBatches[0]());
  await page.waitForFunction(()=>document.getElementById('inventory-batch-run').textContent==='판매처 파일 다시 생성');
  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),false);assert.match(await page.locator('#inventory-batch-title').textContent(),/업데이트 완료.*파일 저장 실패/);
  await page.locator('#inventory-batch-run').click();await page.waitForFunction(()=>document.getElementById('inventory-batch-result').hidden===false);
@@ -158,7 +159,7 @@ test('a file-save failure after committed upload offers export-only retry and ne
 
 test('unsupported folder selection and session-only persistence display their actual destination state',async t=>{
  const unsupported=await fixture(t,{supported:false,deferMappings:false});assert.equal(await unsupported.locator('#inventory-choose-destination').isHidden(),true);assert.equal(await unsupported.locator('#inventory-choose-destination').isDisabled(),true);
- assert.match(await unsupported.locator('#inventory-download-destination-hint').textContent(),/브라우저 기본 다운로드 폴더/);
+ assert.match(await unsupported.locator('#inventory-download-destination-hint').textContent(),/기본 다운로드.*파일별로/);
  const session=await fixture(t,{configured:true,persistent:false,deferMappings:false});assert.equal(await session.locator('#inventory-choose-destination').isHidden(),false);assert.equal(await session.locator('#inventory-clear-destination').isHidden(),false);
  assert.equal(await session.locator('#inventory-download-destination-name').textContent(),'QA folder');assert.match(await session.locator('#inventory-download-destination-hint').textContent(),/세션에서만 기억/);
 });

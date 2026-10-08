@@ -51,5 +51,10 @@
 .inventory-batch-status[data-state="error"]{background:#fff1f1;color:#a12727}
 .inventory-batch-status[data-state="success"],.inventory-batch-result{background:#edf9f1;color:#17733a}
 .inventory-batch-result ul{padding-left:18px;margin:10px 0 0}
+.inventory-batch-result li{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0}
+.inventory-redownload-link{display:inline-block;flex:none;padding:6px 10px;border:1px solid #b7d8c1;border-radius:6px;background:#fff;color:#17733a;font-size:11px;font-weight:700;text-decoration:none}
+.inventory-redownload-link:hover{background:#f3fbf5}
+.inventory-redownload-link:focus-visible{outline:3px solid #83adff;outline-offset:2px}
+.inventory-redownload-link[aria-disabled="true"]{opacity:.55;pointer-events:none}
 .inventory-export-config [hidden]{display:none!important}
 @media(max-width:700px){.inventory-export-config{padding:18px;gap:16px}.inventory-preview-summary{grid-template-columns:repeat(3,minmax(0,1fr))}#inventory-batch-run{justify-self:stretch}.inventory-download-destination,.inventory-blocked-report{align-items:stretch;flex-direction:column}.inventory-destination-actions button{flex:1}}

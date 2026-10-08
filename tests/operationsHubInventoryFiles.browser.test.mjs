@@ -9,7 +9,7 @@ const require=createRequire(path.join(root,'package.json'));
 const {chromium}=require('playwright');
 const uiPath=path.join(root,'mockups/operations-hub/inventory-batch-ui.js');
 
-async function fixture(t){
+async function fixture(t,{directory=false}={}){
   const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH}:process.platform==='win32'?{channel:'msedge'}:{})});
   const context=await browser.newContext({acceptDownloads:true});
   const page=await context.newPage();
@@ -39,6 +39,16 @@ async function fixture(t){
   await page.addScriptTag({path:path.join(root,'tests/vendor/xlsx-0.18.5.full.min.js')});
   await page.addScriptTag({path:path.join(root,'mockups/operations-hub/sellpia-inventory-count.js')});
   await page.addScriptTag({path:path.join(root,'mockups/operations-hub/inventory-file-downloads.js')});
+  await page.evaluate(configured=>{
+    window.__prepareCalls=0;window.__saveCalls=0;window.__createdUrls=[];window.__revokedUrls=[];window.__linkEvents=[];
+    const create=URL.createObjectURL,revoke=URL.revokeObjectURL;
+    URL.createObjectURL=function(blob){const url=create.call(this,blob);window.__createdUrls.push(url);return url;};URL.revokeObjectURL=function(url){window.__revokedUrls.push(url);return revoke.call(this,url);};
+    const module=window.HubInventoryFileDownloads,prepare=module.prepareDestination,save=module.saveFiles;
+    module.prepareDestination=async()=>{window.__prepareCalls++;return configured?{kind:'directory',name:'QA folder'}:prepare();};
+    module.saveFiles=async(...args)=>{window.__saveCalls++;return configured?{destination:'directory',savedCount:args[0].length}:save(...args);};
+    if(configured)module.loadDestination=async()=>({supported:true,configured:true,persistent:true,name:'QA folder'});
+    document.addEventListener('click',event=>{const link=event.target.closest('[data-redownload-index]');if(link)window.__linkEvents.push({trusted:event.isTrusted,prevented:event.defaultPrevented,name:link.download});});
+  },directory);
   await page.addScriptTag({path:uiPath});
   t.after(async()=>{await context.close();await browser.close();assert.deepEqual(errors,[],'fixture has no browser script errors');});
   return page;
@@ -83,7 +93,7 @@ test('preview conflicts and invalid rows exclude only their SKUs, while no valid
   const download=page.waitForEvent('download');await page.locator('#inventory-blocked-preview-download').click();assert.equal((await download).suggestedFilename(),'재고_차단목록.xlsx');
 });
 
-test('update flow locks every control, prevents duplicate clicks, and downloads four individual seller files',async t=>{
+test('default generation prepares four native file links, locks every control, and accepts one trusted download per click',async t=>{
   const page=await fixture(t);
   await page.evaluate(()=>{window.__batchCalls=0;window.__downloadClicks=0;window.__finishBatch=null;window.__expectedPreview={fingerprint:'fixture-fingerprint',baseSnapshotId:'fixture-snapshot',summary:{validSkuCount:2,changedSkuCount:2}};
     window.SystemV3Data={previewSellpiaInventoryCount:async()=>window.__expectedPreview};
@@ -102,15 +112,22 @@ test('update flow locks every control, prevents duplicate clicks, and downloads 
   await page.evaluate(()=>window.__finishBatch());
   await page.waitForFunction(()=>document.querySelector('#inventory-batch-result')?.hidden===false);
   assert.deepEqual(await page.evaluate(()=>window.__batchArgs),{files:['count-a.xlsx','count-b.xlsx'],previewFingerprint:'fixture-fingerprint',stockSource:'stock'});
-  assert.equal(await page.evaluate(()=>window.__downloadClicks),4);
+  assert.equal(await page.evaluate(()=>window.__downloadClicks),0,'generation does not synthesize automatic anchor clicks');assert.equal(await page.evaluate(()=>window.__saveCalls),0,'default mode never calls the bulk save helper');
   assert.equal(await page.locator('#inventory-batch-title').textContent(),'재고 반영 및 판매처 파일 생성 완료');
   assert.deepEqual(await page.locator('#inventory-batch-result li span').allTextContents(),['smartstore-a.xlsx','smartstore-b.xlsx','makeshop.xlsx','에이블리_재고 수량 변경.xlsx']);
-  assert.match(await page.locator('#inventory-batch-result').textContent(),/판매처 XLSX 4개 다운로드 요청/);
+  assert.match(await page.locator('#inventory-batch-result').textContent(),/판매처 XLSX 4개 다운로드 준비/);
+  const names=['smartstore-a.xlsx','smartstore-b.xlsx','makeshop.xlsx','에이블리_재고 수량 변경.xlsx'];
+  for(const [index,name] of names.entries()){
+    const link=page.locator(`[data-redownload-index="${index}"]`);assert.equal(await link.evaluate(node=>node.tagName),'A');assert.equal(await link.getAttribute('download'),name);assert.match(await link.getAttribute('href'),/^blob:/);
+    const event=page.waitForEvent('download');await link.click();assert.equal((await event).suggestedFilename(),name);
+  }
+  assert.equal(await page.evaluate(()=>window.__saveCalls),0);assert.equal(await page.evaluate(()=>window.__prepareCalls),1,'default native links require no asynchronous destination preparation');assert.equal(await page.evaluate(()=>window.__batchCalls),1);
+  assert.ok((await page.evaluate(()=>window.__linkEvents)).every(event=>event.trusted&&!event.prevented));
   assert.equal(await page.locator('#inventory-batch-run').isDisabled(),false);
 });
 
 test('post-update file-generation failure exposes retry-only path and file additions clear it',async t=>{
-  const page=await fixture(t);
+  const page=await fixture(t,{directory:true});
   await page.evaluate(()=>{window.__updates=0;window.__retries=0;window.__downloadClicks=0;
     window.SystemV3Data={previewSellpiaInventoryCount:async()=>({fingerprint:'retry-fingerprint',baseSnapshotId:'fixture-snapshot',summary:{validSkuCount:1,changedSkuCount:1,duplicateConflictCount:0,errorRowCount:0}})};
     const click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){window.__downloadClicks++;return click.call(this);};
@@ -126,7 +143,7 @@ test('post-update file-generation failure exposes retry-only path and file addit
   await page.waitForFunction(()=>window.__retries===1&&document.querySelector('#inventory-batch-result')?.hidden===false);
   assert.equal(await page.evaluate(()=>window.__updates),1,'retry never uploads Sellpia files again');
   assert.deepEqual(await page.evaluate(()=>window.__retryArgs),{stockSource:'available_stock'});
-  assert.equal(await page.evaluate(()=>window.__downloadClicks),4);
+  assert.equal(await page.evaluate(()=>window.__downloadClicks),0,'directory storage does not synthesize browser downloads');assert.equal(await page.evaluate(()=>window.__saveCalls),1,'only the successful export retry stores its four files');
   await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('replacement-count.xlsx'));
   await page.waitForFunction(()=>document.querySelector('#inventory-preview-title')?.textContent==='재고 반영 미리보기 완료');
   assert.equal(await page.locator('#inventory-batch-run').textContent(),'재고 반영 후 판매처 파일 4개 생성','adding files invalidates the export-only retry state');
@@ -150,9 +167,9 @@ test('pending preview rejects replacement selection, and a later failed preview 
   assert.equal(await page.locator('#inventory-batch-run').isDisabled(),true);
 });
 
-test('each result file and report can be saved again from its retained Blob with correct destination status and no bridge or preview regeneration',async t=>{
-  for(const destination of ['browser','directory']){
-    const page=await fixture(t);
+test('directory result links save retained report and seller Blobs with locks, errors and no bridge or preview regeneration',async t=>{
+  const destination='directory';{
+    const page=await fixture(t,{directory:true});
     await page.evaluate(kind=>{
       window.__updates=0;window.__previews=0;window.__prepares=0;window.__savedGroups=[];window.__finishSave=null;window.__failSave=false;
       window.SystemV3Data={previewSellpiaInventoryCount:async()=>{window.__previews++;return {fingerprint:'retained-file-proof',baseSnapshotId:'fixture-snapshot',summary:{validSkuCount:1,changedSkuCount:1}};}};
@@ -169,17 +186,42 @@ test('each result file and report can be saved again from its retained Blob with
     assert.equal(await page.locator('[data-redownload-index]').count(),5);assert.match(await page.locator('#inventory-batch-result').textContent(),destination==='directory'?/판매처 XLSX 4개 저장 완료/:/판매처 XLSX 4개 다운로드 요청/);
     const mappingChecks=await page.evaluate(()=>window.__mappingChecks);
     await page.locator('[data-redownload-index="4"]').click();await page.waitForFunction(()=>window.__savedGroups.length===2&&window.__finishSave!==null);
-    assert.equal(await page.locator('[data-redownload-index]').evaluateAll(nodes=>nodes.every(node=>node.disabled)),true);assert.equal(await page.locator('#inventory-sellpia-files').isDisabled(),true);assert.equal(await page.locator('#inventory-batch-run').isDisabled(),true);
-    await page.locator('[data-redownload-index="4"]').evaluate(node=>node.dispatchEvent(new MouseEvent('click',{bubbles:true})));assert.equal(await page.evaluate(()=>window.__prepares),2);
+    assert.equal(await page.locator('[data-redownload-index]').evaluateAll(nodes=>nodes.every(node=>node.getAttribute('aria-disabled')==='true'&&node.tabIndex===-1)),true);assert.equal(await page.locator('#inventory-sellpia-files').isDisabled(),true);assert.equal(await page.locator('#inventory-batch-run').isDisabled(),true);
+    await page.locator('[data-redownload-index="4"]').evaluate(node=>node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));assert.equal(await page.evaluate(()=>window.__prepares),2);
     assert.deepEqual(await page.evaluate(()=>window.__savedGroups.map(files=>files.map(file=>file.fileName))),[['a.xlsx','b.xlsx','c.xlsx','d.xlsx','재고_차단목록.xlsx'],['재고_차단목록.xlsx']]);
     assert.equal(await page.evaluate(()=>window.__savedGroups[1][0].blob===window.__retainedOutput.blockedFile.blob),true,'report retry uses the original generated Blob');
-    await page.evaluate(()=>window.__finishSave());await page.waitForFunction(()=>document.querySelector('#inventory-batch-status')?.dataset.state==='success'&&!document.querySelector('[data-redownload-index="4"]')?.disabled);
+    await page.evaluate(()=>window.__finishSave());await page.waitForFunction(()=>document.querySelector('#inventory-batch-status')?.dataset.state==='success'&&document.querySelector('[data-redownload-index="4"]')?.getAttribute('aria-disabled')==='false');
     assert.equal(await page.locator('#inventory-batch-title').textContent(),destination==='directory'?'파일 저장 완료':'다운로드 요청 완료');
     await page.evaluate(()=>{window.__finishSave=null;window.__failSave=true;});await page.locator('[data-redownload-index="0"]').click();await page.waitForFunction(()=>window.__finishSave!==null);
     assert.equal(await page.evaluate(()=>window.__savedGroups[2][0].blob===window.__retainedOutput.files[0].blob),true,'seller retry also retains its exact generated Blob');
     await page.evaluate(()=>window.__finishSave());await page.waitForFunction(()=>document.querySelector('#inventory-batch-title')?.textContent==='파일 다시 받기 실패');
-    assert.match(await page.locator('#inventory-batch-detail').textContent(),/synthetic retained save failed/);assert.equal(await page.locator('[data-redownload-index="0"]').isDisabled(),false);
+    assert.match(await page.locator('#inventory-batch-detail').textContent(),/synthetic retained save failed/);assert.equal(await page.locator('[data-redownload-index="0"]').getAttribute('aria-disabled'),'false');
     assert.equal(await page.evaluate(()=>window.__updates),1);assert.equal(await page.evaluate(()=>window.__previews),1);assert.equal(await page.evaluate(()=>window.__mappingChecks),mappingChecks);
     assert.equal(await page.locator('#inventory-batch-result').isHidden(),false,'a one-file save failure preserves all generated result files');
+    assert.ok((await page.evaluate(()=>window.__linkEvents)).every(event=>event.prevented),'configured directory links intercept native download navigation');
   }
+});
+
+test('default prepares four files and report without save calls, preserves URLs for direct downloads, and revokes them only on result replacement or clear',async t=>{
+  const page=await fixture(t);await page.evaluate(()=>{
+    window.__updates=0;window.__previews=0;window.SystemV3Data={previewSellpiaInventoryCount:async()=>{window.__previews++;return {fingerprint:'url-proof',baseSnapshotId:'fixture-snapshot',summary:{validSkuCount:1,changedSkuCount:1}};}};
+    window.SystemV3SellerExportBridge={runInventoryUpdateBatch:async()=>{window.__updates++;return {...window.__fourFiles(['a.xlsx','b.xlsx','c.xlsx','d.xlsx']),blockedFile:{blob:new Blob(['blocked-report fixture']),fileName:'재고_차단목록.xlsx',rowCount:1}};}};
+  });
+  await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('count.xlsx'));await page.waitForFunction(()=>document.querySelector('#inventory-batch-run')?.disabled===false);
+  await page.locator('#inventory-batch-run').click();await page.waitForFunction(()=>document.querySelector('#inventory-batch-result')?.hidden===false);
+  const links=page.locator('[data-redownload-index]'),firstUrls=await links.evaluateAll(nodes=>nodes.map(node=>node.href));
+  assert.equal(firstUrls.length,5);assert.equal(await page.evaluate(()=>window.__saveCalls),0);assert.equal(await page.evaluate(()=>window.__revokedUrls.length),0);
+  assert.match(await page.locator('#inventory-batch-result').textContent(),/차단 목록 XLSX 다운로드 준비/);
+  const mappingChecks=await page.evaluate(()=>window.__mappingChecks);
+  for(const [index,name] of ['a.xlsx','b.xlsx','c.xlsx','d.xlsx','재고_차단목록.xlsx'].entries()){
+    const event=page.waitForEvent('download');await links.nth(index).click();assert.equal((await event).suggestedFilename(),name);
+  }
+  assert.equal(await page.evaluate(()=>window.__prepareCalls),1);assert.equal(await page.evaluate(()=>window.__saveCalls),0);assert.equal(await page.evaluate(()=>window.__updates),1);assert.equal(await page.evaluate(()=>window.__previews),1);assert.equal(await page.evaluate(()=>window.__mappingChecks),mappingChecks);
+  assert.equal(await page.evaluate(()=>window.__revokedUrls.length),0,'clicking or awaiting a download cannot invalidate the retained result links');
+  assert.equal(await page.evaluate(async()=>await (await fetch(document.querySelector('[data-redownload-index="4"]').href)).text()),'blocked-report fixture');
+  await page.locator('#inventory-batch-run').click();await page.waitForFunction(()=>window.__updates===2&&document.querySelector('#inventory-batch-result')?.hidden===false);
+  assert.deepEqual(await page.evaluate(()=>window.__revokedUrls),firstUrls,'regeneration revokes every old result URL');
+  const secondUrls=await page.locator('[data-redownload-index]').evaluateAll(nodes=>nodes.map(node=>node.href));assert.equal(secondUrls.length,5);assert.ok(secondUrls.every(url=>!firstUrls.includes(url)));
+  await page.locator('#inventory-sellpia-clear-files').click();assert.equal(await page.locator('[data-redownload-index]').count(),0);assert.deepEqual(await page.evaluate(()=>window.__revokedUrls),[...firstUrls,...secondUrls]);
+  assert.equal(await page.evaluate(()=>window.__saveCalls),0);assert.ok((await page.evaluate(()=>window.__linkEvents)).every(event=>event.trusted&&!event.prevented));
 });
