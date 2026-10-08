@@ -50,5 +50,17 @@
   "operationsHubSellpiaSourcePriceOverlay.mock.test.mjs",
   "operationsHubSellpiaUploadParser.mock.test.mjs",
   "productImagePolicy.contract.test.mjs",
-  "sellerSourceParsers.mock.test.mjs"
+  "sellerSourceParsers.mock.test.mjs",
+  "operationsHubAblyInventoryExport.test.mjs",
+  "operationsHubAblyMappingDatabase.test.mjs",
+  "operationsHubAblyMappingManagement.test.mjs",
+  "operationsHubIntegratedExportContract.test.mjs",
+  "operationsHubIntegratedExportContractWorkflow.test.mjs",
+  "operationsHubIntegratedExportContractDatabase.test.mjs",
+  "operationsHubIntegratedDataService.test.mjs",
+  "operationsHubTargetAllScope.mock.test.mjs",
+  "operationsHubSellerExportModesV1.mock.test.mjs",
+  "operationsHubAblyMappingScaleDatabase.test.mjs",
+  "operationsHubIntegratedMappingExport.test.mjs",
+  "operationsHubAblyMappingPrefetchFixtureDatabase.test.mjs"
 ]

@@ -103,6 +103,10 @@
     const optionKeys=[clean(item.seller_option_code),clean(item.option_sku_code)].filter(value=>value&&!explicitSellpiaSku(value));
     const productMappings=sellerProduct?(mappings||[]).filter(row=>clean(row.product_code)===sellerProduct):[];
     const exactMappings=productMappings.length?(optionKeys.length?productMappings.filter(row=>optionKeys.includes(clean(row.option_code))):(productMappings.length===1?productMappings:[])):[];
+    if(exactMappings.some(row=>row.mapping_blocked||row.suppression_active))return {error:'에이블리 상품·옵션 연결이 억제되었거나 충돌 상태입니다.',method:'seller_mapping_suppressed'};
+    const verifiedMappings=exactMappings.filter(row=>row.mapping_origin==='verified_solution_code'&&clean(row.sku));
+    if(verifiedMappings.length===1)return {sku:clean(verifiedMappings[0].sku),method:'verified_solution_code',row:verifiedMappings[0]};
+    if(verifiedMappings.length>1)return {error:'검증된 에이블리 상품·옵션이 여러 SKU를 가리킵니다.',method:'seller_mapping_ambiguous'};
     const uniqueMappings=[...new Map(exactMappings.map(row=>[clean(row.sku),row])).values()].filter(row=>clean(row.sku));
     const rows=(catalog||[]).filter(row=>clean(row.sellpia_product_code)===clean(item.sellpia_product_code));
     if(preferDirectProductSku&&item.template_type==='product_price_option'&&item.direct_sellpia_sku_error)

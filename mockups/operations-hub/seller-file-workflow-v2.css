@@ -23,6 +23,15 @@
 .seller-card-scope textarea{min-height:58px;resize:vertical}
 .seller-card-scope small{color:#315fca;font-size:10px;font-weight:800;line-height:1.4}
 .seller-card-scope-detail[hidden]{display:none!important}
+.seller-output-mode-label{display:grid;gap:5px;font-size:10px;font-weight:800;color:#52647a}
+.seller-output-mode-label select{width:100%;box-sizing:border-box;border:1px solid #cbd7e7;border-radius:7px;background:#fff;padding:7px;font:inherit;color:#1e293b}
+.seller-output-contract,.seller-scope-summary{display:block;color:#68778c;font-size:10px;line-height:1.45}
+.seller-advanced,.seller-recalculate{border:1px solid #dfe6ef;border-radius:8px;background:#fff;padding:8px 10px}
+.seller-advanced>summary,.seller-recalculate>summary{cursor:pointer;color:#52647a;font-size:10px;font-weight:800}
+.seller-advanced[open]>summary,.seller-recalculate[open]>summary{margin-bottom:9px}
+.seller-advanced input[type=file]{margin:5px 0 9px}
+.seller-recalculate p{margin:7px 0;color:#68778c;font-size:10px;line-height:1.45}
+.seller-recalculate .btn{width:100%;margin-top:3px}
 .export-channel-grid{display:grid;grid-template-columns:1fr;gap:16px}
 .export-channel-card{border:1px solid #dfe6ef;border-radius:11px;padding:16px;background:#fbfcfe;display:grid;grid-template-columns:minmax(260px,32fr) minmax(0,68fr);gap:20px;min-height:180px;align-items:start}
 .seller-export-controls{display:flex;flex-direction:column;gap:9px;min-width:0}

@@ -14,7 +14,8 @@ test('inventory keeps Jobs exporter in place and exposes the combined DB-update 
   assert.match(html,/<div id="inventory" class="page inventory-page">/,'Inventory page remains present');
   assert.match(workflow,/section\.id='export-workflow-v2'/,'Jobs workflow remains mounted by the existing exporter');
   assert.doesNotMatch(workflow,/inventory-export-host|transferExportWorkspace|bindInventoryControls/,'legacy workflow transfer is removed');
-  assert.match(html,/id="inventory-ably-file" type="file" accept="\.xlsx"/);
+  assert.doesNotMatch(html,/id="inventory-ably-file"/,'combined inventory batch has no PlayAuto upload prerequisite');
+  assert.match(html,/id="inventory-ably-mapping-status"/,'DB mapping and packaged official template readiness are displayed');
   assert.match(html,/id="inventory-sellpia-files" type="file" accept="\.xlsx" multiple/);
   assert.match(html,/id="inventory-preview-summary"/);
   assert.match(html,/id="inventory-preview-unconfirmed"/);
@@ -28,6 +29,7 @@ test('inventory keeps Jobs exporter in place and exposes the combined DB-update 
   assert.doesNotMatch(html,/data-standard-(?:preview|run|full-run)|data-ably-(?:preview|run)/,'inventory contains no per-seller export actions');
   assert.match(ui,/output\.files\?\.length!==4/,'one ZIP requires all four expected seller files');
   assert.match(ui,/runInventoryUpdateBatch/,'the final action uses the dedicated DB-update orchestration bridge');
+  assert.match(ui,/preflightInventoryMappings/,'DB option mapping and official AB template are checked before enabling the batch');
   assert.match(ui,/retryInventoryBatchExport/,'post-update ZIP failures can retry export alone');
   assert.match(ui,/error\?\.uploaded===true&&error\?\.retryAvailable===true/,'only a confirmed DB update exposes export-only retry');
 });

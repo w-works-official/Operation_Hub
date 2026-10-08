@@ -6,14 +6,16 @@ const workflow=fs.readFileSync('mockups/operations-hub/seller-file-workflow-v2.j
 const app=fs.readFileSync('mockups/operations-hub/app.js','utf8');
 const current=fs.readFileSync('mockups/operations-hub/current-price-export.js','utf8');
 
-test('seller export UI exposes three explicit workbook modes',()=>{
-  for(const label of ['전체 원본 미리보기','전체 원본 XLSX 생성','변경분 미리보기','변경분 XLSX 생성','수정파일 선택','선택 파일 변환'])assert.match(workflow,new RegExp(label));
+test('seller export UI separates target/output settings and keeps original/carrier modes advanced',()=>{
+  for(const label of ['변경사항 미리보기','XLSX 생성','대상 전체','실제 변경분만','고급 기능','수정파일 선택','선택 파일 변환'])assert.ok(workflow.includes(label),`missing ${label}`);
+  assert.doesNotMatch(workflow,/data-standard-(?:preview|run)="[^"]+">(?:변경분|전체 원본)/,'ordinary actions use the output setting rather than separate full/changed buttons');
   assert.match(workflow,/previewFullOriginal/);assert.match(workflow,/runFullOriginal/);
   assert.match(app,/mode==='full_original'/);assert.match(app,/_SystemV3전체반영/);assert.match(app,/_SystemV3변경분/);
 });
 
 test('full-original preserves all rows; changed-only scopes changed product blocks',()=>{
-  assert.match(app,/mode==='changed_only'\?\{dataRowNumbers:allDataRows,keepOnlyRows:keepRowsForItems\(items\)\}:\{\}/);
+  assert.match(app,/keepOnlyRows:keepRowsForItems\(items\)/);
+  assert.match(app,/mode==='target_all'.*keepOnlyRows:keepRowsForTargetAll\(\)/);
   assert.match(app,/changedProducts=new Set/);
   assert.match(app,/Untouched\/unmapped original rows are not export warnings/);
 });

@@ -47,8 +47,8 @@ assert.ok(localAssets.every(asset => /\?v=[^&\"]+$/.test(asset)), 'all local exp
 assert.match(html,/discount-price-math\.js\?v=20260914-matrix-visible-export-v2/,'shared matrix display math keeps its deployed version');
 assert.match(html,/seller-export-adapter\.js\?v=20260922-makeshop-batch-row-patch-v2/,'MakeShop workbook batch row serializer uses the latest version');
 assert.match(html,/app\.js\?v=[^"']+/,'carrier guard remains cache-versioned');
-assert.match(html,/current-price-export\.js\?v=20261001-seller-fanout-v1/,'source-price preview and fan-out classifier uses a fresh release version');
-assert.match(html,/ably-price-projection\.js\?v=20260929-ably-carrier-policy-v1[\s\S]*?ably-playauto-export\.js\?v=20260929-ably-carrier-policy-v1/,'Ably projection loads before its PlayAuto adapter with a fresh version');
+assert.match(html,/current-price-export\.js\?v=20261008-integrated-export-v1/,'source-price preview and fan-out classifier uses the integrated release version');
+assert.match(html,/ably-price-projection\.js\?v=20261008-price-decisions-v1[\s\S]*?ably-playauto-export\.js\?v=20261008-integrated-export-v1/,'Ably projection loads before its PlayAuto adapter with a fresh version');
 assert.match(html,/seller-file-workflow-v2\.js\?v=[^"']+/,'seller file workflow remains cache-versioned');
 assert.match(html,/data-service\.js\?v=[^"']+/,'targeted carrier lookup data service remains cache-versioned');
 assert.doesNotMatch(html, /class="seller-export-files"/, 'export must reuse the latest stored originals instead of asking for files again');
@@ -69,7 +69,8 @@ assert.match(app, /matrixHasActiveExportFilter\(\)[^]*?defaultScope = matrixHasA
 assert.match(app, /scope === 'selected'[^]*?scope === 'filtered'[^]*?collectSellerExportFilteredSkus/, 'checked and filtered SKU scopes must resolve separately');
 assert.match(app, /scope === 'tag'[^]*?collectSellerExportTagSkus/, 'tag scope must resolve through the authoritative server member reader');
 assert.match(app, /loadTagMembers\(\{tagId,search:'',page,pageSize:1000\}\)/, 'tag scope must page through the complete server-side assignment set');
-assert.match(app, /expected!==null&&expected!==count[^]*?skus\.length!==expected/, 'tag scope must fail closed if membership changes or rows are missing');
+assert.match(app, /reportedCount!==null&&reportedCount!==count[^]*?skus\.length!==expected/, 'fallback tag pagination must fail closed if membership changes or rows are missing');
+assert.match(data,/new global\.HubMatrixDataset\.Dataset\(result\.rows,result\.count\)/,'primary tag selection validates the complete versioned dataset and inherited product tags');
 assert.match(app, /HubCurrentPriceExport\.refreshItems[\s\S]*?skus:scopeSkusForRules/, 'tag scope must reach the same bounded seller carrier resolver as other SKU scopes');
 assert.match(app, /let firstChunk = true[^]*?while \(firstChunk \|\| offset < filter\.total\)/, 'filtered export must query once even when the matrix total is still loading');
 assert.match(app, /const includeStockDrafts = Boolean\(sellerExportState\.rows\?\.length\)/, 'only an explicit saved-change export may validate queue rows');

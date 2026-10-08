@@ -6,7 +6,7 @@ const require=createRequire(process.env.CODEX_NODE_MODULES?`${process.env.CODEX_
 const {chromium}=require('playwright');
 const workflow=fs.readFileSync(new URL('../mockups/operations-hub/seller-file-workflow-v2.js',import.meta.url),'utf8');
 
-const browser=await chromium.launch({channel:'msedge',headless:true});
+const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH}:process.platform==='win32'?{channel:'msedge'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
  page.on('pageerror',error=>errors.push(error.message));
@@ -25,8 +25,8 @@ try{
  await page.waitForSelector('#export-workflow-v2');
 
  assert.deepEqual(await page.locator('[data-export-field-preset]').allTextContents(),['가격 + 재고','가격만','재고만']);
- assert.deepEqual(await page.locator('[data-standard-field-mode="smartstore"] option').allTextContents(),['가격 + 재고 (기존)','가격만','재고만']);
- assert.deepEqual(await page.locator('[data-ably-field-mode] option').allTextContents(),['옵션가 + 재고 (기존)','옵션가만','재고만']);
+ assert.deepEqual(await page.locator('[data-standard-field-mode="smartstore"] option').allTextContents(),['가격 + 재고','가격만','재고만']);
+ assert.deepEqual(await page.locator('[data-ably-field-mode] option').allTextContents(),['가격 + 재고','가격만','재고만']);
 
  await page.locator('[data-export-field-preset="stock_only"]').click();
  assert.equal(await page.locator('[data-standard-field-mode="smartstore"]').inputValue(),'stock_only');
@@ -43,8 +43,9 @@ try{
  assert.equal(await page.locator('[data-ably-field-mode]').inputValue(),'price_only');
  assert.equal(await page.locator('[data-standard-stock-source-wrap="smartstore"]').isVisible(),false);
  assert.equal(await page.locator('[data-standard-price-mode="smartstore"]').isEnabled(),true);
+ await page.locator('[data-standard-recalculate="smartstore"]').evaluate(button=>{button.closest('details').open=true;});
  assert.equal(await page.locator('[data-standard-recalculate="smartstore"]').isVisible(),true);
- assert.match(await page.locator('[data-seller-notice]').nth(0).innerText(),/재고 셀은 원본 그대로 보존/);
+ assert.match(await page.locator('[data-seller-notice]').nth(0).innerText(),/재고.*원본 그대로 보존/);
 
  await page.locator('[data-export-field-preset="price_stock"]').click();
  assert.equal(await page.locator('[data-standard-field-mode="smartstore"]').inputValue(),'price_stock');

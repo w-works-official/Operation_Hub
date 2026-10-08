@@ -68,8 +68,8 @@ function fixture(){
  assert.equal(r.items[0],f.stock);assert.deepEqual(r.items.filter(i=>i.field_key==='sellpia_sale_price').map(i=>i.sellpia_sku_code),['D'],'unchanged C produces no operation');assert.equal(r.excludedItems.length,2);assert.ok(!r.excludedItems.some(e=>/not materialized/.test(e.reason)),'a wholly uncalculated row keeps the original and is not an exclusion');assert.ok(!r.items.some(i=>i.after_value===99999),'current target errors must not reuse a stale prepared price');
 }
 {
- const f=fixture();const a=f.rows.find(r=>r.source_channel==='ably'&&r.sellpia_sku_code==='A');f.rows.push({...a,sellpia_sku_code:'SAME'});const r=await api.refreshItems([],f.files,{sources:['ably']});assert.equal(r.items.length,2);assert.equal(r.excludedItems.length,1);assert.ok(r.items.every(i=>i.seller_option_code!=='A'),'identity ambiguity blocks the carrier row even when values happen to match');
- f.rows.at(-1).option_price=100;f.rows.at(-1).final_price=5100;const conflict=await api.refreshItems([],f.files,{sources:['ably']});assert.equal(conflict.excludedItems.length,1);assert.ok(conflict.items.every(i=>i.seller_option_code!=='A'));
+ const f=fixture();const a=f.rows.find(r=>r.source_channel==='ably'&&r.sellpia_sku_code==='A');f.rows.push({...a,sellpia_sku_code:'SAME'});const r=await api.refreshItems([],f.files,{sources:['ably']});assert.equal(r.items.length,1);assert.equal(r.excludedItems.length,2);assert.deepEqual(r.items.map(i=>i.seller_option_code),['D'],'an ambiguous sibling freezes its product shared base/discount while unrelated products remain eligible');
+ f.rows.at(-1).option_price=100;f.rows.at(-1).final_price=5100;const conflict=await api.refreshItems([],f.files,{sources:['ably']});assert.equal(conflict.excludedItems.length,2);assert.ok(conflict.items.every(i=>!['A','B'].includes(i.seller_option_code)));
 }
 {
  const f=fixture();f.originals.makeshop.push({product_code:'P',option_code:'',base_price:9000,final_price:null,source_row_no:1,raw_payload:{source_file_name:'makeshop.csv'}});

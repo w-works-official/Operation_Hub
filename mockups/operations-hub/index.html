@@ -20,8 +20,8 @@
     <link rel="stylesheet" href="./rule-workspace.css?v=20260914-legacy-formulas-v2">
       <link rel="stylesheet" href="./ui-cleanup-v1.css?v=20260912-queue-count-clarity-v1">
       <link rel="stylesheet" href="./tag-management-v2.css?v=20260929-ably-carrier-policy-v1">
-      <link rel="stylesheet" href="./seller-file-workflow-v2.css?v=20261008-inventory-batch-v1">
-      <link rel="stylesheet" href="./inventory-batch.css?v=20261008-inventory-update-v2">
+      <link rel="stylesheet" href="./seller-file-workflow-v2.css?v=20261008-integrated-export-v1">
+      <link rel="stylesheet" href="./inventory-batch.css?v=20261008-integrated-export-v1">
   </head>
   <body class="operations-auth-locked">
     <section id="operations-auth-gate" class="operations-auth-gate" aria-labelledby="operations-auth-title">
@@ -593,12 +593,7 @@
                 <label><input type="radio" name="inventory-stock-source" value="available_stock" checked> 가용재고</label>
                 <label><input type="radio" name="inventory-stock-source" value="stock"> 재고</label>
               </fieldset>
-              <div class="inventory-file-picker">
-                <label for="inventory-ably-file">3. 에이블리 PlayAuto 옵션 + 재고 원본</label>
-                <input id="inventory-ably-file" type="file" accept=".xlsx" aria-describedby="inventory-file-hint inventory-file-status">
-                <small id="inventory-file-hint">선택한 PlayAuto XLSX로 에이블리 파일을 만들며, 파일 선택 자체로 업로드하지 않습니다.</small>
-                <p id="inventory-file-status" role="status" aria-live="polite">선택한 파일 없음</p>
-              </div>
+              <p id="inventory-ably-mapping-status" role="status" aria-live="polite">에이블리 DB 매핑과 재고 양식을 확인 중입니다.</p>
               <p class="inventory-export-guidance">미리보기는 읽기 전용입니다. 최종 버튼을 누르면 변경 SKU만 DB에 반영하고, 최신 DB 재고로 스마트스토어 2개·메이크샵 1개·에이블리 1개를 생성합니다.</p>
               <button id="inventory-batch-run" class="btn primary" type="button" disabled>재고 반영 후 4개 ZIP 생성</button>
               <div id="inventory-batch-status" class="inventory-batch-status" role="status" aria-live="polite" hidden>
@@ -607,6 +602,7 @@
                 <p id="inventory-batch-detail"></p>
               </div>
               <div id="inventory-batch-result" class="inventory-batch-result" hidden></div>
+              <details class="inventory-mapping-management"><summary>고급 기능 · 에이블리 솔루션사 코드 관리</summary><div id="ably-mapping-management"></div></details>
             </section>
           </div>
           <div id="jobs" class="page queue-page">
@@ -1043,18 +1039,18 @@
     <script src="./matrix-shadow.js?v=20260919-full-scope-v12"></script>
     <script src="./baseline-canary.js?v=20260917-shadow-preview-v1"></script>
     <script src="./matrix-multilisting.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./data-service.js?v=20261008-price-decisions-v1"></script>
+  <script src="./data-service.js?v=20261008-integrated-export-v1"></script>
     <script src="./channels-page.js?v=20260910-rule-destination-v111"></script>
     <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./app.js?v=20261008-inventory-update-v2"></script>
+  <script src="./app.js?v=20261008-integrated-export-v1"></script>
     <script src="./mapping-import.js?v=20260910-rule-destination-v111"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
     <script src="./ably-stock-export.js?v=20260917-ably-stock-x-v1"></script>
     <script src="./ably-price-projection.js?v=20261008-price-decisions-v1"></script>
-    <script src="./ably-playauto-export.js?v=20261008-inventory-batch-v1"></script>
+    <script src="./ably-playauto-export.js?v=20261008-integrated-export-v1"></script>
     <script src="./ably-combinations.js?v=20260917-ably-stock-x-v1"></script>
     <script src="./ably-combination-lab.js?v=20260910-rule-destination-v111"></script>
     <script src="./ably-pair-generator.js?v=20260917-ably-stock-x-v1"></script>
@@ -1065,14 +1061,16 @@
 <script src="./rule-registry.js?v=20260921-inbound-won-round-v1"></script>
 <script src="./platform-rule-service.js?v=20261008-price-decisions-v1"></script>
 <script src="./price-result-materializer.js?v=20260921-bounded-source-refresh-v1"></script>
-<script src="./current-price-export.js?v=20261008-price-decisions-v1"></script>
+<script src="./current-price-export.js?v=20261008-integrated-export-v1"></script>
 <script src="./representative-price.js?v=20260917-tags-representative-ui-v1"></script>
 <script src="./representative-price-workspace.js?v=20260917-tags-representative-ui-v1"></script>
 <script src="./rule-workspace.js?v=20260918-tag-partial-v2"></script>
       <script src="./ui-cleanup-v1.js?v=20261007-inventory-tab-v1"></script>
       <script src="./tag-management-v2.js?v=20260929-ably-carrier-policy-v1"></script>
-      <script src="./seller-file-workflow-v2.js?v=20261008-price-decisions-v1"></script>
-      <script src="./inventory-batch-ui.js?v=20261008-inventory-update-v2"></script>
+      <script src="./seller-file-workflow-v2.js?v=20261008-integrated-export-v1"></script>
+      <script src="./ably-inventory-export.js?v=20261008-integrated-export-v1"></script>
+      <script src="./ably-mapping-management.js?v=20261008-integrated-export-v1"></script>
+      <script src="./inventory-batch-ui.js?v=20261008-integrated-export-v1"></script>
 <link rel="stylesheet" href="./price-decision-workspace.css?v=20261008-price-decisions-v1">
 <script src="./price-decision-workspace.js?v=20261008-price-decisions-v1"></script>
   </body>

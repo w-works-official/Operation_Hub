@@ -10,6 +10,9 @@
 .inventory-file-picker small,.inventory-export-guidance{font-size:12px;color:#68778c;line-height:1.6}
 .inventory-file-picker p{margin:0;font-size:12px;color:#68778c;overflow-wrap:anywhere}
 .inventory-file-picker p[data-ready="true"]{color:#17733a}
+.inventory-mapping-status{margin:0;padding:10px 12px;border:1px solid #d9e4f2;border-radius:8px;background:#fbfcfe;color:#52647a;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.inventory-mapping-status[data-state="success"]{border-color:#c9e7d2;color:#17733a;background:#f3fbf5}
+.inventory-mapping-status[data-state="error"]{border-color:#efcaca;color:#a12727;background:#fff6f6}
 .inventory-export-guidance{margin:0}
 #inventory-update-preview{display:grid;gap:12px;padding:0;color:#52647a;font-size:12px;line-height:1.6}
 .inventory-update-preview[data-state="success"] .inventory-preview-heading b{color:#17733a}

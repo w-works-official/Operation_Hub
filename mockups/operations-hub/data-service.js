@@ -294,6 +294,17 @@
         if (!result.data || result.data.length < 1000) break;
       }
     }
+    const ablyProducts=[...new Set(projectionRows.filter(row=>row.source_channel==='ably').map(row=>cleanText(row.product_code)).filter(Boolean))];
+    const canonical=await loadAblyVerifiedExportMappings({skus});
+    for(let offset=0;offset<ablyProducts.length;offset+=1000){
+      const legacyCanonical=await loadAblyVerifiedExportMappings({productCodes:ablyProducts.slice(offset,offset+1000)});
+      canonical.rows.push(...legacyCanonical.rows);canonical.blocked_identities.push(...legacyCanonical.blocked_identities);
+    }
+    const ablyLegacy=projectionRows.filter(row=>row.source_channel==='ably').map(row=>({...row,sku:row.sellpia_sku_code}));
+    const ablyMerged=mergeVerifiedAblyMappings(ablyLegacy,canonical).filter(row=>!row.mapping_blocked&&skus.includes(row.sku));
+    projectionRows.splice(0,projectionRows.length,...projectionRows.filter(row=>row.source_channel!=='ably'),...ablyMerged.map(row=>({
+      ...row,source_channel:'ably',sellpia_sku_code:row.sku,mapping_source:row.mapping_origin||row.mapping_source,component_qty:row.component_qty||1
+    })));
     const inventoryRows = [];
     for (const source of ['smartstore', 'makeshop', 'ably']) {
       const productCodes = [...new Set(projectionRows
@@ -3401,6 +3412,62 @@
     if(Number(data?.total)!==skus.length)throw Error('필터 전체 대상 수와 SKU 목록이 일치하지 않습니다. 다시 조회하세요.');
     onProgress?.({loaded:skus.length,total:skus.length});return {skus,total:skus.length};
   }
+  async function loadAllTagScopeSkus({tagId,onProgress=null}={}) {
+    const id=cleanText(tagId);
+    if(!id)throw new Error('대상 태그를 선택하세요.');
+    if(!global.HubMatrixDataset?.Dataset)throw new Error('전체 태그 대상 계산기를 불러오지 못했습니다.');
+    const result=await loadMatrixGridDataset({onProgress});
+    const dataset=new global.HubMatrixDataset.Dataset(result.rows,result.count);
+    const skus=dataset.select({tagId:id,status:'all',sort:'sku_asc'}).map(row=>row.sellpia_sku_code);
+    return {skus,count:skus.length,datasetVersion:result.metrics?.datasetVersion||null};
+  }
+  async function loadAblyInventoryMappings() {
+    const {data,error}=await db.rpc('load_ably_inventory_mappings_v1',{p_session_token:requireOperationsHubSessionToken()});
+    if(error)throw readableDatabaseError(error);
+    if(!data||!Array.isArray(data.rows)||!data.fingerprint)throw new Error('에이블리 매핑 응답을 검증하지 못했습니다.');
+    return data;
+  }
+  async function loadAblyVerifiedExportMappings({productCodes=null,skus=null}={}) {
+    const {data,error}=await db.rpc('load_ably_verified_export_mappings_v1',{
+      p_session_token:requireOperationsHubSessionToken(),p_product_codes:productCodes,p_skus:skus
+    });
+    if(error)throw readableDatabaseError(error);
+    if(!Array.isArray(data?.rows)||!Array.isArray(data?.blocked_identities)||!data.fingerprint)throw new Error('에이블리 검증 매핑 응답을 검증하지 못했습니다.');
+    return data;
+  }
+  function mergeVerifiedAblyMappings(legacyRows,canonical) {
+    const key=row=>JSON.stringify([cleanText(row.product_code),cleanText(row.option_code)]);
+    const verified=new Map((canonical.rows||[]).map(row=>[key(row),row]));
+    const blocked=new Map((canonical.blocked_identities||[]).map(row=>[key(row),row]));
+    const rows=legacyRows.filter(row=>!verified.has(key(row))&&!blocked.has(key(row)));
+    for(const row of verified.values())if(!blocked.has(key(row)))rows.push({...row,sku:cleanText(row.sku),mapping_origin:'verified_solution_code'});
+    for(const row of blocked.values())rows.push({...row,sku:'',mapping_blocked:true,suppression_active:true});
+    return rows;
+  }
+  async function importAblyInventoryMappings({batchKey,fileName,sha256,rows}) {
+    const {data,error}=await db.rpc('import_operations_hub_ably_mappings_v1',{
+      p_session_token:requireOperationsHubSessionToken(),p_batch_key:batchKey,p_file_name:fileName,p_file_sha256:sha256,p_rows:rows
+    });
+    if(error)throw readableDatabaseError(error);
+    global.dispatchEvent?.(new global.CustomEvent('ably-inventory-mappings-changed'));
+    return data;
+  }
+  async function updateAblyInventoryMapping(row) {
+    const {data,error}=await db.rpc('update_operations_hub_ably_mapping_v1',{
+      p_session_token:requireOperationsHubSessionToken(),p_product_code:row.product_code,p_option_code:row.option_code,
+      p_sellpia_sku_code:row.sellpia_sku_code||null,p_mapping_state:row.mapping_state,p_stock_policy:row.stock_policy,
+      p_individual_stock:row.individual_stock??null,p_is_active:row.is_active!==false,p_reason:row.reason
+    });
+    if(error)throw readableDatabaseError(error);
+    global.dispatchEvent?.(new global.CustomEvent('ably-inventory-mappings-changed'));
+    return data;
+  }
+  async function loadAblyInventoryTemplateFile() {
+    const url=new URL('./ably-inventory-template.xlsx',global.document?.baseURI||global.location?.href);
+    const response=await global.fetch(url.href,{cache:'no-cache'});
+    if(!response.ok)throw new Error(`에이블리 재고 양식 조회 실패: HTTP ${response.status}`);
+    return new global.File([await response.arrayBuffer()],'에이블리_재고 수량 변경.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }
   async function applyTagToSkus({tagId,skus,action='add'}) {
     const {data,error}=await db.rpc('hub_tag_assign_v1',{p_session_token:requireOperationsHubSessionToken(),p_tag_id:tagId,p_skus:[...new Set(skus)],p_action:action});
     if(error)throw readableDatabaseError(error);return data;
@@ -4453,6 +4520,15 @@
         for(const sku of active||[])if(!suppressed.has(mappingKey(sku,listing.product_code,listing.option_code)))rows.push({sku,product_code:cleanText(listing.product_code),option_code:cleanText(listing.option_code)});
       }
     }
+    if(safeSource==='ably'){
+      const canonicalRows=[],blockedIdentities=[];
+      for(let offset=0;offset<productCodes.length;offset+=1000){
+        const canonical=await loadAblyVerifiedExportMappings({productCodes:productCodes.slice(offset,offset+1000)});
+        canonicalRows.push(...canonical.rows);blockedIdentities.push(...canonical.blocked_identities);
+      }
+      const merged=mergeVerifiedAblyMappings(rows,{rows:canonicalRows,blocked_identities:blockedIdentities});
+      rows.splice(0,rows.length,...merged);
+    }
     const unique=new Map();
     for(const row of rows){const key=mappingKey(row.sku,row.product_code,row.option_code);if(!unique.has(key))unique.set(key,row);}
     return {source:safeSource,rows:[...unique.values()]};
@@ -4825,6 +4901,12 @@
     savePlatformRuleGroup,
     filterRulePlatformSkus,
     loadAllFilteredSkus,
+    loadAllTagScopeSkus,
+    loadAblyInventoryMappings,
+    loadAblyVerifiedExportMappings,
+    importAblyInventoryMappings,
+    updateAblyInventoryMapping,
+    loadAblyInventoryTemplateFile,
     loadAllSellerUnmatchedSkus,
     applyTagToSkus,
     bulkImportTags,
