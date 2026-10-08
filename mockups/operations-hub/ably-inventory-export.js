@@ -40,29 +40,50 @@
   const reason=duplicateCodes.size?`중복 솔루션사 고유코드를 확인해주세요: ${[...duplicateCodes].slice(0,5).join(', ')}${duplicateCodes.size>5?' 외':''}`:ambiguousIdentities.size?`판매처 옵션이 여러 SKU 또는 솔루션사 고유코드에 연결되어 있습니다: ${[...ambiguousIdentities].slice(0,5).map(identity=>JSON.parse(identity).join('/')).join(', ')}${ambiguousIdentities.size>5?' 외':''}`:eligible.length?'':`내보낼 수 있는 에이블리 재고 매핑이 없습니다. 검토 ${summary.reviewCount}건 · 제외 ${summary.excludedCount}건`;
   return {ready:Boolean(eligible.length)&&!conflict,eligibleCount:eligible.length,reviewCount:summary.reviewCount,excludedCount:summary.excludedCount,fingerprint,reason,duplicateCodes:[...duplicateCodes],ambiguousIdentities:[...ambiguousIdentities]};
  }
- function prepare({mappingRows=[],stockSources,stockSource='available_stock'}={}){
+ function excludedExportRow(row,status,reason){
+  return {stage:'seller_export',source:'ably',file_name:clean(row?.source_file_name||row?.file_name),source_row_no:row?.source_row_no??null,
+   sellpia_sku_code:clean(row?.sellpia_sku_code),solution_code:solutionCode(row?.solution_code),product_code:clean(row?.product_code),
+   option_code:clean(row?.option_code),stock_policy:clean(row?.stock_policy),stock:null,available_stock:null,raw_stock:null,raw_available_stock:null,status,reason};
+ }
+ function prepare({mappingRows=[],stockSources,stockSource='available_stock',excludedSkus=[]}={}){
   if(!['stock','available_stock'].includes(stockSource))throw Error('에이블리 재고 기준을 확인해주세요.');
   if(!stockSources?.snapshotId||!(stockSources.bySku instanceof Map))throw Error('최신 Sellpia 재고 snapshot을 확인할 수 없습니다.');
   const mappingReadiness=readiness({mappingRows});
   if(!mappingReadiness.ready)throw Error(mappingReadiness.reason||'에이블리 재고 매핑이 준비되지 않았습니다.');
-  const summary={mappingCount:Array.isArray(mappingRows)?mappingRows.length:0,eligibleCount:0,reviewCount:mappingReadiness.reviewCount,excludedCount:mappingReadiness.excludedCount};
-  const rows=[];
+  const summary={mappingCount:Array.isArray(mappingRows)?mappingRows.length:0,eligibleCount:0,reviewCount:mappingReadiness.reviewCount,excludedCount:mappingReadiness.excludedCount,excludedRowCount:0};
+  const rows=[],excludedRows=[];
+  const inputBlockedSkus=new Set(Array.from(excludedSkus||[]).map(clean).filter(Boolean));
   for(const raw of Array.isArray(mappingRows)?mappingRows:[]){
-   if(!eligibleMapping(raw))continue;
    const row={...raw},code=solutionCode(row.solution_code),sku=clean(row.sellpia_sku_code);
+   if(!eligibleMapping(row)){
+    const state=clean(row.mapping_state)||'review',reasons=Array.isArray(row.review_reasons)?row.review_reasons.filter(Boolean):[],exclusionReasons=[];
+    if(row.suppression_active)exclusionReasons.push('활성 연결 억제');
+    if(row.stock_policy==='excluded')exclusionReasons.push('재고 자동 반영 제외 정책');
+    if(!row.is_active)exclusionReasons.push('비활성 매핑');
+    if(reasons.length)exclusionReasons.push(...reasons);
+    if(!exclusionReasons.length)exclusionReasons.push(`매핑 상태/재고 정책 검토: ${state}/${row.stock_policy||'unknown'}`);
+    const status=state==='conflict'||state==='review'?state:row.suppression_active?'suppressed':row.stock_policy==='excluded'?'excluded':!row.is_active?'inactive':state;
+    excludedRows.push(excludedExportRow(row,status,exclusionReasons.join(' · ')));continue;
+   }
+   if(inputBlockedSkus.has(sku)){
+    excludedRows.push(excludedExportRow(row,'inventory_input_blocked','Sellpia 재고 입력 단계에서 이 SKU가 차단되어 제외되었습니다.'));
+    summary.reviewCount++;continue;
+   }
+   const source=stockSources.bySku.get(sku);
+   if(!source){excludedRows.push(excludedExportRow(row,'snapshot_sku_missing',`최신 Sellpia 재고 snapshot에서 SKU를 찾지 못했습니다: ${sku}`));summary.reviewCount++;continue;}
    let quantity=null;
    if(row.stock_policy==='shared'){
-    const source=stockSources.bySku.get(sku);
-    if(!source)throw Error(`최신 Sellpia 재고 snapshot에서 SKU를 찾지 못했습니다: ${sku}`);
     quantity=resolveStock(source,stockSource);
    }else quantity=row.individual_stock;
-   if(quantity===null||quantity===undefined||clean(quantity)===''||!Number.isSafeInteger(Number(quantity))||Number(quantity)<0){summary.reviewCount++;continue;}
+   if(quantity===null||quantity===undefined||clean(quantity)===''||!Number.isSafeInteger(Number(quantity))||Number(quantity)<0){
+    excludedRows.push(excludedExportRow(row,'invalid_quantity',`선택한 재고 기준(${stockSource})의 수량을 확인할 수 없어 제외되었습니다.`));summary.reviewCount++;continue;
+   }
    rows.push({solution_code:code,quantity:Number(quantity),sellpia_sku_code:sku,product_code:clean(row.product_code),option_code:clean(row.option_code)});
   }
   const uniqueRows=rows;
   summary.eligibleCount=uniqueRows.length;
-  if(!uniqueRows.length)throw Error(`내보낼 수 있는 에이블리 재고 매핑이 없습니다. 검토 ${summary.reviewCount}건 · 제외 ${summary.excludedCount}건`);
-  return {kind:'AblyInventoryPlan',version:1,stockSource,snapshotId:String(stockSources.snapshotId),rows:uniqueRows,summary,mappingFingerprint:mappingReadiness.fingerprint};
+  summary.excludedRowCount=excludedRows.length;
+  return {kind:'AblyInventoryPlan',version:1,stockSource,snapshotId:String(stockSources.snapshotId),rows:uniqueRows,excludedRows,summary,mappingFingerprint:mappingReadiness.fingerprint};
  }
  function patchCell(xml,line,column,value,type){
   const reference=`${column}${line}`,rowRe=new RegExp(`<row\\b(?=[^>]*\\br="${line}")[^>]*>[\\s\\S]*?<\\/row>`),match=String(xml).match(rowRe);
@@ -114,7 +135,7 @@
   return {valid:true,sheetName:SHEET_NAME,capacity:last-1};
  }
  async function build({plan,templateFile}={}){
-  if(!plan||plan.kind!=='AblyInventoryPlan'||!Array.isArray(plan.rows)||!plan.rows.length)throw Error('에이블리 재고 계획을 확인할 수 없습니다.');
+  if(!plan||plan.kind!=='AblyInventoryPlan'||!Array.isArray(plan.rows))throw Error('에이블리 재고 계획을 확인할 수 없습니다.');
   await inspectTemplate(templateFile);
   const bytes=await templateFile.arrayBuffer(),book=global.XLSX.read(bytes,{type:'array'}),sheet=book.Sheets[SHEET_NAME];
   const zip=await global.JSZip.loadAsync(bytes),workbookXml=await zip.file('xl/workbook.xml').async('string');

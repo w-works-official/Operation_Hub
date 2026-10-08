@@ -35,6 +35,7 @@
   "operationsHubCurrentPriceExport.mock.test.mjs",
   "operationsHubStockOnlyExport.mock.test.mjs",
   "operationsHubInventoryBatch.functional.test.mjs",
+  "operationsHubInventoryFileDownloads.test.mjs",
   "operationsHubExportFieldModes.mock.test.mjs",
   "operationsHubCarrierScopedRead.mock.test.mjs",
   "operationsHubRetentionLifecycleV2.mock.test.mjs",

@@ -120,7 +120,8 @@ test('inventory readiness classifies inactive review rows as review before confi
  assert.equal(readiness.ready,true);assert.equal(readiness.eligibleCount,1);assert.equal(readiness.reviewCount,3);assert.equal(readiness.excludedCount,3);
  const plan=context.HubAblyInventoryExport.prepare({mappingRows,stockSources:{snapshotId:'local-review-fixture',bySku:new Map([['SKU-ONE',{sellpia_current_stock:12,sellpia_available_stock:9}]])}});
  assert.deepEqual(plain(plan.rows.map(row=>[row.solution_code,row.quantity])),[['SAFE',9]]);
- assert.deepEqual(plain(plan.summary),{mappingCount:7,eligibleCount:1,reviewCount:3,excludedCount:3});
+ assert.deepEqual(plain(plan.summary),{mappingCount:7,eligibleCount:1,reviewCount:3,excludedCount:3,excludedRowCount:6});
+ assert.deepEqual(plain(plan.excludedRows.map(row=>row.solution_code)),['UNRESOLVED','STOCK-REVIEW','REVIEW-WITH-EXCLUSION','CONFIRMED-EXCLUDED','SUPPRESSED-VERIFIED','DISABLED-VERIFIED']);
  const reviewOnly=context.HubAblyInventoryExport.readiness({mappingRows:[mappingRows[1]]});
  assert.equal(reviewOnly.ready,false);assert.equal(reviewOnly.reviewCount,1);assert.equal(reviewOnly.excludedCount,0);assert.match(reviewOnly.reason,/검토 1건 · 제외 0건/);
 });

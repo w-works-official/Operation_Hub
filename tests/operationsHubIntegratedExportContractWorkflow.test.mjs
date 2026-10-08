@@ -124,12 +124,12 @@ test('integrated inventory validates DB mapping and official template before com
 
 test('integrated inventory generates exactly four reopened files without any PlayAuto input or price read',async()=>{
  const h=harness(),output=await h.bridge.runInventoryUpdateBatch({files:[h.previewFile],expectedPreview:h.expected,stockSource:'available_stock'});
- assert.equal(h.uploads,1);assert.ok(output.blob instanceof Blob);assert.deepEqual(h.priceCalls,[]);
+ assert.equal(h.uploads,1);assert.equal(Object.hasOwn(output,'blob'),false);assert.equal(Object.hasOwn(output,'fileName'),false);assert.deepEqual(h.priceCalls,[]);
  assert.ok(h.timeline.indexOf('ably-template')<h.timeline.indexOf('stock-upload'));assert.ok(h.timeline.indexOf('matrix-wait')<h.timeline.indexOf('stock-read'));assert.ok(h.timeline.indexOf('matrix-refresh')<h.timeline.indexOf('stock-read'));
- const zip=await JSZip.loadAsync(await output.blob.arrayBuffer()),names=Object.keys(zip.files).filter(name=>!zip.files[name].dir);assert.equal(names.length,4);assert.equal(output.files.length,4);
+ const names=output.files.map(file=>file.fileName);assert.equal(names.length,4);assert.equal(new Set(names).size,4);assert.equal(output.files.length,4);assert.ok(output.files.every(file=>file.blob instanceof Blob&&file.name===file.fileName));
  const ablyName=names.find(name=>name==='에이블리_재고 수량 변경.xlsx');assert.ok(ablyName);
- const ably=XLSX.read(await zip.file(ablyName).async('uint8array'),{type:'array'}).Sheets['재고 수량 수정_양식'];assert.equal(ably.A2.v,'J-0001');assert.equal(ably.B2.v,11);
- const merchantFiles=names.filter(name=>name!==ablyName);for(const name of merchantFiles){const book=XLSX.read(await zip.file(name).async('uint8array'),{type:'array'}),sheet=book.Sheets[book.SheetNames[0]];assert.ok(sheet,'every archived merchant XLSX reopens');}
+ const ably=XLSX.read(await output.files.find(file=>file.fileName===ablyName).blob.arrayBuffer(),{type:'array'}).Sheets['재고 수량 수정_양식'];assert.equal(ably.A2.v,'J-0001');assert.equal(ably.B2.v,11);
+ const merchantFiles=output.files.filter(file=>file.fileName!==ablyName);for(const file of merchantFiles){const book=XLSX.read(await file.blob.arrayBuffer(),{type:'array'}),sheet=book.Sheets[book.SheetNames[0]];assert.ok(sheet,'every individual merchant XLSX reopens');}
 });
 
 test('integrated zero-change inventory skips stock upload and still builds four current snapshot files',async()=>{
@@ -147,5 +147,5 @@ test('integrated mapping drift or stock snapshot drift prevents ZIP download aft
 test('integrated explicit export retry after Matrix failure never submits the successful inventory again',async()=>{
  const h=harness({failMatrixOnce:true});await assert.rejects(h.bridge.runInventoryUpdateBatch({files:[h.previewFile],expectedPreview:h.expected}),error=>error.code==='INVENTORY_EXPORT_FAILED_AFTER_UPDATE');
  assert.equal(h.uploads,1);const result=await h.bridge.retryInventoryBatchExport({});
- assert.equal(h.uploads,1);assert.equal(result.files.length,4);assert.ok(result.blob instanceof Blob);assert.deepEqual(h.priceCalls,[]);
+ assert.equal(h.uploads,1);assert.equal(result.files.length,4);assert.ok(result.files.every(file=>file.blob instanceof Blob));assert.deepEqual(h.priceCalls,[]);
 });

@@ -4559,7 +4559,7 @@
     return bySku;
   }
 
-  async function loadSellpiaStockSourcesForExport({skus=[],onQuery=null}={}) {
+  async function loadSellpiaStockSourcesForExport({skus=[],onQuery=null,allowPartial=false}={}) {
     requireOperationsHubSessionToken();
     const requested=[...new Set((skus||[]).map(cleanText).filter(Boolean))],rows=[];
     let snapshotId=null;
@@ -4572,15 +4572,21 @@
       rows.push(...(data?.rows||[]));
       onQuery?.({query:'latest Sellpia physical/available stock',scope_count:chunk.length,latency_ms:Math.round(performance.now()-started)});
     }
-    const bySku=new Map();
+    const bySku=new Map(),seenSkus=new Set(),invalidSkus=[];
     for(const row of rows){
       const sku=cleanText(row.sellpia_sku_code);
-      if(bySku.has(sku))throw new Error(`셀피아 재고 source identity가 중복되었습니다: ${sku}`);
-      if(!Number.isSafeInteger(Number(row.sellpia_current_stock))||!Number.isSafeInteger(Number(row.sellpia_available_stock)))throw new Error(`셀피아 재고 source를 확인할 수 없습니다: ${sku}`);
+      if(seenSkus.has(sku)||!requested.includes(sku))throw new Error(`셀피아 재고 source identity가 중복되거나 요청 범위와 다릅니다: ${sku}`);
+      seenSkus.add(sku);
+      const valid=value=>value!==null&&value!==undefined&&cleanText(value)!==''&&Number.isSafeInteger(Number(value));
+      if(!valid(row.sellpia_current_stock)||!valid(row.sellpia_available_stock)){
+        if(!allowPartial)throw new Error(`셀피아 재고 source를 확인할 수 없습니다: ${sku}`);
+        invalidSkus.push(sku);continue;
+      }
       bySku.set(sku,{sellpia_current_stock:Number(row.sellpia_current_stock),sellpia_available_stock:Number(row.sellpia_available_stock)});
     }
-    for(const sku of requested)if(!bySku.has(sku))throw new Error(`셀피아 최신 재고 SKU가 없습니다: ${sku}`);
-    return {snapshotId,bySku,rows:[...bySku].map(([sku,value])=>({sku,...value}))};
+    const missingSkus=requested.filter(sku=>!seenSkus.has(sku));
+    if(!allowPartial&&missingSkus.length)throw new Error(`셀피아 최신 재고 SKU가 없습니다: ${missingSkus[0]}`);
+    return {snapshotId,bySku,rows:[...bySku].map(([sku,value])=>({sku,...value})),missingSkus,invalidSkus};
   }
 
   async function recordStockExportAudit({batchId,sources=[],stockSource,itemCount=0,manifest=[]}={}) {

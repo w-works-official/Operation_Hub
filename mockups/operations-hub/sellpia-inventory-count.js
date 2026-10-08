@@ -65,6 +65,8 @@
         sellpia_sku_code:sku,
         available_stock:available.valid ? available.value : null,
         stock:stock.valid ? stock.value : null,
+        raw_available_stock:rawAvailable,
+        raw_stock:rawStock,
         status:errors.length ? 'invalid' : 'valid',
         reason:errors.join(' · ')
       });
@@ -74,25 +76,32 @@
 
   function mergeRecords(parts) {
     const records = (parts || []).flatMap(part => part.records || []);
-    const validBySku = new Map();
-    for (const row of records.filter(item => item.status === 'valid')) {
-      if (!validBySku.has(row.sellpia_sku_code)) validBySku.set(row.sellpia_sku_code, []);
-      validBySku.get(row.sellpia_sku_code).push(row);
+    const groupsBySku = new Map();
+    const uniqueRows = [];
+    const tupleValue = (row, field, rawField) => row.status === 'valid'
+      ? row[field]
+      : {invalid:clean(row[rawField])};
+    for (const row of records) {
+      const sku = clean(row.sellpia_sku_code);
+      if (!sku) { uniqueRows.push(row); continue; }
+      if (!groupsBySku.has(sku)) groupsBySku.set(sku, []);
+      groupsBySku.get(sku).push(row);
     }
-    const rows = [];
+    const rows = [...uniqueRows];
     let duplicateSameCount = 0;
     let duplicateConflictCount = 0;
-    for (const [sku, group] of validBySku) {
-      const values = new Set(group.map(row => JSON.stringify([row.stock, row.available_stock])));
-      if (values.size > 1) {
-        duplicateConflictCount += 1;
-        rows.push({...group[0], status:'duplicate_conflict', reason:`동일 상품코드가 서로 다른 재고값으로 ${group.length}회 등장`, occurrences:group});
-        continue;
-      }
-      duplicateSameCount += Math.max(0, group.length - 1);
-      rows.push({...group[0], status:'valid', reason:group.length > 1 ? `동일값 ${group.length}회 · 중복 제거` : '', occurrences:group});
+    for (const [sku, group] of groupsBySku) {
+      if (group.length === 1) { rows.push(group[0]); continue; }
+      const values = new Set(group.map(row => JSON.stringify([
+        tupleValue(row, 'stock', 'raw_stock'), tupleValue(row, 'available_stock', 'raw_available_stock')
+      ])));
+      const duplicateKind = values.size > 1 ? 'conflict' : 'same';
+      if (duplicateKind === 'conflict') duplicateConflictCount += 1;
+      else duplicateSameCount += 1;
+      const detail = duplicateKind === 'conflict' ? '서로 다른 재고값' : '동일한 재고값';
+      rows.push({...group[0], status:'duplicate_sku', duplicate_kind:duplicateKind,
+        reason:`동일 SKU가 ${detail}으로 ${group.length}회 등장 · SKU 전체 차단`, occurrences:group});
     }
-    rows.push(...records.filter(item => item.status === 'invalid'));
     rows.sort((left, right) => left.file_index - right.file_index || left.source_row_no - right.source_row_no || left.sellpia_sku_code.localeCompare(right.sellpia_sku_code));
     return {
       files:(parts || []).map(part => part.file),
@@ -105,6 +114,53 @@
     };
   }
 
+  function blockedInventoryRow(row, {status, reason} = {}) {
+    return {
+      stage:'inventory_input', source:'sellpia', file_name:row.file_name || '', file_index:row.file_index ?? null,
+      source_row_no:row.source_row_no ?? null, sellpia_sku_code:clean(row.sellpia_sku_code),
+      stock:row.stock ?? null, available_stock:row.available_stock ?? null,
+      raw_stock:row.raw_stock ?? '', raw_available_stock:row.raw_available_stock ?? '',
+      status:status || row.status || 'blocked', reason:reason || row.reason || '재고 행이 차단되었습니다.',
+      product_code:row.product_code ?? '', option_code:row.option_code ?? '', solution_code:row.solution_code ?? ''
+    };
+  }
+
+  const BLOCKED_WORKBOOK_HEADERS = Object.freeze([
+    '단계','판매처','상태','재고 정책','사유','SKU','원본 파일','원본 행','상품코드','옵션 번호','솔루션사 고유코드',
+    '재고','가용재고','원본 재고 입력값','원본 가용재고 입력값'
+  ]);
+
+  function buildBlockedWorkbook(rows, {XLSX} = {}) {
+    if (!XLSX?.utils?.aoa_to_sheet || !XLSX?.utils?.book_new || !XLSX?.utils?.book_append_sheet || !XLSX?.write) {
+      throw new Error('차단 목록 XLSX 생성 모듈을 불러오지 못했습니다.');
+    }
+    const blocked = Array.from(rows || []);
+    const numericCell = value => value === null || value === undefined || clean(value) === '' || !Number.isSafeInteger(Number(value)) ? '' : Number(value);
+    const stageLabels={inventory_input:'재고조사 입력',seller_export:'판매처 파일'};
+    const sourceLabels={sellpia:'셀피아',smartstore:'스마트스토어',makeshop:'메이크샵',ably:'에이블리'};
+    const statusLabels={duplicate_sku:'중복 SKU',invalid:'재고값 오류',unknown_sku:'미확인 SKU',inventory_input_blocked:'입력 SKU 차단',
+      snapshot_sku_missing:'최신 재고 SKU 없음',invalid_quantity:'수량 확인 필요',review:'검토 필요',conflict:'충돌',excluded:'자동 반영 제외',
+      inactive:'비활성',suppressed:'억제 중',verified:'연결 확인됨'};
+    const policyLabels={shared:'Sellpia 재고 공유',individual:'개별 수량',excluded:'재고 자동 반영 제외',review:'재고 정책 검토'};
+    const values = [BLOCKED_WORKBOOK_HEADERS, ...blocked.map(row => [
+      stageLabels[row.stage] || String(row.stage ?? ''), sourceLabels[row.source] || String(row.source ?? ''), statusLabels[row.status] || String(row.status ?? ''),
+      policyLabels[row.stock_policy] || String(row.stock_policy ?? ''), String(row.reason ?? ''),
+      String(row.sellpia_sku_code ?? ''), String(row.file_name ?? ''),
+      numericCell(row.source_row_no),
+      String(row.product_code ?? ''), String(row.option_code ?? ''), String(row.solution_code ?? row.code ?? ''),
+      numericCell(row.stock), numericCell(row.available_stock),
+      row.raw_stock == null ? '' : String(row.raw_stock), row.raw_available_stock == null ? '' : String(row.raw_available_stock)
+    ])];
+    const sheet = XLSX.utils.aoa_to_sheet(values);
+    sheet['!cols']=[{wch:20},{wch:16},{wch:20},{wch:22},{wch:60},{wch:20},{wch:35},{wch:12},{wch:20},{wch:20},{wch:25},{wch:12},{wch:12},{wch:20},{wch:20}];
+    sheet['!autofilter']={ref:`A1:O${Math.max(1,blocked.length+1)}`};
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, '차단목록');
+    const output = XLSX.write(book, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([output], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    return {blob, fileName:'재고_차단목록.xlsx', rowCount:blocked.length};
+  }
+
   async function parseFiles(files, {XLSX} = {}) {
     const selected = Array.from(files || []);
     if (!selected.length) throw new Error('재고조사 결과 파일을 1개 이상 선택해주세요.');
@@ -115,7 +171,7 @@
       const workbook = XLSX.read(await file.arrayBuffer(), {type:'array', raw:true, cellDates:false});
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       if (!worksheet?.['!ref']) throw new Error(`${file.name}: 첫 시트에 데이터가 없습니다.`);
-      const rows = XLSX.utils.sheet_to_json(worksheet, {header:1, raw:true, defval:null, blankrows:false});
+      const rows = XLSX.utils.sheet_to_json(worksheet, {header:1, raw:true, defval:null, blankrows:true});
       parts.push(parseSheetRows(rows, {fileName:file.name, fileIndex:index}));
     }
     return mergeRecords(parts);
@@ -132,18 +188,22 @@
     const currentBySku = new Map((currentRows || []).map(row => [clean(row.sellpia_sku_code), row]));
     const previewRows = [];
     const changedRows = [];
+    const blockedRows = [];
     for (const row of parsed?.rows || []) {
-      if (row.status === 'invalid') {
-        previewRows.push({...row, preview_status:'invalid', preview_label:row.reason || '오류 행'});
+      if (row.status === 'duplicate_sku') {
+        previewRows.push({...row, preview_status:'duplicate_sku', preview_label:'중복 SKU 전체 차단'});
+        for (const occurrence of row.occurrences || [row]) blockedRows.push(blockedInventoryRow(occurrence,{status:'duplicate_sku',reason:row.reason}));
         continue;
       }
-      if (row.status === 'duplicate_conflict') {
-        previewRows.push({...row, preview_status:'duplicate_conflict', preview_label:'중복 충돌'});
+      if (row.status === 'invalid') {
+        const preview={...row, preview_status:'invalid', preview_label:row.reason || '오류 행'};
+        previewRows.push(preview);blockedRows.push(blockedInventoryRow(row,{status:'invalid',reason:row.reason}));
         continue;
       }
       const current = currentBySku.get(row.sellpia_sku_code);
       if (!current) {
-        previewRows.push({...row, preview_status:'unknown_sku', preview_label:'미확인 SKU', old_stock:null, old_available_stock:null});
+        const preview={...row, preview_status:'unknown_sku', preview_label:'미확인 SKU', old_stock:null, old_available_stock:null};
+        previewRows.push(preview);blockedRows.push(blockedInventoryRow(row,{status:'unknown_sku',reason:'Sellpia 재고 snapshot에서 SKU를 찾지 못했습니다.'}));
         continue;
       }
       const oldStock = current.stock;
@@ -159,6 +219,7 @@
         raw_payload:{inventory_count_source_file:row.file_name, inventory_count_source_row:row.source_row_no}
       });
     }
+    const blockedSkus=[...new Set(blockedRows.map(row=>clean(row.sellpia_sku_code)).filter(Boolean))];
     const summary = {
       fileCount:(parsed?.files || []).length,
       readRowCount:Number(parsed?.readRowCount || 0),
@@ -167,11 +228,19 @@
       unchangedSkuCount:previewRows.filter(row => row.preview_status === 'unchanged').length,
       unknownSkuCount:previewRows.filter(row => row.preview_status === 'unknown_sku').length,
       duplicateSameCount:Number(parsed?.duplicateSameCount || 0),
-      duplicateConflictCount:previewRows.filter(row => row.preview_status === 'duplicate_conflict').length,
-      errorRowCount:previewRows.filter(row => row.preview_status === 'invalid').length
+      duplicateConflictCount:Number(parsed?.duplicateConflictCount || 0),
+      errorRowCount:Number(parsed?.errorRowCount ?? previewRows.filter(row => row.preview_status === 'invalid').length),
+      blockedSkuCount:blockedSkus.length,
+      blockedRowCount:blockedRows.length
     };
-    const fingerprint = stableFingerprint([baseSnapshotId, changedRows.map(row => [row.sellpia_sku_code, row.stock, row.available_stock]), summary]);
-    return {baseSnapshotId, files:parsed.files || [], rows:previewRows, changedRows, summary, fingerprint};
+    const logicalRecords=(parsed?.records || []).map(row=>[
+      row.file_name,row.file_index,row.source_row_no,row.sellpia_sku_code,row.stock,row.available_stock,
+      row.raw_stock,row.raw_available_stock,row.status,row.reason
+    ]);
+    const fingerprint = stableFingerprint([baseSnapshotId,parsed?.files||[],logicalRecords,
+      blockedRows.map(row=>[row.stage,row.source,row.file_name,row.source_row_no,row.sellpia_sku_code,row.stock,row.available_stock,row.raw_stock,row.raw_available_stock,row.status,row.reason]),
+      changedRows.map(row => [row.sellpia_sku_code, row.stock, row.available_stock]),summary]);
+    return {baseSnapshotId, files:parsed.files || [], rows:previewRows, changedRows, blockedRows, blockedSkus, summary, fingerprint};
   }
 
   function resolveExportStock(row, stockSource) {
@@ -182,5 +251,5 @@
     return stockSource === 'available_stock' ? Math.max(0, value) : value;
   }
 
-  return {REQUIRED_HEADERS, clean, headerMap, integerValue, parseSheetRows, mergeRecords, parseFiles, buildPreview, resolveExportStock, stableFingerprint};
+  return {REQUIRED_HEADERS, BLOCKED_WORKBOOK_HEADERS, clean, headerMap, integerValue, parseSheetRows, mergeRecords, parseFiles, buildPreview, buildBlockedWorkbook, resolveExportStock, stableFingerprint};
 });

@@ -76,12 +76,17 @@ test('integrated fanout writes each literal solution code independently and clam
  assert.equal(snapshot.bySku.get('SKU-A').sellpia_available_stock,-7,'source snapshot remains the authoritative negative value');
 });
 
-test('integrated excluded, suppressed, review and uncertain individual stock never become zero writes',()=>{
+test('integrated excluded, suppressed, review and uncertain stock are reported without zero writes, including all-blocked official output',async()=>{
  const rows=[shared('SAFE'),{...shared('EXCLUDED'),stock_policy:'excluded'},{...shared('SUPPRESSED'),suppression_active:true},{...shared('REVIEW'),mapping_state:'review'},{...shared('NULL'),stock_policy:'individual',individual_stock:null},{...shared('FRACTION'),stock_policy:'individual',individual_stock:1.5}];
  const result=exporter.prepare({mappingRows:rows,stockSources:snapshot,stockSource:'stock'});
  assert.deepEqual(plain(result.rows.map(row=>[row.solution_code,row.quantity])),[['SAFE',12]]);
  assert.equal(result.summary.reviewCount,3);assert.equal(result.summary.excludedCount,2);
- assert.throws(()=>exporter.prepare({mappingRows:[shared('MISSING','UNKNOWN')],stockSources:snapshot,stockSource:'stock'}),/snapshot/);
+ const unavailable=exporter.prepare({mappingRows:[shared('MISSING','UNKNOWN'),{...shared('MISSING-INDIVIDUAL','UNKNOWN','other'),stock_policy:'individual',individual_stock:0}],stockSources:snapshot,stockSource:'stock'});
+ assert.equal(unavailable.rows.length,0);assert.equal(unavailable.excludedRows.length,2);
+ assert.deepEqual(plain(unavailable.excludedRows.map(row=>[row.solution_code,row.status])),[['MISSING','snapshot_sku_missing'],['MISSING-INDIVIDUAL','snapshot_sku_missing']]);
+ const output=await exporter.build({plan:unavailable,templateFile:template()}),reopened=XLSX.read(await output.blob.arrayBuffer(),{type:'array'}).Sheets['재고 수량 수정_양식'];
+ assert.equal(output.rowCount,0);assert.equal(reopened.A1.v,'솔루션사 고유코드');assert.equal(reopened.B1.v,'재고 수량');
+ assert.equal(Object.entries(reopened).filter(([ref,cell])=>/^[AB]\d+$/.test(ref)&&Number(ref.match(/\d+/)[0])>1&&cell.v!==undefined&&cell.v!=='').length,0);
 });
 
 test('integrated inverse seller option ambiguity fails closed even with two unique solution codes',()=>{

@@ -13,8 +13,9 @@ const templateBytes=fs.readFileSync(path.join(root,'mockups/operations-hub/ably-
 class TestFile extends Blob{constructor(parts,name,options={}){super(parts,options);this.name=name;}}
 const context={console,Blob,File:TestFile,JSZip,XLSX,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,TextEncoder,TextDecoder,Date,Math};
 context.window=context;
-context.SystemV3SellpiaInventoryCount={resolveExportStock(row,stockSource){const value=stockSource==='stock'?row.sellpia_current_stock:row.sellpia_available_stock;return Number.isSafeInteger(Number(value))?stockSource==='available_stock'?Math.max(0,Number(value)):Number(value):null;}};
-vm.createContext(context);vm.runInContext(source,context,{filename:'ably-inventory-export.js'});
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(path.join(root,'mockups/operations-hub/sellpia-inventory-count.js'),'utf8'),context,{filename:'sellpia-inventory-count.js'});
+vm.runInContext(source,context,{filename:'ably-inventory-export.js'});
 const exporter=context.HubAblyInventoryExport;
 const shared=(solution_code,sellpia_sku_code,option_code)=>({solution_code,sellpia_sku_code,product_code:`P-${option_code}`,option_code,mapping_state:'verified',stock_policy:'shared',individual_stock:null,suppression_active:false,is_active:true});
 const stockSources={snapshotId:'snapshot-1',bySku:new Map([['sku-1',{sellpia_current_stock:8,sellpia_available_stock:-3}],['sku-2',{sellpia_current_stock:5,sellpia_available_stock:4}]])};
@@ -33,9 +34,37 @@ test('duplicate active solution codes fail closed, including identical option ro
  assert.throws(()=>exporter.prepare({mappingRows:rows,stockSources,stockSource:'stock'}),/중복 솔루션사 고유코드/);
 });
 
-test('shared mapping without an authoritative snapshot SKU fails closed',()=>{
+test('shared mapping without an authoritative snapshot SKU is excluded with provenance instead of inventing stock',()=>{
  const rows=[shared('code-1','missing-sku','red')];
- assert.throws(()=>exporter.prepare({mappingRows:rows,stockSources,stockSource:'stock'}),/snapshot에서 SKU를 찾지 못했습니다/);
+ const plan=exporter.prepare({mappingRows:rows,stockSources,stockSource:'stock'});
+ assert.equal(plan.rows.length,0);assert.equal(plan.excludedRows.length,1);
+ assert.equal(plan.excludedRows[0].sellpia_sku_code,'missing-sku');assert.equal(plan.excludedRows[0].solution_code,'code-1');
+ assert.equal(plan.excludedRows[0].status,'snapshot_sku_missing');
+});
+
+test('input-blocked SKU removes every fanout option including individual stock while other fanout remains',()=>{
+ const rows=[shared('blocked-red','sku-1','red'),{...shared('blocked-blue','sku-1','blue'),stock_policy:'individual',individual_stock:9},shared('safe-one','sku-2','one'),shared('safe-two','sku-2','two')];
+ const plan=exporter.prepare({mappingRows:rows,stockSources,stockSource:'available_stock',excludedSkus:['sku-1']});
+ assert.deepEqual(Array.from(plan.rows,row=>[row.solution_code,row.quantity]),[['safe-one',4],['safe-two',4]]);
+ assert.deepEqual(Array.from(plan.excludedRows,row=>[row.solution_code,row.status]),[['blocked-red','inventory_input_blocked'],['blocked-blue','inventory_input_blocked']]);
+});
+
+test('all blocked mappings produce a readable official headers-only workbook preserving every package part',async()=>{
+ const plan=exporter.prepare({mappingRows:[shared('blocked','sku-1','red')],stockSources,excludedSkus:['sku-1']});
+ const output=await exporter.build({plan,templateFile:templateFile()});assert.equal(output.rowCount,0);
+ const reopened=XLSX.read(await output.blob.arrayBuffer(),{type:'array'}),sheet=reopened.Sheets['재고 수량 수정_양식'];
+ assert.equal(sheet.A1.v,'솔루션사 고유코드');assert.equal(sheet.B1.v,'재고 수량');assert.equal(sheet.D1.v,'← 양식의 A,B열 순서를 변경하지 말아주세요.');
+ assert.equal(Object.entries(sheet).filter(([ref,cell])=>/^[AB]\d+$/.test(ref)&&Number(ref.match(/\d+/)[0])>1&&cell.v!==undefined&&cell.v!=='').length,0);
+ const original=await JSZip.loadAsync(templateBytes),result=await JSZip.loadAsync(await output.blob.arrayBuffer());
+ assert.deepEqual(Object.keys(result.files).sort(),Object.keys(original.files).sort());
+ for(const name of Object.keys(original.files).filter(name=>!original.files[name].dir))assert.deepEqual(await result.file(name).async('uint8array'),await original.file(name).async('uint8array'),`empty plan preserves ${name}`);
+});
+
+test('invalid source quantity is excluded independently and an available-stock negative projection remains valid zero',()=>{
+ const sources={snapshotId:'snapshot-1',bySku:new Map([['bad',{sellpia_current_stock:2,sellpia_available_stock:''}],['good',{sellpia_current_stock:8,sellpia_available_stock:-3}]])};
+ const plan=exporter.prepare({mappingRows:[shared('bad-code','bad','bad'),shared('good-code','good','good')],stockSources:sources});
+ assert.deepEqual(Array.from(plan.rows,row=>[row.solution_code,row.quantity]),[['good-code',0]]);
+ assert.equal(plan.excludedRows[0].status,'invalid_quantity');
 });
 
 test('official template output retains headings, guidance, merge, validation and row styles',async()=>{

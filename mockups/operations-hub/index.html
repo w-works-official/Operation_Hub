@@ -21,7 +21,7 @@
       <link rel="stylesheet" href="./ui-cleanup-v1.css?v=20260912-queue-count-clarity-v1">
       <link rel="stylesheet" href="./tag-management-v2.css?v=20260929-ably-carrier-policy-v1">
       <link rel="stylesheet" href="./seller-file-workflow-v2.css?v=20261008-seller-choices-v2">
-      <link rel="stylesheet" href="./inventory-batch.css?v=20261008-integrated-export-v4">
+      <link rel="stylesheet" href="./inventory-batch.css?v=20261008-inventory-partial-v1">
   </head>
   <body class="operations-auth-locked">
     <section id="operations-auth-gate" class="operations-auth-gate" aria-labelledby="operations-auth-title">
@@ -570,10 +570,16 @@
             </div>
             <section class="panel inventory-export-config" aria-label="셀피아 재고 반영 및 판매처 파일 생성">
               <div class="inventory-file-picker">
-                <label for="inventory-sellpia-files">1. 셀피아 재고 조사 결과 (여러 파일)</label>
+                <label for="inventory-sellpia-files">1. 셀피아 재고 조사 결과 (최대 10개)</label>
+                <label id="inventory-sellpia-dropzone" class="inventory-dropzone" for="inventory-sellpia-files" tabindex="0" role="button" aria-describedby="inventory-sellpia-hint inventory-sellpia-file-status">
+                  <strong>재고조사 XLSX를 여기에 끌어놓거나 파일을 선택하세요</strong>
+                  <span>XLSX 파일만 추가됩니다. 파일을 여러 번 선택해 이어서 담을 수 있습니다.</span>
+                </label>
                 <input id="inventory-sellpia-files" type="file" accept=".xlsx" multiple aria-describedby="inventory-sellpia-hint inventory-sellpia-file-status">
-                <small id="inventory-sellpia-hint">상품코드·가용재고·재고 컬럼이 있는 XLSX를 여러 개 선택하면 현재 DB와 자동 비교합니다.</small>
+                <small id="inventory-sellpia-hint">상품코드·가용재고·재고 컬럼이 있는 XLSX를 선택하세요. 최대 10개이며 같은 이름의 파일도 각각 목록에 표시합니다.</small>
                 <p id="inventory-sellpia-file-status" role="status" aria-live="polite">선택한 파일 없음</p>
+                <ul id="inventory-sellpia-file-list" class="inventory-file-list" aria-label="선택한 재고 조사 파일"></ul>
+                <button id="inventory-sellpia-clear-files" class="btn secondary" type="button" disabled>전체 비우기</button>
               </div>
               <section id="inventory-update-preview" class="inventory-update-preview" data-state="idle" aria-label="재고 반영 미리보기">
                 <div class="inventory-preview-heading"><b id="inventory-preview-title">재고 반영 미리보기</b><span id="inventory-preview-message">셀피아 파일을 선택하면 현재 DB와 자동 비교합니다.</span></div>
@@ -587,15 +593,25 @@
                   <div><dt>중복 동일</dt><dd id="inventory-preview-duplicate-same">0</dd></div>
                   <div><dt>중복 충돌</dt><dd id="inventory-preview-duplicate-conflict">0</dd></div>
                   <div><dt>오류 행</dt><dd id="inventory-preview-errors">0</dd></div>
+                  <div><dt>차단 SKU</dt><dd id="inventory-preview-blocked-skus">0</dd></div>
+                  <div><dt>차단 행</dt><dd id="inventory-preview-blocked-rows">0</dd></div>
                 </dl>
+                <div id="inventory-blocked-report" class="inventory-blocked-report" hidden>
+                  <p id="inventory-blocked-report-summary"></p>
+                  <button id="inventory-blocked-preview-download" class="btn secondary" type="button">차단 목록 XLSX 받기</button>
+                </div>
               </section>
               <fieldset class="inventory-stock-source"><legend>2. 판매처 파일 재고 기준</legend>
                 <label><input type="radio" name="inventory-stock-source" value="available_stock" checked> 가용재고</label>
                 <label><input type="radio" name="inventory-stock-source" value="stock"> 재고</label>
               </fieldset>
               <p id="inventory-ably-mapping-status" role="status" aria-live="polite">에이블리 DB 매핑과 재고 양식을 확인 중입니다.</p>
-              <p class="inventory-export-guidance">미리보기는 읽기 전용입니다. 최종 버튼을 누르면 변경 SKU만 DB에 반영하고, 최신 DB 재고로 스마트스토어 2개·메이크샵 1개·에이블리 1개를 생성합니다.</p>
-              <button id="inventory-batch-run" class="btn primary" type="button" disabled>재고 반영 후 4개 ZIP 생성</button>
+              <section class="inventory-download-destination" aria-label="파일 저장 위치">
+                <div><b>파일 저장 위치</b><span id="inventory-download-destination-name" role="status" aria-live="polite">브라우저 기본 다운로드 폴더</span><small id="inventory-download-destination-hint" hidden></small></div>
+                <div class="inventory-destination-actions"><button id="inventory-choose-destination" class="btn secondary" type="button">폴더 선택</button><button id="inventory-clear-destination" class="btn secondary" type="button" hidden>기본 다운로드 폴더 사용</button></div>
+              </section>
+              <p class="inventory-export-guidance">미리보기는 읽기 전용입니다. 최종 버튼은 확인된 정상 SKU를 반영하고, 스마트스토어 2개·메이크샵 1개·에이블리 1개 XLSX를 각각 저장합니다. 미확인 SKU와 중복 SKU는 별도 차단 파일로 받습니다.</p>
+              <button id="inventory-batch-run" class="btn primary" type="button" disabled>재고 반영 후 판매처 파일 4개 생성</button>
               <div id="inventory-batch-status" class="inventory-batch-status" role="status" aria-live="polite" hidden>
                 <b id="inventory-batch-title"></b>
                 <progress id="inventory-batch-progress" max="100" value="0" aria-label="재고 반영 및 파일 생성 진행률" hidden></progress>
@@ -1029,7 +1045,7 @@
     <script src="./bundle-import-parser.js?v=20260910-rule-destination-v111"></script>
     <script src="./seller-bundle-import-parser.js?v=20260910-rule-destination-v111"></script>
     <script src="./sellpia-source-parser.js?v=20260910-rule-destination-v111"></script>
-    <script src="./sellpia-inventory-count.js?v=20261001-inventory-count-v1"></script>
+    <script src="./sellpia-inventory-count.js?v=20261008-inventory-partial-v1"></script>
     <script src="./sellpia-carrier-export.js?v=20260920-sellpia-carrier-v1"></script>
     <link rel="stylesheet" href="./matrix-shadow.css?v=20260917-matrix-compact-v1">
     <script src="./value-state-model.js?v=20260917-shadow-preview-v1"></script>
@@ -1039,12 +1055,12 @@
     <script src="./matrix-shadow.js?v=20260919-full-scope-v12"></script>
     <script src="./baseline-canary.js?v=20260917-shadow-preview-v1"></script>
     <script src="./matrix-multilisting.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./data-service.js?v=20261008-integrated-export-v4"></script>
+  <script src="./data-service.js?v=20261008-inventory-partial-v1"></script>
     <script src="./channels-page.js?v=20260910-rule-destination-v111"></script>
     <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./app.js?v=20261008-integrated-export-v4"></script>
+  <script src="./app.js?v=20261008-inventory-partial-v1"></script>
     <script src="./mapping-import.js?v=20260910-rule-destination-v111"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
@@ -1068,9 +1084,10 @@
       <script src="./ui-cleanup-v1.js?v=20261007-inventory-tab-v1"></script>
       <script src="./tag-management-v2.js?v=20260929-ably-carrier-policy-v1"></script>
       <script src="./seller-file-workflow-v2.js?v=20261008-seller-choices-v2"></script>
-      <script src="./ably-inventory-export.js?v=20261008-integrated-export-v4"></script>
+      <script src="./ably-inventory-export.js?v=20261008-inventory-partial-v1"></script>
       <script src="./ably-mapping-management.js?v=20261008-integrated-export-v4"></script>
-      <script src="./inventory-batch-ui.js?v=20261008-integrated-export-v4"></script>
+      <script src="./inventory-file-downloads.js?v=20261008-inventory-partial-v1"></script>
+      <script src="./inventory-batch-ui.js?v=20261008-inventory-partial-v1"></script>
 <link rel="stylesheet" href="./price-decision-workspace.css?v=20261008-price-decisions-v1">
 <script src="./price-decision-workspace.js?v=20261008-price-decisions-v1"></script>
   </body>

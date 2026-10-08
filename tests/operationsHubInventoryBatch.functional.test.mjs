@@ -89,7 +89,7 @@ function buildHarness({statusOverride=null,changeSecondSnapshot=false}={}){
   loadAblyInventoryTemplateFile:async()=>{workflow.timeline.push('ably-template');return asFile('official-ably-template.xlsx',officialTemplateBytes);},
   loadCarrierSellerMappings:async({source,identities})=>({rows:identities.map(row=>{const sku=skuByIdentity.get(`${row.product_code}\u0000${row.option_code||''}`)||(/^sellpia_.+-\d+$/.test(row.seller_option_code||'')?(row.seller_option_code||'').replace(/^sellpia_/,''):null);return {...row,sku};}).filter(row=>row.sku)}),
   loadPlayautoSellpiaCatalog:async productCodes=>[...stockBySku.keys()].map((sku,index)=>({sellpia_product_code:['1001','1002','2001'][index],sellpia_sku_code:sku,sellpia_option_name:`Option ${['5001','5002','5003'][index]}`})).filter(row=>productCodes.includes(row.sellpia_product_code)),
-  loadSellpiaStockSourcesForExport:async({skus})=>{stockRead++;stockSkuSets.push([...skus]);workflow.timeline.push(`stock-read-${stockRead}`);if(workflow.failNextStockRead){workflow.failNextStockRead=false;throw Error('synthetic export source failed');}const selectedSnapshot=workflow.active?workflow.snapshotId:changeSecondSnapshot&&stockRead===2?'snap-2':snapshotId;return {snapshotId:selectedSnapshot,bySku:new Map(skus.filter(sku=>stockBySku.has(sku)).map(sku=>[sku,stockBySku.get(sku)]))};},
+  loadSellpiaStockSourcesForExport:async({skus,allowPartial})=>{stockRead++;stockSkuSets.push([...skus]);workflow.timeline.push(`stock-read-${stockRead}`);if(workflow.failNextStockRead){workflow.failNextStockRead=false;throw Error('synthetic export source failed');}const selectedSnapshot=workflow.active?workflow.snapshotId:changeSecondSnapshot&&stockRead===2?'snap-2':snapshotId;const missingSkus=skus.filter(sku=>!stockBySku.has(sku)),invalidSkus=skus.filter(sku=>stockBySku.has(sku)&&['sellpia_current_stock','sellpia_available_stock'].some(field=>{const value=stockBySku.get(sku)[field];return value===null||value===undefined||String(value).trim()===''||!Number.isSafeInteger(Number(value));}));if(!allowPartial&&(missingSkus.length||invalidSkus.length))throw Error('missing/invalid stock source');return {snapshotId:selectedSnapshot,missingSkus,invalidSkus,bySku:new Map(skus.filter(sku=>stockBySku.has(sku)&&!invalidSkus.includes(sku)).map(sku=>[sku,{...stockBySku.get(sku)}]))};},
   previewSellpiaInventoryCount:async()=>workflow.expectedPreview,
   checkOperationsHubSession:async()=>{workflow.checkSessionCalls++;workflow.timeline.push('session');return {authenticated:workflow.sessionAuthenticated};},
   uploadSellpiaInventoryCount:async(_files,expected)=>{workflow.uploadCalls++;workflow.timeline.push('upload');if(workflow.uploadGate)await workflow.uploadGate;for(const row of expected.changedRows||[]){const current=stockBySku.get(row.sellpia_sku_code);if(current)Object.assign(current,{sellpia_current_stock:row.stock,sellpia_available_stock:row.available_stock});}return {...expected,snapshotId:'snap-2',uploadMode:'inventory_count',uploadedRowCount:expected.changedRows.length,matrixAffectedSkus:['1001-1']};},
@@ -127,7 +127,7 @@ function buildHarness({statusOverride=null,changeSecondSnapshot=false}={}){
  ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch=options=>ctx.__runInventoryUpdateBatch.call(ctx.SystemV3SellerExportBridge,options);
  ctx.SystemV3SellerExportBridge.retryInventoryBatchExport=options=>ctx.__retryInventoryBatchExport.call(ctx.SystemV3SellerExportBridge,options);
  ctx.window.__prepareChangedOnlyExport=ctx.__prepareChangedOnlyExport;
- return {ctx,run:options=>ctx.SystemV3SellerExportBridge.runInventoryBatch(options),liveData,originals,stockBySku,ablyMappings,officialTemplateBytes,status,stockSkuSets,workflow,resolverCalls,get counts(){return {stockRead,downloadCalls,statusCalls};}};
+ return {ctx,run:options=>ctx.SystemV3SellerExportBridge.runInventoryBatch(options),liveData,originals,stockBySku,skuByIdentity,ablyMappings,officialTemplateBytes,status,stockSkuSets,workflow,resolverCalls,get counts(){return {stockRead,downloadCalls,statusCalls};}};
 }
 
 async function makeHarnessFiles(harness,{duplicateCarrier=false}={}){
@@ -140,7 +140,15 @@ async function makeHarnessFiles(harness,{duplicateCarrier=false}={}){
  return asFile('ably-original.xlsx',await makeXlsx('옵션기본',ablyRows({duplicateCarrier})));
 }
 
-async function archiveXlsx(blob){const zip=await JSZip.loadAsync(await blob.arrayBuffer());const names=Object.keys(zip.files).filter(name=>!zip.files[name].dir);return {zip,names};}
+async function individualXlsx(output){
+ assert.equal(Object.hasOwn(output,'blob'),false,'batch returns individual files rather than a ZIP blob');
+ assert.equal(Object.hasOwn(output,'fileName'),false,'batch has no top-level ZIP filename');
+ const names=output.files.map(file=>file.fileName||file.name),index=new Map(output.files.map(file=>[file.fileName||file.name,file]));
+ assert.equal(index.size,4);assert.ok(output.files.every(file=>file.blob instanceof BlobClass&&file.fileName===file.name));
+ // A file index adapter keeps the existing per-XLSX roundtrip assertions. No archive is created here.
+ const zip={file(name){assert.ok(index.has(name),`missing individual file ${name}`);return {async:async type=>{assert.equal(type,'uint8array');return new Uint8Array(await index.get(name).blob.arrayBuffer());}};}};
+ return {zip,names};
+}
 async function sheetCells(file){const zip=await JSZip.loadAsync(await file.arrayBuffer()),xml=await zip.file('xl/worksheets/sheet1.xml').async('string');return new Map([...xml.matchAll(/<c\b([^>]*?\br="([A-Z]+\d+)"[^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)].map(match=>[match[2],match[0]]));}
 async function sheetXml(file){const zip=await JSZip.loadAsync(await file.arrayBuffer());return zip.file('xl/worksheets/sheet1.xml').async('string');}
 async function officialAblyRows(file){const book=XLSX.read(await file.arrayBuffer(),{type:'array'});assert.deepEqual(book.SheetNames,['재고 수량 수정_양식']);const sheet=book.Sheets['재고 수량 수정_양식'];assert.equal(sheet.A1.v,'솔루션사 고유코드');assert.equal(sheet.B1.v,'재고 수량');return XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:''}).slice(1).filter(row=>String(row[0])!=='').map(row=>({solution_code:row[0],quantity:row[1]}));}
@@ -148,14 +156,14 @@ async function assertOfficialAblyPreserved(h,file){const original=await sheetCel
 async function writeQaOutput(result,details){
  const outputDir=process.env.INVENTORY_QA_OUTPUT;if(!outputDir)return;
  fs.mkdirSync(outputDir,{recursive:true});
- fs.writeFileSync(path.join(outputDir,'QA-fixture-inventory-batch.zip'),Buffer.from(await result.blob.arrayBuffer()));
+ for(const file of result.files)fs.writeFileSync(path.join(outputDir,file.fileName),Buffer.from(await file.blob.arrayBuffer()));
  fs.writeFileSync(path.join(outputDir,'QA-fixture-inventory-batch-summary.json'),JSON.stringify({synthetic_fixture:true,live_data_used:false,archive_file_name:result.fileName,archive_members:details.archiveMembers,source_identity:details.sourceIdentity,stock_modes:['available_stock','stock'],matched_sku_count:result.matchedSkuCount,stock_snapshot_reads:details.stockReads,stock_snapshot_read_sku_sets:details.stockSkuSets,negative_available_stock_source:-3,negative_available_stock_export:0,source_snapshot_preserved:true,parser_row_counts:details.rowCounts,ably_solution_column:'A',ably_stock_column:'B',ably_source:'verified DB option mapping plus packaged official blank template'},null,2)+'\n','utf8');
 }
 
 async function writeInventoryUpdateQaOutput(result,details){
  const outputDir=process.env.INVENTORY_UPDATE_QA_OUTPUT;if(!outputDir)return;
  fs.mkdirSync(outputDir,{recursive:true});
- fs.writeFileSync(path.join(outputDir,'QA-fixture-inventory-update.zip'),Buffer.from(await result.blob.arrayBuffer()));
+ for(const file of result.files)fs.writeFileSync(path.join(outputDir,file.fileName),Buffer.from(await file.blob.arrayBuffer()));
  fs.writeFileSync(path.join(outputDir,'QA-fixture-inventory-update-summary.json'),JSON.stringify({synthetic_fixture:true,live_data_used:false,upload_mode:'inventory_count',base_snapshot_id:'snap-1',export_snapshot_id:result.stockSnapshotId,stock_source:result.stockSource,uploaded_changed_sku_count:result.uploadResult.uploadedRowCount,matched_sku_count:result.matchedSkuCount,changed_row_stock_after_upload:7,unchanged_matched_sku_stock_after_upload:5,archive_file_name:result.fileName,archive_members:details.archiveMembers,parser_row_counts:details.rowCounts,upload_call_count:details.uploadCalls,matrix_refresh_calls:details.refreshCalls},null,2)+'\n','utf8');
 }
 
@@ -163,8 +171,7 @@ test('inventory batch emits three full originals plus official Ably AB stock fil
  const h=buildHarness();await makeHarnessFiles(h);const result=await h.run({stockSource:'available_stock'});
  assert.equal(result.stockSource,'available_stock');assert.equal(result.matchedSkuCount,3);assert.equal(result.files.length,4);
  assert.equal(result.files.filter(entry=>entry.source==='smartstore').length,2);assert.equal(result.files.filter(entry=>entry.source==='makeshop').length,1);assert.equal(result.files.filter(entry=>entry.source==='ably').length,1);
- assert.match(result.fileName,/^재고파일_\d{8}_\d{4}\.zip$/,'archive uses the KST inventory batch name');
- const {zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);assert.ok(names.every(name=>name.toLowerCase().endsWith('.xlsx')));assert.ok(names.every(name=>!name.includes('/')),'all four labeled XLSX files are flat ZIP members');
+ const {zip,names}=await individualXlsx(result);assert.equal(names.length,4);assert.ok(names.every(name=>name.toLowerCase().endsWith('.xlsx')));assert.ok(names.every(name=>!name.includes('/')),'all four labeled XLSX files have safe individual filenames');
  assert.equal(names.filter(name=>name.startsWith('스마트스토어_원본')).length,2);assert.equal(names.filter(name=>name.startsWith('메이크샵_')).length,1);assert.equal(names.filter(name=>name.startsWith('에이블리_')).length,1);
  const outputFiles=[];for(const name of names)outputFiles.push(asFile(name,await zip.file(name).async('uint8array')));
  const sourceParsers=h.ctx.SystemV3SellerParsers;
@@ -186,7 +193,7 @@ test('inventory batch emits three full originals plus official Ably AB stock fil
 });
 
 test('stock source accepts the current-stock mode and maps its value to all carriers',async()=>{
- const h=buildHarness(),file=await makeHarnessFiles(h),result=await h.run({file,stockSource:'stock'}),{zip,names}=await archiveXlsx(result.blob);
+ const h=buildHarness(),file=await makeHarnessFiles(h),result=await h.run({file,stockSource:'stock'}),{zip,names}=await individualXlsx(result);
  assert.equal(result.stockSource,'stock');assert.equal(names.length,4);
  const ablyName=names.find(name=>name.startsWith('에이블리_')),ably=await officialAblyRows(asFile(ablyName,await zip.file(ablyName).async('uint8array')));
  assert.deepEqual(ably.map(item=>item.quantity),[11,8,3]);
@@ -197,7 +204,7 @@ test('stock source accepts the current-stock mode and maps its value to all carr
 
 test('available stock -3 clamps to zero on all matched seller exports while the source snapshot stays negative',async()=>{
  const h=buildHarness();for(const value of h.stockBySku.values())value.sellpia_available_stock=-3;
- const file=await makeHarnessFiles(h),result=await h.run({file,stockSource:'available_stock'}),{zip,names}=await archiveXlsx(result.blob);
+ const file=await makeHarnessFiles(h),result=await h.run({file,stockSource:'available_stock'}),{zip,names}=await individualXlsx(result);
  const ssFiles=names.filter(name=>name.startsWith('스마트스토어_')).map(async name=>h.ctx.SystemV3SellerParsers.parseSellerFiles('smartstore',[asFile(name,await zip.file(name).async('uint8array'))],{inventory:true,price:false}));
  assert.deepEqual((await Promise.all(ssFiles)).flatMap(part=>part.normalizedRows.map(row=>row.stock)),[0,0]);
  const ms=await h.ctx.SystemV3SellerParsers.parseSellerFiles('makeshop',[asFile(names.find(name=>name.startsWith('메이크샵_')),await zip.file(names.find(name=>name.startsWith('메이크샵_'))).async('uint8array'))],{inventory:true,price:false});assert.equal(ms.normalizedRows[0].stock,0);
@@ -207,27 +214,27 @@ test('available stock -3 clamps to zero on all matched seller exports while the 
 
 test('unchanged full originals still emit four files with unchanged worksheet XML and no warnings',async()=>{
  const h=buildHarness();h.stockBySku.set('1001-1',{sellpia_current_stock:1,sellpia_available_stock:1});h.stockBySku.set('1002-1',{sellpia_current_stock:2,sellpia_available_stock:2});h.stockBySku.set('2001-1',{sellpia_current_stock:3,sellpia_available_stock:3});
- const file=await makeHarnessFiles(h),result=await h.run({file,stockSource:'stock'}),{zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);assert.equal(result.files.length,4);assert.equal(result.warnings.length,0);
+ const file=await makeHarnessFiles(h),result=await h.run({file,stockSource:'stock'}),{zip,names}=await individualXlsx(result);assert.equal(names.length,4);assert.equal(result.files.length,4);assert.equal(result.warnings.length,0);
  for(const [index,name] of names.filter(name=>name.startsWith('스마트스토어_')).entries()){const outFile=asFile(name,await zip.file(name).async('uint8array'));assert.equal(await sheetXml(h.originals.smartstore[index]),await sheetXml(outFile),'unchanged SmartStore full-original sheet is emitted intact');}
  const makeName=names.find(name=>name.startsWith('메이크샵_'));assert.equal(await sheetXml(h.originals.makeshop[0]),await sheetXml(asFile(makeName,await zip.file(makeName).async('uint8array'))));
  const ablyName=names.find(name=>name.startsWith('에이블리_')),ablyFile=asFile(ablyName,await zip.file(ablyName).async('uint8array'));assert.deepEqual((await officialAblyRows(ablyFile)).map(item=>item.quantity),[1,2,3]);await assertOfficialAblyPreserved(h,ablyFile);
 });
 
-test('missing Ably mapping or required seller originals fails before generating a ZIP',async()=>{
+test('missing Ably mapping or required seller originals fails before generating files',async()=>{
  const missingAbly=buildHarness();await makeHarnessFiles(missingAbly);missingAbly.ablyMappings.splice(0);await assert.rejects(()=>missingAbly.run({}),/매핑/);assert.equal(missingAbly.counts.downloadCalls,0);assert.equal(missingAbly.counts.stockRead,0);
  const missingMake=buildHarness({statusOverride:[{source:'smartstore',snapshotId:'ss',available:true,files:[{name:'a.xlsx'},{name:'b.xlsx'}]},{source:'makeshop',snapshotId:'ms',available:false,files:[]}]});const file=await makeHarnessFiles(missingMake);
  await assert.rejects(()=>missingMake.run({file}),/메이크샵.*공식 원본/);assert.equal(missingMake.counts.downloadCalls,0);
  const missingSmart=buildHarness({statusOverride:[{source:'smartstore',snapshotId:'ss',available:true,files:[{name:'only-one.xlsx'}]},{source:'makeshop',snapshotId:'ms',available:true,files:[{name:'make.xlsx'}]}]});
- await assert.rejects(()=>missingSmart.run({file}),/스마트스토어.*원본 2개가 필요/);assert.equal(missingSmart.counts.downloadCalls,0);assert.equal(missingSmart.counts.stockRead,0,'incomplete originals cannot reach a stock query or produce a ZIP');
+ await assert.rejects(()=>missingSmart.run({file}),/스마트스토어.*원본 2개가 필요/);assert.equal(missingSmart.counts.downloadCalls,0);assert.equal(missingSmart.counts.stockRead,0,'incomplete originals cannot reach a stock query or produce files');
 });
 
 test('review-only duplicate rawcodes are excluded while safe official Ably mappings still emit four files',async()=>{
  const h=buildHarness();await makeHarnessFiles(h);h.ablyMappings.push({...h.ablyMappings[0],solution_code:'review-duplicate',mapping_state:'review'},{...h.ablyMappings[1],solution_code:'review-duplicate',mapping_state:'review'});
- const result=await h.run({stockSource:'available_stock'}),{zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);assert.equal(result.ablySummary.reviewCount,2);
+ const result=await h.run({stockSource:'available_stock'}),{zip,names}=await individualXlsx(result);assert.equal(names.length,4);assert.equal(result.ablySummary.reviewCount,2);
  const ablyName=names.find(name=>name.startsWith('에이블리_')),parsed=await officialAblyRows(asFile(ablyName,await zip.file(ablyName).async('uint8array')));assert.deepEqual(parsed.map(item=>[item.solution_code,item.quantity]),[['001',0],['002',5],['003',9]]);
 });
 
-test('snapshot drift aborts the batch before the ZIP is returned',async()=>{
+test('snapshot drift aborts the batch before individual files are returned',async()=>{
  const h=buildHarness({changeSecondSnapshot:true}),file=await makeHarnessFiles(h);await assert.rejects(()=>h.run({file,stockSource:'available_stock'}),/snapshot이 변경되었습니다/);assert.equal(h.counts.stockRead,2);
 });
 
@@ -240,14 +247,14 @@ test('inventory update uploads once, waits for snapshot B, refreshes affected Ma
  assert.deepEqual(h.resolverCalls,[],'stock-only batch never invokes current-price decision normalization or proof logic');
  assert.deepEqual(h.workflow.refreshCalls,[['1001-1']]);
  assert.deepEqual(h.workflow.timeline,['session','ably-mapping','ably-template','upload','wait','refresh','stock-read-1','stock-read-2','ably-mapping']);
- const {zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);assert.ok(names.every(name=>name.endsWith('.xlsx')));
+ const {zip,names}=await individualXlsx(result);assert.equal(names.length,4);assert.ok(names.every(name=>name.endsWith('.xlsx')));
  const parsed=[];for(const name of names){const file=asFile(name,await zip.file(name).async('uint8array'));if(name.startsWith('스마트스토어_'))parsed.push(...(await h.ctx.SystemV3SellerParsers.parseSellerFiles('smartstore',[file],{inventory:true,price:false})).normalizedRows);else if(name.startsWith('메이크샵_')){const makeRows=(await h.ctx.SystemV3SellerParsers.parseSellerFiles('makeshop',[file],{inventory:true,price:false})).normalizedRows;assert.equal(makeRows.length,1);assert.equal(makeRows[0].stock,9);}else{const ably=await officialAblyRows(file);assert.equal(ably.length,3);assert.deepEqual(ably.map(row=>[row.solution_code,row.quantity]),[['001',7],['002',5],['003',9]],'the uploaded changed row and every unchanged matched option use snapshot B');await assertOfficialAblyPreserved(h,file);}}
  assert.equal(parsed.length,2);assert.deepEqual(parsed.map(row=>row.stock).sort((a,b)=>a-b),[5,7],'the changed row comes from B and the SKU absent from the changed-row list remains in the full-original export');
  await writeInventoryUpdateQaOutput(result,{archiveMembers:names,rowCounts:{smartstore:parsed.length,makeshop:1,ably:3},uploadCalls:h.workflow.uploadCalls,refreshCalls:h.workflow.refreshCalls});
  const retriedAfterDownloadFailure=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file:ablyFile,stockSource:'available_stock'});
  assert.equal(h.workflow.uploadCalls,1,'re-running the same confirmed proof after a client-side download failure reuses the completed upload');
  assert.equal(retriedAfterDownloadFailure.uploaded,true);assert.equal(retriedAfterDownloadFailure.stockSnapshotId,'snap-2');
- assert.equal((await archiveXlsx(retriedAfterDownloadFailure.blob)).names.length,4);
+ assert.equal((await individualXlsx(retriedAfterDownloadFailure)).names.length,4);
 });
 
 test('inventory update clamps negative available stock across every matched XLSX while preserving negative snapshot values',async()=>{
@@ -256,7 +263,7 @@ test('inventory update clamps negative available stock across every matched XLSX
  const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'proof-negative',summary:{changedSkuCount:1,errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1',stock:10,available_stock:-3}]};
  h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;
  const result=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file:ablyFile,stockSource:'available_stock'});
- const {zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);
+ const {zip,names}=await individualXlsx(result);assert.equal(names.length,4);
  const smartRows=[];
  for(const name of names){
   const file=asFile(name,await zip.file(name).async('uint8array'));
@@ -268,18 +275,10 @@ test('inventory update clamps negative available stock across every matched XLSX
  for(const value of h.stockBySku.values())assert.equal(value.sellpia_available_stock,-3,'export clamp never mutates snapshot source values');
 });
 
-test('inventory update rejects preview errors before upload and rejects stale base snapshot A after the upload boundary',async()=>{
- const invalid=buildHarness(),invalidFile=await makeHarnessFiles(invalid),invalidPreview={baseSnapshotId:'snap-1',fingerprint:'fatal',summary:{errorRowCount:1,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1'}]};
- await assert.rejects(()=>invalid.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:invalidPreview,file:invalidFile}),/숫자 오류|중복 충돌/);
- assert.equal(invalid.workflow.uploadCalls,0);assert.equal(invalid.counts.stockRead,0);
-
- const duplicate=buildHarness(),duplicateFile=await makeHarnessFiles(duplicate),duplicatePreview={baseSnapshotId:'snap-1',fingerprint:'duplicate',summary:{errorRowCount:0,duplicateConflictCount:1},changedRows:[{sellpia_sku_code:'1001-1'}]};
- await assert.rejects(()=>duplicate.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:duplicatePreview,file:duplicateFile}),/숫자 오류|중복 충돌/);
- assert.equal(duplicate.workflow.uploadCalls,0);assert.equal(duplicate.counts.stockRead,0);
-
+test('inventory update rejects stale base snapshot A after upload and invalid official template before upload',async()=>{
  const stale=buildHarness(),staleFile=await makeHarnessFiles(stale),preview={baseSnapshotId:'snap-1',fingerprint:'proof-stale',summary:{errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1'}]};
  stale.workflow.active=true;stale.workflow.snapshotId='snap-1';stale.workflow.expectedPreview=preview;
- await assert.rejects(()=>stale.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:preview,file:staleFile}),/업로드\/미리보기 기준과 달라 ZIP을 만들지 않았습니다/);
+ await assert.rejects(()=>stale.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:preview,file:staleFile}),/업로드\/미리보기 기준과 달라 파일을 만들지 않았습니다/);
  assert.equal(stale.workflow.uploadCalls,1);assert.equal(stale.workflow.waitCalls,1);assert.equal(stale.counts.stockRead,1);
 
  const invalidAbly=buildHarness(),fatalAbly=asFile('not-an-ably-template.xlsx',new Uint8Array([7,8,9])),validPreview={baseSnapshotId:'snap-1',fingerprint:'proof-valid',summary:{errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1'}]};
@@ -287,6 +286,74 @@ test('inventory update rejects preview errors before upload and rejects stale ba
  await makeHarnessFiles(invalidAbly);invalidAbly.liveData.loadAblyInventoryTemplateFile=async()=>fatalAbly;
  await assert.rejects(()=>invalidAbly.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:validPreview}));
  assert.equal(invalidAbly.workflow.uploadCalls,0,'invalid packaged official Ably workbook is rejected before the DB write');assert.equal(invalidAbly.counts.stockRead,0);
+});
+
+test('mixed multi-file input excludes every duplicate occurrence from upload and seller stock, retains safe 1:N, and reopens all four files plus the complete report',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);
+ const extra=smartRows('1001','5004','SKU-A',17)[1],smart=asFile('ss-a.xlsx',await makeXlsx('Sheet1',[...smartRows('1001','5001','SKU-A',1),extra]));
+ h.originals.smartstore[0]=smart;h.status[0].files[0].size=smart.size;h.skuByIdentity.set('1001\u00005004','1001-1');
+ const mappings=h.liveData.loadCarrierSellerMappings;
+ h.liveData.loadCarrierSellerMappings=async args=>{const result=await mappings(args);return {...result,rows:result.rows.map(row=>({...row,sellpia_current_stock:9999,sellpia_available_stock:8888,stock:7777}))};};
+ h.ablyMappings.push({...h.ablyMappings[0],solution_code:'004',option_code:'safe-second-option'});
+ const cols=['상품코드','가용재고','재고'],countFiles=[
+  asFile('first-count.xlsx',await makeXlsx('재고조사',[cols,['1001-1',7,10],[],['1002-1',6,12],['2001-1',5,8],['missing-input',1,2]])),
+  asFile('second-count.xlsx',await makeXlsx('재고조사',[cols,['1002-1',6,12],['2001-1','bad',8]])),
+ ];
+ const parsed=await h.ctx.SystemV3SellpiaInventoryCount.parseFiles(countFiles,{XLSX});
+ const current=[...h.stockBySku].map(([sellpia_sku_code,row])=>({sellpia_sku_code,stock:row.sellpia_current_stock,available_stock:row.sellpia_available_stock}));
+ const expectedPreview=h.ctx.SystemV3SellpiaInventoryCount.buildPreview(parsed,current,{baseSnapshotId:'snap-1'});
+ assert.equal(expectedPreview.summary.validSkuCount,1);assert.equal(expectedPreview.summary.duplicateSameCount,1);assert.equal(expectedPreview.summary.duplicateConflictCount,1);assert.equal(expectedPreview.summary.blockedRowCount,5);
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;
+ const output=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:countFiles,expectedPreview});
+ assert.equal(h.workflow.uploadCalls,1);assert.equal(output.uploadResult.uploadedRowCount,1);assert.deepEqual(h.resolverCalls,[]);
+ const {zip,names}=await individualXlsx(output),smartStocks=[];
+ for(const name of names.filter(name=>name.startsWith('스마트스토어_'))){const result=await h.ctx.SystemV3SellerParsers.parseSellerFiles('smartstore',[asFile(name,await zip.file(name).async('uint8array'))],{inventory:true,price:true});smartStocks.push(...result.normalizedRows.map(row=>[row.product_code,row.option_code,row.stock,row.price]));}
+ assert.deepEqual(smartStocks,[['1001','5001',7,1025],['1001','5004',7,1025],['1002','5002',2,1025]],'authoritative snapshot outranks stale mapping stock, safe SKU fanout updates, blocked SKU retains source stock and prices');
+ const makeName=names.find(name=>name.startsWith('메이크샵_')),make=asFile(makeName,await zip.file(makeName).async('uint8array'));
+ assert.equal(await sheetXml(make),await sheetXml(h.originals.makeshop[0]),'valid+invalid duplicate cannot update MakeShop original');
+ const ablyName=names.find(name=>name.startsWith('에이블리_'));
+ assert.deepEqual(await officialAblyRows(asFile(ablyName,await zip.file(ablyName).async('uint8array'))),[{solution_code:'001',quantity:7},{solution_code:'004',quantity:7}]);
+ assert.ok(output.blockedFile?.blob instanceof BlobClass);assert.equal(output.blockedFile.rowCount,output.blockedRows.length);
+ const reportBook=XLSX.read(await output.blockedFile.blob.arrayBuffer(),{type:'array'}),report=XLSX.utils.sheet_to_json(reportBook.Sheets['차단목록'],{header:1,raw:true,defval:''});
+ assert.equal(report.length,output.blockedRows.length+1);assert.equal(output.blockedRows.filter(row=>row.stage==='inventory_input').length,5);
+ assert.ok(output.blockedRows.some(row=>row.source==='smartstore'&&row.sellpia_sku_code==='1002-1'&&row.stock===2));
+ assert.ok(output.blockedRows.some(row=>row.source==='makeshop'&&row.sellpia_sku_code==='2001-1'&&row.stock===3));
+ const duplicateRows=report.slice(1).filter(row=>row[0]==='재고조사 입력'&&row[5]==='1002-1');assert.deepEqual(duplicateRows.map(row=>[row[6],row[7]]),[['first-count.xlsx',4],['second-count.xlsx',2]]);
+ assert.ok(h.stockSkuSets.every(skus=>skus.includes('1002-1')&&skus.includes('2001-1')),'blocked SKUs remain in full snapshot verification scope');
+});
+
+test('missing and invalid authoritative SKUs preserve only their seller cells and produce per-option exclusions alongside four valid XLSX files',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);h.stockBySku.delete('2001-1');h.stockBySku.get('1002-1').sellpia_available_stock='bad';
+ const output=await h.run({stockSource:'available_stock'}),{zip,names}=await individualXlsx(output);
+ const ss2=names.find(name=>name.includes('원본2_'));assert.equal(await sheetXml(asFile(ss2,await zip.file(ss2).async('uint8array'))),await sheetXml(h.originals.smartstore[1]));
+ const make=names.find(name=>name.startsWith('메이크샵_'));assert.equal(await sheetXml(asFile(make,await zip.file(make).async('uint8array'))),await sheetXml(h.originals.makeshop[0]));
+ const ably=names.find(name=>name.startsWith('에이블리_'));assert.deepEqual(await officialAblyRows(asFile(ably,await zip.file(ably).async('uint8array'))),[{solution_code:'001',quantity:0}]);
+ assert.ok(output.blockedRows.some(row=>row.sellpia_sku_code==='1002-1'&&row.source==='smartstore'&&row.status==='snapshot_stock_invalid'));
+ assert.ok(output.blockedRows.some(row=>row.sellpia_sku_code==='2001-1'&&row.source==='makeshop'&&row.status==='snapshot_sku_missing'));
+ assert.equal(output.blockedRows.filter(row=>row.source==='ably').length,2);assert.ok(output.blockedFile);
+});
+
+test('all authoritative sources absent still produce intact originals and official Ably headers-only output with a report',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);h.stockBySku.clear();const output=await h.run({}),{zip,names}=await individualXlsx(output);
+ for(const [source,originals] of Object.entries(h.originals))for(const [index,original] of originals.entries()){const name=names.find(name=>source==='smartstore'?name.includes(`원본${index+1}_`):name.startsWith('메이크샵_'));assert.equal(await sheetXml(asFile(name,await zip.file(name).async('uint8array'))),await sheetXml(original));}
+ const ably=names.find(name=>name.startsWith('에이블리_'));assert.deepEqual(await officialAblyRows(asFile(ably,await zip.file(ably).async('uint8array'))),[]);assert.equal(output.ablySummary.eligibleCount,0);assert.ok(output.blockedFile);
+});
+
+test('source presence drift remains globally fatal when a previously missing SKU appears or a known SKU disappears',async()=>{
+ for(const action of ['appears','disappears']){
+  const h=buildHarness();await makeHarnessFiles(h);if(action==='appears')h.stockBySku.delete('2001-1');
+  const read=h.liveData.loadSellpiaStockSourcesForExport;let calls=0;
+  h.liveData.loadSellpiaStockSourcesForExport=async args=>{if(++calls===2){if(action==='appears')h.stockBySku.set('2001-1',{sellpia_current_stock:7,sellpia_available_stock:6});else h.stockBySku.delete('2001-1');}return read(args);};
+  await assert.rejects(()=>h.run({}),/snapshot이 변경/);assert.equal(h.workflow.uploadCalls,0);assert.equal(h.counts.stockRead,2);
+ }
+});
+
+test('blocked SKUs stay within final value verification and cannot hide snapshot drift behind input exclusion',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'blocked-proof',summary:{validSkuCount:1,changedSkuCount:0},changedRows:[],blockedSkus:['1002-1'],blockedRows:[{stage:'inventory_input',source:'sellpia',file_name:'blocked.xlsx',source_row_no:2,sellpia_sku_code:'1002-1',status:'invalid',reason:'bad input'}]};
+ h.workflow.expectedPreview=expectedPreview;const read=h.liveData.loadSellpiaStockSourcesForExport;let calls=0;
+ h.liveData.loadSellpiaStockSourcesForExport=async args=>{if(++calls===2)h.stockBySku.get('1002-1').sellpia_available_stock=999;return read(args);};
+ await assert.rejects(()=>h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('blocked.xlsx',new Uint8Array([1]))],expectedPreview}),/snapshot이 변경/);
+ assert.equal(h.workflow.uploadCalls,0);assert.ok(h.stockSkuSets.every(skus=>skus.includes('1002-1')));
 });
 
 test('missing required SmartStore or MakeShop originals fail before inventory upload',async()=>{
@@ -325,7 +392,7 @@ test('no-change inventory preview skips upload and exports the current complete 
  const result=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file,stockSource:'stock'});
  assert.equal(h.workflow.uploadCalls,0);assert.equal(h.workflow.waitCalls,1);assert.equal(h.workflow.refreshCalls.length,0);assert.equal(result.stockSnapshotId,'snap-1');
  assert.deepEqual(h.workflow.timeline,['session','ably-mapping','ably-template','wait','stock-read-1','stock-read-2','ably-mapping'],'the unchanged path preflights mapping/template and waits for the current base snapshot without writing or refreshing affected SKUs');
- const {zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);assert.ok(names.every(name=>name.endsWith('.xlsx')));
+ const {zip,names}=await individualXlsx(result);assert.equal(names.length,4);assert.ok(names.every(name=>name.endsWith('.xlsx')));
  for(const name of names.filter(name=>name.startsWith('스마트스토어_'))){const parsed=await h.ctx.SystemV3SellerParsers.parseSellerFiles('smartstore',[asFile(name,await zip.file(name).async('uint8array'))],{inventory:true,price:false});assert.equal(parsed.normalizedRows.length,1);}
 });
 
@@ -337,7 +404,7 @@ test('export failure after a ready inventory upload can retry from retained snap
  assert.equal(h.workflow.uploadCalls,1);assert.equal(h.counts.stockRead,1);
  const retried=await h.ctx.SystemV3SellerExportBridge.retryInventoryBatchExport({stockSource:'available_stock'});
  assert.equal(h.workflow.uploadCalls,1,'retry uses the retained successful DB upload');assert.equal(retried.uploaded,true);assert.equal(retried.stockSnapshotId,'snap-2');assert.equal(h.workflow.checkSessionCalls,2,'retry validates the current Operations Hub session again');
- const {names}=await archiveXlsx(retried.blob);assert.equal(names.length,4);
+ const {names}=await individualXlsx(retried);assert.equal(names.length,4);
 });
 
 test('matrix rebuild timeout can be retried from the completed upload without a second upload',async()=>{

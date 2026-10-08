@@ -8524,7 +8524,7 @@ async function transformStandardCarrierExport(plan,{download=false}={}){
   return {...plan,blob,appliedItems:transformed.appliedItems,skippedItems:skipped};
 }
 
-async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgress=null,mode='changed_only',priceMode='rules',expectedPlanFingerprint=null,includePrice=true,includeStock=true,stockSource=null,filesBySourceOverride=null,stockSourcesOverride=null,includeEmptyFullOriginal=false,markCarrierWarnings=true}={}){
+async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgress=null,mode='changed_only',priceMode='rules',expectedPlanFingerprint=null,includePrice=true,includeStock=true,stockSource=null,filesBySourceOverride=null,stockSourcesOverride=null,includeEmptyFullOriginal=false,markCarrierWarnings=true,excludedStockSkus=[]}={}){
   if(!['smartstore','makeshop'].includes(source))throw Error('원본 기반 내보내기는 스마트스토어·메이크샵만 지원합니다.');
   if(!['changed_only','target_all','full_original'].includes(mode))throw Error('내보내기 모드를 확인해주세요.');
   if(!['rules','sellpia_source'].includes(priceMode))throw Error('가격 계산 방식을 확인해주세요.');
@@ -8534,6 +8534,7 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
   if(priceMode==='sellpia_source'&&includePrice&&(!['smartstore','makeshop'].includes(source)||!Array.isArray(skus)||!skus.length))throw Error('셀피아 판매가 기준은 스마트스토어·메이크샵의 태그 또는 SKU 범위에서만 사용할 수 있습니다.');
   const clock=()=>globalThis.performance?.now?.()??Date.now(),started=clock(),timings={download_ms:0,parse_ms:0,mapping_ms:0,target_ms:0,plan_ms:0,serialize_ms:0},queries=[];
   const requested=Array.isArray(skus)?new Set(skus.map(value=>String(value||'').trim()).filter(Boolean)):null;
+  const stockExcluded=new Set(excludedStockSkus.map(value=>String(value||'').trim()).filter(Boolean));
   const identityKey=row=>JSON.stringify([String(row?.product_code||'').trim(),String(row?.option_code||'').trim()]);
   let mark=clock();
   const filesBySource=filesBySourceOverride&&typeof filesBySourceOverride.get==='function'?filesBySourceOverride:await liveData.downloadLatestSellerOriginals([source]);
@@ -8598,7 +8599,7 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
     if(sourcePrices)for(const [sku,value] of sourcePrices){if(sourcePriceProofs.has(sku)&&sourcePriceProofs.get(sku)!==value)throw Error(`${sku}: 파일 간 셀피아 원본 가격이 다릅니다.`);sourcePriceProofs.set(sku,value);}
     timings.target_ms+=Math.round(clock()-mark);
     const targetBySku=new Map((targets.rows||[]).map(row=>[row.sku,row]));
-    const snapshotRows=mappingRows.map(row=>({...targetBySku.get(row.sku),...(stockSources?.bySku.get(row.sku)||{}),...row,current_price_decision:includePrice?window.HubCurrentPriceDecisionResolver.decisionForMapping(currentDecisions,row,{source}):null}));
+    const snapshotRows=mappingRows.map(row=>({...targetBySku.get(row.sku),...row,...(stockSources?.bySku.get(row.sku)||{}),...(stockExcluded.has(String(row.sku||'').trim())||stockSources&&stockSource&&!stockSources.bySku.has(row.sku)?{sellpia_current_stock:null,sellpia_available_stock:null,stock:null,available_stock:null}:{}),current_price_decision:includePrice?window.HubCurrentPriceDecisionResolver.decisionForMapping(currentDecisions,row,{source}):null}));
     onProgress?.(`${includePrice?'가격':'재고 반영'} 계획 계산 중 · 연결 ${formatNumber(matchedSkus.length)} SKU`);
     await new Promise(resolve=>globalThis.setTimeout(resolve,0));
     mark=clock();
@@ -8807,9 +8808,7 @@ window.SystemV3SellerExportBridge={
 
       if(_inventoryUpdate){
         const expected=_inventoryUpdate.expectedPreview;
-        const counts=expected?.summary||{};
         if(!expected?.fingerprint||!expected?.baseSnapshotId)throw Error('재고조사 미리보기 identity를 확인할 수 없습니다. 다시 미리보기해주세요.');
-        if(Number(counts.errorRowCount||0)||Number(counts.duplicateConflictCount||0))throw Error('재고조사 파일의 숫자 오류 또는 중복 충돌을 먼저 해결해주세요. 업로드하지 않았습니다.');
         if(typeof liveData?.waitForSellpiaMatrixRebuild!=='function')throw Error('Sellpia 매트릭스 준비 상태 확인 기능을 불러오지 못했습니다.');
         if(_inventoryUpdate.skipUpload){
           uploadResult=_inventoryUpdate.uploadResult;
@@ -8829,8 +8828,7 @@ window.SystemV3SellerExportBridge={
           if(String(uploadResult.baseSnapshotId||'')!==String(expected.baseSnapshotId)||String(uploadResult.fingerprint||'')!==String(expected.fingerprint))throw Error('업로드 처리 결과가 확인한 미리보기와 달라 안전하게 중단했습니다.');
         }else{
           const current=await liveData.previewSellpiaInventoryCount(_inventoryUpdate.files);
-          const currentSummary=current?.summary||{};
-          if(current?.fingerprint!==expected.fingerprint||current?.baseSnapshotId!==expected.baseSnapshotId||Number(currentSummary.errorRowCount||0)||Number(currentSummary.duplicateConflictCount||0))throw Error('재고조사 미리보기 이후 파일 또는 Sellpia 기준 snapshot이 변경됐습니다. 업로드하지 않았습니다. 다시 미리보기해주세요.');
+          if(current?.fingerprint!==expected.fingerprint||current?.baseSnapshotId!==expected.baseSnapshotId)throw Error('재고조사 미리보기 이후 파일 또는 Sellpia 기준 snapshot이 변경됐습니다. 업로드하지 않았습니다. 다시 미리보기해주세요.');
           uploadResult={...expected,unchanged:true,uploadedRowCount:0,matrixAffectedSkus:[],snapshotId:expected.baseSnapshotId};
           report('upload','변경 SKU가 없어 업로드를 건너뜁니다. 최신 기준 snapshot을 확인합니다.',48);
         }
@@ -8842,7 +8840,7 @@ window.SystemV3SellerExportBridge={
         if(inventoryUpdateCommitted){
           if(inventoryBatchRecovery)inventoryBatchRecovery.needsRebuild=false;
           const affected=[...new Set((Array.isArray(uploadResult.matrixAffectedSkus)?uploadResult.matrixAffectedSkus:[]).map(String).filter(Boolean))];
-          if(affected.length!==Number(uploadResult.uploadedRowCount||0))throw Error('업로드된 재고 SKU와 Matrix 영향 SKU 수가 일치하지 않아 ZIP을 만들지 않았습니다.');
+          if(affected.length!==Number(uploadResult.uploadedRowCount||0))throw Error('업로드된 재고 SKU와 Matrix 영향 SKU 수가 일치하지 않아 파일을 만들지 않았습니다.');
           if(!affected.length)throw Error('업로드된 재고 SKU의 Matrix 영향 목록이 비어 있습니다.');
           report('matrix',`영향 SKU ${fmt(affected.length)}개의 준비된 매트릭스를 새로 읽습니다.`,72);
           const refreshed=await refreshMatrixSkus(affected);
@@ -8850,21 +8848,37 @@ window.SystemV3SellerExportBridge={
         }
         queryPhase='준비된 Sellpia 재고 snapshot을 확인합니다.';
         report('stock',`매칭 SKU ${fmt(allSkus.size)}개의 준비된 재고를 한 번에 조회합니다.`,75);
-        const stockSnapshot=await liveData.loadSellpiaStockSourcesForExport({skus:[...allSkus],onQuery:queryProgress});
-        if(String(stockSnapshot?.snapshotId||'')!==String(expectedSnapshotId))throw Error('준비된 Sellpia 재고 snapshot이 업로드/미리보기 기준과 달라 ZIP을 만들지 않았습니다.');
+        const stockSnapshot=await liveData.loadSellpiaStockSourcesForExport({skus:[...allSkus],onQuery:queryProgress,allowPartial:true});
+        if(String(stockSnapshot?.snapshotId||'')!==String(expectedSnapshotId))throw Error('준비된 Sellpia 재고 snapshot이 업로드/미리보기 기준과 달라 파일을 만들지 않았습니다.');
         _inventoryUpdate.stockSourcesOverride=stockSnapshot;
       }
       queryPhase='매칭 SKU의 최신 재고를 확인합니다.';
       report('stock',`매칭 SKU ${fmt(allSkus.size)}개의 최신 재고를 한 번에 조회합니다.`,_inventoryUpdate?78:50);
-      const stockSnapshot=_inventoryUpdate?.stockSourcesOverride||await liveData.loadSellpiaStockSourcesForExport({skus:[...allSkus],onQuery:queryProgress});
-      if(!stockSnapshot?.bySku||[...allSkus].some(sku=>!stockSnapshot.bySku.has(sku)))throw Error('최신 재고 snapshot에서 일부 매칭 SKU를 확인할 수 없습니다.');
-      const outputFiles=[],warnings=[];
+      const stockSnapshot=_inventoryUpdate?.stockSourcesOverride||await liveData.loadSellpiaStockSourcesForExport({skus:[...allSkus],onQuery:queryProgress,allowPartial:true});
+      if(!stockSnapshot?.snapshotId||!(stockSnapshot.bySku instanceof Map))throw Error('최신 재고 snapshot을 확인할 수 없습니다.');
+      const inputBlockedSkus=new Set(_inventoryUpdate?.expectedPreview?.blockedSkus||[]);
+      const unavailableSkus=new Set([...allSkus].filter(sku=>!stockSnapshot.bySku.has(sku)));
+      const excludedStockSkus=[...new Set([...inputBlockedSkus,...unavailableSkus])];
+      const outputFiles=[],warnings=[],blockedRows=[...(_inventoryUpdate?.expectedPreview?.blockedRows||[])];
+      const reportKeys=new Set(blockedRows.map(row=>JSON.stringify([row.stage,row.source,row.file_name,row.source_row_no,row.sellpia_sku_code,row.product_code,row.option_code,row.solution_code])));
+      const addBlocked=row=>{const key=JSON.stringify([row.stage,row.source,row.file_name,row.source_row_no,row.sellpia_sku_code,row.product_code,row.option_code,row.solution_code]);if(!reportKeys.has(key)){reportKeys.add(key);blockedRows.push(row);}};
       for(const context of contexts){
         const sourceLabel=context.source==='smartstore'?'스마트스토어':'메이크샵';
+        const ownersByIdentity=new Map();
+        for(const mapping of context.mapped.rows||[]){const key=JSON.stringify([String(mapping.product_code||'').trim(),String(mapping.option_code||'').trim()]);if(!ownersByIdentity.has(key))ownersByIdentity.set(key,[]);ownersByIdentity.get(key).push(mapping);}
+        for(let fileIndex=0;fileIndex<context.parsedFiles.length;fileIndex++)for(const original of context.parsedFiles[fileIndex].normalizedRows||[]){
+          const key=JSON.stringify([String(original.product_code||'').trim(),String(original.option_code||'').trim()]);
+          for(const mapping of ownersByIdentity.get(key)||[]){
+            const sku=String(mapping.sku||'').trim();if(!inputBlockedSkus.has(sku)&&!unavailableSkus.has(sku))continue;
+            addBlocked({stage:'seller_export',source:context.source,file_name:context.files[fileIndex].name,source_row_no:original.source_row_no,sellpia_sku_code:sku,product_code:original.product_code,option_code:original.option_code,stock:original.stock,
+              status:inputBlockedSkus.has(sku)?'inventory_input_blocked':stockSnapshot.invalidSkus?.includes(sku)?'snapshot_stock_invalid':'snapshot_sku_missing',
+              reason:inputBlockedSkus.has(sku)?'재고조사 입력에서 차단된 SKU입니다. 판매처 원본 재고를 유지했습니다.':stockSnapshot.invalidSkus?.includes(sku)?'최신 셀피아 재고값을 확인할 수 없어 판매처 원본 재고를 유지했습니다.':'최신 셀피아 재고에 SKU가 없어 판매처 원본 재고를 유지했습니다.'});
+          }
+        }
         report('build',`${sourceLabel} 전체 원본을 재고-only로 변환합니다.`,65);
         const result=await prepareChangedOnlyExport(context.source,null,{
           download:false,mode:'full_original',priceMode:'rules',includePrice:false,includeStock:true,stockSource,
-          filesBySourceOverride:new Map([[context.source,context.files]]),stockSourcesOverride:stockSnapshot,includeEmptyFullOriginal:true,markCarrierWarnings:false,
+          filesBySourceOverride:new Map([[context.source,context.files]]),stockSourcesOverride:stockSnapshot,excludedStockSkus,includeEmptyFullOriginal:true,markCarrierWarnings:false,
           onProgress:()=>report('build',`${sourceLabel} 상품 행을 원본 양식에 반영합니다.`,68)
         });
         if(result.outputs.length!==context.files.length)throw Error(`${context.source}: 전체 원본 ${context.files.length}개 중 ${result.outputs.length}개만 생성되었습니다.`);
@@ -8882,40 +8896,40 @@ window.SystemV3SellerExportBridge={
           }
         }
         warnings.push(...(result.skippedItems||[]).map(entry=>({...entry,source:context.source})));
+        for(const entry of result.skippedItems||[]){const item=entry.item||entry;addBlocked({stage:'seller_export',source:context.source,file_name:item.source_file_name||'',source_row_no:item.source_row_no,sellpia_sku_code:item.sellpia_sku_code||'',product_code:item.seller_product_code||'',option_code:item.seller_option_code||'',status:entry.status||'blocked',reason:entry.reason||'판매처 원본 유지'});}
         for(const output of result.outputs){
           outputFiles.push({source:context.source,file:output.file,blob:output.blob});
         }
       }
 
       report('build','DB 옵션 매핑과 재고 정책으로 에이블리 A/B 재고 양식을 생성합니다.',83);
-      const ablyPlan=window.HubAblyInventoryExport.prepare({mappingRows:ablyMapping.rows,stockSources:stockSnapshot,stockSource});
+      const ablyPlan=window.HubAblyInventoryExport.prepare({mappingRows:ablyMapping.rows,stockSources:stockSnapshot,stockSource,excludedSkus:[...inputBlockedSkus]});
       const ablyOutput=await window.HubAblyInventoryExport.build({plan:ablyPlan,templateFile:ablyMapping.templateFile});
       warnings.push(...(ablyPlan.excludedRows||[]).map(entry=>({...entry,source:'ably'})));
+      for(const entry of ablyPlan.excludedRows||[])addBlocked(entry);
       outputFiles.push({source:'ably',file:new File([ablyOutput.blob],ablyOutput.fileName,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),blob:ablyOutput.blob});
-      if(outputFiles.length!==4)throw Error(`ZIP 구성 파일 수가 4개가 아닙니다: ${outputFiles.length}`);
+      if(outputFiles.length!==4)throw Error(`판매처 파일 수가 4개가 아닙니다: ${outputFiles.length}`);
 
-      report('verify','ZIP 저장 직전에 최신 재고 snapshot을 다시 확인합니다.',90);
+      report('verify','파일 저장 직전에 최신 재고 snapshot을 다시 확인합니다.',90);
       queryPhase='최신 재고 snapshot을 다시 확인합니다.';
-      const confirmation=await liveData.loadSellpiaStockSourcesForExport({skus:[...allSkus],onQuery:queryProgress});
+      const confirmation=await liveData.loadSellpiaStockSourcesForExport({skus:[...allSkus],onQuery:queryProgress,allowPartial:true});
       if(confirmation.snapshotId!==stockSnapshot.snapshotId||[...allSkus].some(sku=>{
         const before=stockSnapshot.bySku.get(sku),after=confirmation.bySku?.get(sku);
-        return !after||before.sellpia_current_stock!==after.sellpia_current_stock||before.sellpia_available_stock!==after.sellpia_available_stock;
-      }))throw Error('파일을 만드는 동안 Sellpia 재고 snapshot이 변경되었습니다. ZIP을 만들지 않았습니다.');
+        return Boolean(before)!==Boolean(after)||before&&after&&(before.sellpia_current_stock!==after.sellpia_current_stock||before.sellpia_available_stock!==after.sellpia_available_stock);
+      }))throw Error('파일을 만드는 동안 Sellpia 재고 snapshot이 변경되었습니다. 파일을 만들지 않았습니다.');
       const mappingConfirmation=await liveData.loadAblyInventoryMappings();
-      if((mappingConfirmation.fingerprint||window.HubAblyInventoryExport.readiness({mappingRows:mappingConfirmation.rows||[]}).fingerprint)!==ablyMapping.mappingFingerprint)throw Error('파일 생성 중 에이블리 매핑 또는 옵션별 재고 정책이 변경되었습니다. ZIP을 만들지 않았습니다.');
+      if((mappingConfirmation.fingerprint||window.HubAblyInventoryExport.readiness({mappingRows:mappingConfirmation.rows||[]}).fingerprint)!==ablyMapping.mappingFingerprint)throw Error('파일 생성 중 에이블리 매핑 또는 옵션별 재고 정책이 변경되었습니다. 파일을 만들지 않았습니다.');
 
-      report('archive','4개 XLSX를 하나의 ZIP으로 묶습니다.',93);
+      report('files','판매처 XLSX 4개와 차단 목록을 준비합니다.',93);
       const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).map(part=>[part.type,part.value]));
       const stamp=`${parts.year}${parts.month}${parts.day}_${parts.hour}${parts.minute}`,stockLabel=stockSource==='stock'?'재고기준':'가용재고기준';
-      const fileName=`재고파일_${stamp}.zip`,zip=new window.JSZip();
-      const archiveFiles=outputFiles.map((output,index)=>{
+      const generatedFiles=outputFiles.map((output,index)=>{
         const base=output.source==='smartstore'?`스마트스토어_원본${index+1}_${stockLabel}_${stamp}.xlsx`:output.source==='makeshop'?`메이크샵_${stockLabel}_${stamp}.xlsx`:'에이블리_재고 수량 변경.xlsx';
-        return {...output,archiveName:base};
+        return {...output,name:base,fileName:base,originalName:output.file.name};
       });
-      archiveFiles.forEach(output=>zip.file(output.archiveName,output.blob));
-      const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
-      report('done',`ZIP 준비 완료 · XLSX 4개 · 매칭 SKU ${fmt(allSkus.size)}개 · 확인 필요 ${fmt(warnings.length)}건`,100);
-      const output={blob,fileName,files:archiveFiles.map(item=>({source:item.source,name:item.archiveName,fileName:item.archiveName,originalName:item.file.name})),warnings,matchedSkuCount:allSkus.size,stockSnapshotId:stockSnapshot.snapshotId,stockSource,ablySummary:ablyPlan.summary,ablyMappingFingerprint:ablyMapping.mappingFingerprint};
+      const blockedFile=blockedRows.length?window.SystemV3SellpiaInventoryCount.buildBlockedWorkbook(blockedRows,{XLSX:window.XLSX}):null;
+      report('done',`파일 준비 완료 · 판매처 XLSX 4개 · 차단 목록 ${fmt(blockedRows.length)}건`,100);
+      const output={files:generatedFiles,warnings,blockedRows,blockedFile,matchedSkuCount:allSkus.size,stockSnapshotId:stockSnapshot.snapshotId,stockSource,ablySummary:ablyPlan.summary,ablyMappingFingerprint:ablyMapping.mappingFingerprint};
       if(_inventoryUpdate){output.uploadResult=uploadResult;output.uploaded=inventoryUpdateCommitted;}
       return output;
     }catch(error){
@@ -8932,8 +8946,6 @@ window.SystemV3SellerExportBridge={
     const selectedFiles=Array.from(files||[]);
     if(!selectedFiles.length)throw Error('재고조사 결과 파일을 1개 이상 선택해주세요.');
     if(!expectedPreview?.fingerprint||!expectedPreview?.baseSnapshotId)throw Error('재고조사 미리보기를 먼저 완료해주세요.');
-    const summary=expectedPreview.summary||{};
-    if(Number(summary.errorRowCount||0)||Number(summary.duplicateConflictCount||0))throw Error('재고조사 파일의 숫자 오류 또는 중복 충돌을 먼저 해결해주세요. 업로드하지 않았습니다.');
     if(inventoryBatchRecovery?.expectedPreview?.fingerprint===expectedPreview.fingerprint&&inventoryBatchRecovery.uploadResult){
       return this.retryInventoryBatchExport({stockSource,onProgress});
     }
@@ -8957,7 +8969,7 @@ window.SystemV3SellerExportBridge={
     if(!saved?.uploadResult?.snapshotId||!saved?.expectedPreview?.fingerprint)throw Error('재시도할 완료 업로드 결과가 없습니다. 재고조사 미리보기부터 다시 진행해주세요.');
     if(typeof liveData?.checkOperationsHubSession!=='function')throw Error('운영 로그인 세션 확인 기능을 불러오지 못했습니다.');
     const session=await liveData.checkOperationsHubSession();
-    if(!session?.authenticated)throw Error('운영 로그인 세션이 만료되었습니다. 다시 로그인한 뒤 ZIP 생성을 재시도해주세요.');
+    if(!session?.authenticated)throw Error('운영 로그인 세션이 만료되었습니다. 다시 로그인한 뒤 파일 생성을 재시도해주세요.');
     return this.runInventoryBatch({stockSource:stockSource||saved.stockSource,onProgress,_inventoryUpdate:{files:saved.files,expectedPreview:saved.expectedPreview,skipUpload:true,uploadResult:saved.uploadResult}});
   },
   async refreshInventoryDrafts({source,skus=null,overwriteBlank=false,job=null,onProgress=null,onCheckpoint=null}={}){

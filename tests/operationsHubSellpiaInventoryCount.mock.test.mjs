@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../mockups/operations-hub/sellpia-inventory-count.js', import.meta.url), 'utf8');
-const context = vm.createContext({console});
+const context = vm.createContext({console, Blob});
 context.globalThis = context;
 vm.runInContext(source, context, {filename:'sellpia-inventory-count.js'});
 const api = context.SystemV3SellpiaInventoryCount;
@@ -20,6 +20,7 @@ test('accepts the real 19-column shape by header text and ignores unrelated colu
   assert.deepEqual(JSON.parse(JSON.stringify(parsed.records[0])), {
     file_name:'DATA pinkrocket01.xlsx', file_index:0, source_row_no:2,
     sellpia_sku_code:'1000-1', available_stock:936, stock:939,
+    raw_available_stock:936, raw_stock:939,
     status:'valid', reason:''
   });
 });
@@ -77,7 +78,7 @@ test('accepts signed PostgreSQL integer boundaries and rejects values outside th
   assert.match(parsed.records[3].reason, /DB 정수 범위 초과/);
 });
 
-test('multi-file merge deduplicates equal values and blocks conflicting values', () => {
+test('multi-file merge blocks every repeated SKU group, including identical values', () => {
   const a = api.parseSheetRows([
     ['상품코드','가용재고','재고'],
     ['same', 3, 5],
@@ -94,8 +95,15 @@ test('multi-file merge deduplicates equal values and blocks conflicting values',
   assert.equal(merged.readRowCount, 6);
   assert.equal(merged.duplicateSameCount, 1);
   assert.equal(merged.duplicateConflictCount, 1);
-  assert.equal(merged.rows.find(row => row.sellpia_sku_code === 'same').status, 'valid');
-  assert.equal(merged.rows.find(row => row.sellpia_sku_code === 'conflict').status, 'duplicate_conflict');
+  for (const sku of ['same', 'conflict']) {
+    const row = merged.rows.find(row => row.sellpia_sku_code === sku);
+    assert.equal(row.status, 'duplicate_sku');
+    assert.equal(row.occurrences.length, 2);
+  }
+  const preview = api.buildPreview(merged, ['same','conflict','only-a','only-b'].map(sku => ({sellpia_sku_code:sku,stock:0,available_stock:0})));
+  assert.deepEqual(Array.from(preview.changedRows,row=>row.sellpia_sku_code), ['only-a','only-b']);
+  assert.deepEqual(Array.from(preview.blockedSkus), ['same','conflict']);
+  assert.equal(preview.summary.blockedRowCount, 4);
 });
 
 test('preview classifies changed, unchanged, unknown, conflict, and invalid rows and uploads changes only', () => {
@@ -121,10 +129,39 @@ test('preview classifies changed, unchanged, unknown, conflict, and invalid rows
   assert.deepEqual(JSON.parse(JSON.stringify(preview.summary)), {
     fileCount:2, readRowCount:6, validSkuCount:2, changedSkuCount:1,
     unchangedSkuCount:1, unknownSkuCount:1, duplicateSameCount:0,
-    duplicateConflictCount:1, errorRowCount:1
+    duplicateConflictCount:1, errorRowCount:1, blockedSkuCount:3, blockedRowCount:4
   });
   assert.deepEqual(Array.from(preview.changedRows, row => row.sellpia_sku_code), ['changed']);
-  assert.deepEqual(new Set(preview.rows.map(row => row.preview_status)), new Set(['changed','unchanged','unknown_sku','duplicate_conflict','invalid']));
+  assert.deepEqual(new Set(preview.rows.map(row => row.preview_status)), new Set(['changed','unchanged','unknown_sku','duplicate_sku','invalid']));
+});
+
+test('valid plus invalid duplicate occurrences block the whole SKU and group counts are independent of multiplicity', () => {
+  const parsed = api.mergeRecords([api.parseSheetRows([
+    ['상품코드','가용재고','재고'],
+    ['same', 1, 2], ['same', 1, 2], ['same', 1, 2],
+    ['mixed', 3, 4], ['mixed', '', 4],
+    ['', 1, 2], ['normal', 5, 6],
+  ], {fileName:'duplicates.xlsx'})]);
+  const preview=api.buildPreview(parsed,[{sellpia_sku_code:'normal',stock:0,available_stock:0},{sellpia_sku_code:'mixed',stock:0,available_stock:0},{sellpia_sku_code:'same',stock:0,available_stock:0}]);
+  assert.equal(preview.summary.duplicateSameCount, 1);
+  assert.equal(preview.summary.duplicateConflictCount, 1);
+  assert.equal(preview.summary.errorRowCount, 2);
+  assert.equal(preview.summary.blockedSkuCount, 2);
+  assert.equal(preview.summary.blockedRowCount, 6);
+  assert.deepEqual(Array.from(preview.blockedRows,row=>[row.sellpia_sku_code,row.source_row_no]), [['same',2],['same',3],['same',4],['mixed',5],['mixed',6],['',7]]);
+  assert.deepEqual(Array.from(preview.changedRows,row=>row.sellpia_sku_code), ['normal']);
+});
+
+test('preview proof changes when blocked values, file provenance, or physical row positions change', () => {
+  const make=(raw='bad',fileName='input.xlsx',blank=false)=>api.buildPreview(api.mergeRecords([api.parseSheetRows([
+    ['상품코드','가용재고','재고'], ... (blank ? [[null,null,null]] : []),
+    ['blocked',raw,1], ['normal',2,3],
+  ],{fileName})]),[{sellpia_sku_code:'normal',stock:0,available_stock:0}],{baseSnapshotId:'snapshot-1'});
+  const proof=make();
+  assert.notEqual(proof.fingerprint,make('different').fingerprint);
+  assert.notEqual(proof.fingerprint,make('bad','renamed.xlsx').fingerprint);
+  assert.notEqual(proof.fingerprint,make('bad','input.xlsx',true).fingerprint);
+  assert.equal(make('bad','input.xlsx',true).blockedRows[0].source_row_no,3);
 });
 
 test('stock export projection chooses physical or available stock and fails closed on unusable values', () => {
