@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
 import '../mockups/operations-hub/discount-price-math.js';
 import '../mockups/operations-hub/seller-export-adapter.js';
 import '../mockups/operations-hub/current-price-export.js';
@@ -18,6 +19,19 @@ function assertFinals(p,expected){assert.deepEqual(p.preview.map(row=>row.diff.p
 {
  const p=plan(fixture());assertFinals(p,[30000,33500,39000]);assert.equal(p.preview[0].diff.price.after.base,34000);assert.equal(p.preview.filter(row=>row.preserve_unmapped).length,2);
  assert.equal(p.operations.length,0,'matching source price and original finals require no workbook edit');
+}
+{
+ const f=fixture({sourcePrices:{}}),event={sku:'A',source_channel:'smartstore',seller_product_code:'P',seller_option_code:'A',event_id:'decision-1',revision:4,decision_source:'manual',effective_at:'2026-10-08T00:00:00Z',price:{base:36000,discounted:32000,option:0,final:32000,terms:term(4000)}};
+ const p=api.prepareSellpiaSourcePricePlan('smartstore','smartstore.xlsx',f.rows,f.mappings,f.prices,f.selected,new Map(),new Map([['A',event]]));
+ assertFinals(p,[32000,33500,39000]);assert.equal(p.preview[0].price_source,'current_price_decision','the explicit current tuple takes priority over the Sellpia source price');
+ assert.equal(p.preview[0].current_price_decision_proof.event_id,'decision-1');assert.equal(p.preview[0].diff.price.after.base,36000);assert.equal(p.preview[0].diff.price.after.discounted,32000);
+ assert.ok(p.operations.some(item=>item.sellpia_sku_code==='A'&&item.pricing_input_mode==='current_price_decision'));
+ const conflict={...event,event_id:'decision-2',price:{...event.price,base:37000}};
+ const blocked=api.prepareSellpiaSourcePricePlan('smartstore','smartstore.xlsx',f.rows,f.mappings,f.prices,['A','B'],new Map(),new Map([['A',event],['B',conflict]]));
+ assert.equal(blocked.summary.blocked,f.rows.length,'inconsistent current shared-base decisions block the whole seller product');assert.equal(blocked.operations.length,0);
+ const accepted={source_channel:'smartstore',field_key:'sellpia_sale_price',sellpia_sku_code:'SKU-A',seller_product_code:'P',seller_option_code:'A',source_row_no:3,expected_source_value:20000,after_value:18900,target_base_price:20000,target_discounted_base_price:20000,target_option_price:-1100,target_final_price:18900,source_discount_terms:[],target_discount_terms:[]},applied=[];
+ const serialized=globalThis.SystemV3SellerExport.patchSmartstoreRow('<row r="3"><c r="F3"><v>20000</v></c><c r="P3" t="inlineStr"><is><t>A</t></is></c><c r="R3" t="inlineStr"><is><t>0</t></is></c></row>',[accepted],[],()=>{},item=>applied.push(item));
+ assert.equal(applied.length,1,'SmartStore serializer applies the current option tuple');assert.equal(Number(globalThis.SystemV3SellerExport.cellValue(serialized,'R3',[])),-1100);assert.equal(20000+Number(globalThis.SystemV3SellerExport.cellValue(serialized,'R3',[])),18900);
 }
 {
  const p=plan(fixture({sourcePrices:{A:32000}}));assertFinals(p,[32000,33500,39000]);assert.equal(p.preview[0].diff.price.after.base,36000);assert.equal(p.operations.length,3,'shared registration change rewrites every sibling option');assert.equal(p.operations.filter(item=>item.preserve_unmapped).length,2);

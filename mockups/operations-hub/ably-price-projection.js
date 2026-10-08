@@ -149,15 +149,26 @@ function projectionMetrics(representativeBase,targetFinals){
     if(originalBases.length!==1||!Number.isSafeInteger(originalBases[0])||originalBases[0]<0)throw Error(`${rowNo}행: PlayAuto 원본 공통 판매가가 불완전합니다.`);
     const policy=policyByRow.get(rowNo)||resolveCarrierPolicy({fallbackStrategy:priceMode==='rules'?'legacy_rules':'lowest',fallbackSource:'legacy fallback'});
     if(policy.status==='conflict')throw Error(policy.reason);
-    if(priceMode==='sellpia_source')for(const item of group.filter(row=>row._inScope)){const sku=clean(item.resolution?.sku);if(!finiteInteger(targetFinalBySku.get(sku))||Number(targetFinalBySku.get(sku))<=0)throw Error(`${sku}: 최신 셀피아 원본 판매가가 없습니다.`);}
-    const targetFinals=resolveTargetFinals(group,targetFinalBySku,originalBases[0]);
+    const currentEntries=group.map((item,index)=>({item,index,decision:item._currentPriceDecision})).filter(entry=>entry.decision);
+    if(priceMode==='sellpia_source')for(const item of group.filter(row=>row._inScope&&!row._currentPriceDecision)){const sku=clean(item.resolution?.sku);if(!finiteInteger(targetFinalBySku.get(sku))||Number(targetFinalBySku.get(sku))<=0)throw Error(`${sku}: 최신 셀피아 원본 판매가가 없습니다.`);}
+    const projectionTargetFinalBySku=new Map(targetFinalBySku||[]);
+    for(const {item,decision} of currentEntries){const sku=clean(item.resolution?.sku),value=decision.price?.final;if(!projectionTargetFinalBySku.has(sku)&&finiteInteger(value))projectionTargetFinalBySku.set(sku,Number(value));}
+    let targetFinals=resolveTargetFinals(group,projectionTargetFinalBySku,originalBases[0]);
     let legacyRulesBase=null;
     if(policy.strategy==='legacy_rules'){
      const values=[...new Set(group.filter(item=>item._inScope).map(item=>Number(legacyRulesBaseBySku.get(clean(item.resolution?.sku)))).filter(Number.isSafeInteger))];
      if(values.length!==1)throw Error('Rule 선택 SKU의 platformBase를 하나로 결정할 수 없습니다.');
      legacyRulesBase=values[0];
     }
-    const representativeBase=selectRepresentativeBase(targetFinals,policy.strategy,{existingBase:originalBases[0],legacyRulesBase});
+    if(currentEntries.length){
+     for(const {item,index,decision} of currentEntries){
+      const tuple=decision.price||{},sku=clean(item.resolution?.sku);
+      if(![tuple.base,tuple.discounted,tuple.option,tuple.final].every(finiteInteger)||tuple.discounted!==tuple.base||(tuple.terms||[]).length||tuple.final!==tuple.base+tuple.option)throw Error(`${sku}: 현재 가격 결정 tuple의 최종가를 안전하게 읽을 수 없습니다.`);
+      targetFinals[index]=tuple.final;
+     }
+    }
+    let representativeBase=selectRepresentativeBase(targetFinals,policy.strategy,{existingBase:originalBases[0],legacyRulesBase});
+    if(currentEntries.length&&policy.strategy==='legacy_rules'&&targetFinals.some(final=>final<representativeBase))representativeBase=Math.min(...targetFinals);
     projection={...projectionMetrics(representativeBase,targetFinals),priceMode,policy:{strategy:policy.strategy,source:policy.source,sourceLabel:policy.sourceLabel||policy.source,version:policy.version||1,policies:policy.policies||[]}};
     group.forEach((item,indexInGroup)=>{item._projection=projection;item._projectionTargetFinal=targetFinals[indexInGroup];item._projectionOptionDelta=projection.optionDeltas[indexInGroup];});
     if(policy.strategy==='lower_middle'&&!allowLowerMiddle)throw Error('lower_middle은 계산·미리보기만 지원합니다. PlayAuto/Ably 음수 옵션가 및 허용범위가 확인되기 전에는 다운로드를 차단합니다.');
@@ -167,7 +178,7 @@ function projectionMetrics(representativeBase,targetFinals){
      if(!Number.isSafeInteger(option))throw Error(`${rowNo}행: 목표 옵션가가 비정상입니다.`);
      if(representativeBase+option!==targetFinals[indexInGroup])throw Error(`${rowNo}행: I + T가 목표 최종가와 일치하지 않습니다.`);
      item.target_base_price=representativeBase;item.target_option_price=option;item._projection=projection;
-     item._priceState={safe:true,code:priceMode,label:item._inScope?(priceMode==='sellpia_source'?(item.carrier_variant_role==='addon'?'셀피아 원본 판매가 + carrier add-on':'셀피아 원본 판매가'):'Rule platformFinal'):'미선택 sibling 기존 최종가 보존'};
+     item._priceState={safe:true,code:item._currentPriceDecision?'current_price_decision':priceMode,label:item._currentPriceDecision?'현재 가격 결정':item._inScope?(priceMode==='sellpia_source'?(item.carrier_variant_role==='addon'?'셀피아 원본 판매가 + carrier add-on':'셀피아 원본 판매가'):'Rule platformFinal'):'미선택 sibling 기존 최종가 보존'};
      item._preserveUnselected=!item._inScope;
     });
    }catch(error){blockGroup(group,error,projection);}

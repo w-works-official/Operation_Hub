@@ -1,0 +1,6 @@
+[data-price-decision-panel]{margin-top:16px;padding-top:14px;border-top:1px solid var(--line,#e5e7eb)}
+[data-price-decision-panel] p{font-size:12px;line-height:1.6;margin:8px 0}
+[data-price-decision-panel] .drawer-section-actions{flex-wrap:wrap;gap:6px}
+[data-decision-candidate]{overflow:auto;max-height:240px;margin:10px 0}
+[data-decision-status].error{color:var(--danger,#dc2626)}
+.price-decision-source{display:block;font-size:10px;line-height:1.4;color:var(--primary,#1558c0);white-space:normal}

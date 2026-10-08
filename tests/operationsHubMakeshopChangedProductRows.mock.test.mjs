@@ -90,3 +90,17 @@ test('MakeShop applies shared and listed option prices for multiple products in 
   assert.equal(adapter.cellValue(xml,'V7',[]),'2500');
   assert.equal(adapter.cellValue(xml,'AF7',[]),'2500');
 });
+
+test('MakeShop XLSX roundtrip preserves an accepted current 18,900 price tuple',async()=>{
+  const rows=[
+    row(1,cell('E1','상품 고유번호')),
+    row(2,cell('E2','product_uid')),
+    row(3,cell('E3','111')+cell('U3','A')+cell('V3','0')+cell('AD3','A')+cell('AF3','0')+cell('AR3','1')+cell('AS3','20000')+cell('DD3','')+cell('AT3','0'))
+  ];
+  const item={...priceItem,seller_option_code:'1',source_row_no:3,expected_source_value:20000,after_value:18900,base_price:20000,option_price:0,target_base_price:20000,target_discounted_base_price:20000,target_option_price:-1100,target_final_price:18900,source_discount_terms:[],target_discount_terms:[],pricing_input_mode:'current_price_decision'};
+  const output=await adapter.transformSellerFile(await workbook(rows),[item]);
+  assert.equal(output.skippedItems.length,0);assert.equal(output.appliedItems.length,1);
+  const zip=await JSZip.loadAsync(await output.blob.arrayBuffer()),xml=await zip.file('xl/worksheets/sheet1.xml').async('string');
+  assert.equal(adapter.cellValue(xml,'AS3',[]),'20000');assert.equal(Number(adapter.cellValue(xml,'AF3',[])),-1100);assert.equal(adapter.cellValue(xml,'V3',[]),'-1100');
+  assert.equal(20000+Number(adapter.cellValue(xml,'AF3',[])),18900,'re-read workbook preserves the current final price');
+});

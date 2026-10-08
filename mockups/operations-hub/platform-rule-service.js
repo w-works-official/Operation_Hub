@@ -71,7 +71,10 @@
   const groups=new Map(), errors=[];
   for(const sku of targets){try{
    const p=products[sku];if(!p)throw Error('SKU 원본 없음');const component=p.__sellerPriceComponents?.[source];if(!component?.seller_product_code)throw Error('판매처 연결 없음');
-   const row={sku,product:p,component,discountTerms:component.source_discount_terms||[],manual:manualIntent(p,source),...evaluator.evaluate(sku)};
+   // Explicit Rule application may request a candidate from current source and
+   // Rule inputs while disregarding any existing seller draft. Keep preview
+   // and ordinary calculation behavior unchanged unless the caller opts in.
+   const row={sku,product:p,component,discountTerms:component.source_discount_terms||[],manual:context.ignoreManualIntent===true?{}:manualIntent(p,source),...evaluator.evaluate(sku)};
    for(const kind of ['registration','discount']){
     const assignment=assignmentSlots.get(model().key(sku,'platform_'+kind+'_price',source));
     const defaultId=config.body[kind+'_rule_id'];if(assignment&&defaultId&&assignment.rule_id!==defaultId)throw Error('같은 플랫폼 단계에 SKU Rule과 판매처 Rule이 충돌합니다.');

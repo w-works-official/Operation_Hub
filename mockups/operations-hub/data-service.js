@@ -645,6 +645,7 @@
       try{products = await attach(products, signal, prefetched);}catch(error){throw new Error('Matrix '+attach.name+': '+(error.message||String(error)));}
     }
     products = await attachStoredCalculatedPrices(products, signal);
+    products = await attachCurrentPriceDecisions(products, signal);
     try{products=await attachRepresentativePrices(products);}catch(error){console.warn('representative price detail enrichment failed',error);}
     if(global.HubMatrixShadow)products = await attachMatrixShadow(products, signal);
     throwIfAborted(signal);
@@ -1165,7 +1166,7 @@
         const normalizeAt=performance.now(),normalized=part.map(raw=>normalizeMatrixGridRow(raw,tagCatalog,linkBadgeCatalog));
         const normalizeMs=performance.now()-normalizeAt,serverMs=Number(result.server_ms),payloadBytes=Number(result.payload_bytes);
         if(Number.isFinite(serverMs))serverTimes.push(serverMs);
-        pageResults[index]=normalized;loadedTotal+=normalized.length;
+        pageResults[index]=typeof attachCurrentPriceDecisions==='function'?await attachCurrentPriceDecisions(normalized,signal):normalized;loadedTotal+=normalized.length;
         pageDiagnostics.push({page,cursor,loaded:part.length,nextSku:actualNext,
           serverMs:Number.isFinite(serverMs)?serverMs:null,clientMs:read.clientMs,
           payloadBytes:Number.isFinite(payloadBytes)?payloadBytes:null,normalizeMs,retries:read.retries,
@@ -1239,7 +1240,7 @@
       }
       if(part.length!==batch.length)throw Error('Matrix targeted row 누락 · 전체 DB 새로고침이 필요합니다.');
     }
-    return rows;
+    return typeof attachCurrentPriceDecisions==='function'?attachCurrentPriceDecisions(rows,signal):rows;
   }
 
   async function loadFullMatrixDataset({signal=null,onProgress=null}={}) {
@@ -2063,6 +2064,13 @@
   }
 
   async function saveSellerValueDraft({sku, source, fieldKey, after, batchId = null}) {
+    if(cleanText(fieldKey)==='sellpia_sale_price'){
+      const context=await loadCurrentPriceDecisions({source,skus:[sku]});
+      const targets=context.groups.flatMap(group=>group.targets).filter(target=>(target.member_skus||[target.sku]).includes(sku));
+      if(targets.length!==1)throw Error('가격 입력 대상이 여러 판매처 옵션에 연결되어 있습니다. 가격 셀에서 대상을 확인해주세요.');
+      const price=targets[0].current_state?.price||targets[0].price;
+      return saveSellerPriceDraft({sku,source,targetBasePrice:price.base,inputMode:'final',targetFinalPrice:Number(after),decisionContext:context,batchId});
+    }
     const {data, error} = await db.rpc('save_operations_hub_seller_value_draft', {
       p_sku:cleanText(sku),
       p_source:cleanText(source),
@@ -2111,21 +2119,80 @@
     return Array.isArray(data) ? data[0] : data;
   }
 
-  async function saveSellerPriceDraft({sku, source, targetBasePrice, inputMode = 'option', targetFinalPrice = null, optionPrice = null, optionPriceSource = 'original', basePriceSource = 'tag', priceRuleSetId = null, batchId = null}) {
-    const {data, error} = await db.rpc('save_operations_hub_seller_price_draft_v2', {
-      p_sku:cleanText(sku),
-      p_source:cleanText(source),
-      p_target_base_price:Number(targetBasePrice),
-      p_input_mode:cleanText(inputMode) || 'option',
-      p_option_price:optionPrice === null || optionPrice === undefined || optionPrice === '' ? null : Number(optionPrice),
-      p_target_final_price:targetFinalPrice === null || targetFinalPrice === undefined || targetFinalPrice === '' ? null : Number(targetFinalPrice),
-      p_option_price_source:cleanText(optionPriceSource) || 'original',
-      p_base_price_source:cleanText(basePriceSource) || 'tag',
-      p_price_rule_set_id:priceRuleSetId ? Number(priceRuleSetId) : null,
-      p_batch_id:batchId
-    });
-    if (error) throw error;
-    return Array.isArray(data) ? data[0] : data;
+  async function loadCurrentPriceDecisions({source,skus=[],signal=null}={}) {
+    const codes=[...new Set(skus.map(cleanText).filter(Boolean))],rows=[],groups=new Map();
+    if(!['smartstore','makeshop','ably'].includes(source))throw Error('가격 결정 판매처 오류');
+    for(let offset=0;offset<codes.length;offset+=200){
+      throwIfAborted(signal);
+      const {data,error}=await db.rpc('hub_price_decision_read_v1',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_skus:codes.slice(offset,offset+200)});
+      if(error)throw readableDatabaseError(error);
+      if(!Array.isArray(data?.rows)||!Array.isArray(data?.groups))throw Error('현재 가격 응답 형식 오류');
+      rows.push(...data.rows);
+      for(const group of data.groups){
+        const previous=groups.get(group.seller_product_code);
+        if(previous&&JSON.stringify(previous)!==JSON.stringify(group))throw Error('현재 가격 조회 중 결정 또는 원본이 변경되었습니다. 다시 확인해주세요.');
+        groups.set(group.seller_product_code,group);
+      }
+    }
+    return {rows,groups:[...groups.values()]};
+  }
+
+  async function attachCurrentPriceDecisions(products,signal=null) {
+    const codes=[...new Set(products.map(row=>cleanText(row.sellpia_sku_code)).filter(Boolean))],bySku=new Map();
+    for(let offset=0;offset<codes.length;offset+=2000){
+      throwIfAborted(signal);
+      const {data,error}=await db.rpc('hub_price_decision_matrix_read_v1',{p_session_token:requireOperationsHubSessionToken(),p_skus:codes.slice(offset,offset+2000)});
+      if(error)throw readableDatabaseError(error);
+      if(!Array.isArray(data?.rows))throw Error('Matrix 현재 가격 응답 형식 오류');
+      for(const row of data.rows){
+        const sku=cleanText(row.sku||row.sellpia_sku_code);if(!bySku.has(sku))bySku.set(sku,{});
+        (bySku.get(sku)[row.source_channel]??=[]).push(row);
+      }
+    }
+    return products.map(product=>({...product,__priceDecisions:bySku.get(cleanText(product.sellpia_sku_code))||{}}));
+  }
+
+  async function applyPriceDecision({source,decisionSource,groups,manualActions=[],reason='',requestId=null,rollbackEventId=null}={}) {
+    const body={source,decision_source:decisionSource,groups,reason};
+    if(manualActions.length)body.manual_actions=manualActions;
+    if(rollbackEventId!==null)body.rollback_event_id=rollbackEventId;
+    const id=requestId||global.crypto.randomUUID();
+    const {data,error}=await db.rpc('hub_price_decision_apply_v1',{p_session_token:requireOperationsHubSessionToken(),p_request_id:id,p_body:body});
+    if(error)throw readableDatabaseError(error);
+    if(!Array.isArray(data?.rows)||!Array.isArray(data?.items))throw Error('가격 결정 저장 응답 형식 오류');
+    return {...data,items:data.items.map(item=>({...item,result:{...item.result,decision:data.rows.find(row=>(row.sku||row.sellpia_sku_code)===item.sku)}}))};
+  }
+
+  async function loadPriceDecisionHistory({source,productCode,limit=100}={}) {
+    const {data,error}=await db.rpc('hub_price_decision_history_v1',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_product_code:productCode,p_limit:limit});
+    if(error)throw readableDatabaseError(error);return data;
+  }
+
+  function priceDecisionGroups(context,productCode=null) {
+    return context.groups.filter(group=>!productCode||group.seller_product_code===productCode).map(group=>({...group,expected_revision:group.revision,
+      targets:group.targets.map(target=>({...target,price:target.current_state?.price||target.price,intent:{input_mode:'preserve'}}))}));
+  }
+
+  async function saveManualPriceDecision({source,skus,actions,productCode=null,decisionContext=null,requestId=null}) {
+    const context=decisionContext||await loadCurrentPriceDecisions({source,skus});
+    const groups=priceDecisionGroups(context,productCode);
+    if(!groups.length)throw Error('최신 판매처 연결과 원본을 찾지 못했습니다.');
+    return applyPriceDecision({source,decisionSource:'matrix_manual',groups,manualActions:actions,reason:'Matrix 가격 저장',requestId});
+  }
+
+  async function saveSellerPriceDraft({sku, source, targetBasePrice, inputMode = 'option', targetFinalPrice = null, optionPrice = null, optionPriceSource = 'original', basePriceSource = 'tag', priceRuleSetId = null, batchId = null,decisionContext=null,requestId=null,sellerProductCode=null,sellerOptionCode=null}) {
+    const context=decisionContext||await loadCurrentPriceDecisions({source,skus:[sku]});
+    const action={kind:'price',sku:cleanText(sku),seller_product_code:sellerProductCode,seller_option_code:sellerOptionCode,target_base_price:Number(targetBasePrice),input_mode:inputMode,option_price:optionPrice,target_final_price:targetFinalPrice,option_price_source:optionPriceSource,base_price_source:basePriceSource,price_rule_set_id:priceRuleSetId};
+    const actions=[action];
+    if(basePriceSource==='manual'&&inputMode==='option')for(const group of context.groups){
+      if(sellerProductCode&&group.seller_product_code!==sellerProductCode)continue;
+      if(!group.targets.some(target=>(target.member_skus||[target.sku]).includes(sku)))continue;
+      if(group.targets.some(target=>(target.current_state?.price||target.price)?.base!==Number(targetBasePrice))){
+        for(const target of group.targets)if(!(target.member_skus||[target.sku]).includes(sku))actions.push({...action,sku:target.sku,seller_product_code:group.seller_product_code,seller_option_code:target.seller_option_code,option_price:(target.current_state?.price||target.price).option,option_price_source:'original'});
+      }
+    }
+    const result=await saveManualPriceDecision({source,skus:[sku],productCode:sellerProductCode,decisionContext:context,requestId:requestId||batchId,actions});
+    return result.items.find(item=>item.sku===cleanText(sku))?.result;
   }
 
   async function saveProductLinkDraft({sku, source, productCode}) {
@@ -2169,119 +2236,41 @@
     return Array.isArray(data) ? data[0] : data;
   }
 
-  async function saveSellerDiscountDraft({sku, source, discountTerms = [], inputMode = 'option', targetFinalPrice = null, optionPrice = null, batchId = null}) {
-    const {data, error} = await db.rpc('save_operations_hub_seller_discount_draft', {
-      p_sku:cleanText(sku),
-      p_source:cleanText(source),
-      p_discount_terms:Array.isArray(discountTerms) ? discountTerms : [],
-      p_input_mode:cleanText(inputMode) || 'option',
-      p_option_price:optionPrice === null || optionPrice === undefined || optionPrice === '' ? null : Number(optionPrice),
-      p_target_final_price:targetFinalPrice === null || targetFinalPrice === undefined || targetFinalPrice === '' ? null : Number(targetFinalPrice),
-      p_batch_id:batchId
-    });
-    if (error) throw error;
-    return Array.isArray(data) ? data[0] : data;
+  async function saveSellerDiscountDraft({sku,source,discountTerms=[],inputMode='option',targetFinalPrice=null,optionPrice=null,batchId=null,decisionContext=null,requestId=null,sellerProductCode=null,sellerOptionCode=null}) {
+    const result=await saveManualPriceDecision({source,skus:[sku],decisionContext,requestId:requestId||batchId,
+      actions:[{kind:'discount',sku:cleanText(sku),seller_product_code:sellerProductCode,seller_option_code:sellerOptionCode,discount_terms:discountTerms,input_mode:inputMode,option_price:optionPrice,target_final_price:targetFinalPrice}]});
+    return result.items[0]?.result;
   }
 
-  async function saveSellerProductDiscountDrafts({source, productCode, anchorSku = null, discountTerms = [], ruleCode = null, calculationMode = 'forward'}) {
-    const normalizedSource = cleanText(source);
-    const normalizedProductCode = cleanText(productCode);
-    const sourceField = {smartstore:'smartstore_product_code',makeshop:'makeshop_product_code',ably:'ably_product_code'}[normalizedSource];
-    if (!sourceField || !normalizedProductCode) throw new Error('판매처와 상품코드를 확인해주세요.');
-    if (normalizedSource !== 'ably') {
-      const batchId = global.crypto?.randomUUID?.() || null;
-      const {data, error} = await db.rpc('save_operations_hub_seller_product_discount_mode_v1', {
-        p_source:normalizedSource,
-        p_product_code:normalizedProductCode,
-        p_anchor_sku:cleanText(anchorSku) || null,
-        p_discount_terms:Array.isArray(discountTerms) ? discountTerms : [],
-        p_rule_code:ruleCode === null || ruleCode === undefined ? null : cleanText(ruleCode),
-        p_calculation_mode:cleanText(calculationMode) || 'forward',
-        p_batch_id:batchId
-      });
-      if (error) throw readableDatabaseError(error);
-      const rows = Array.isArray(data) ? data : (data ? [data] : []);
-      return {
-        items:rows.map(result => ({sku:cleanText(result.sellpia_sku_code), result})),
-        count:rows.length,
-        batchId:rows[0]?.change_batch_id || batchId,
-        atomic:true
-      };
+  async function sellerProductPriceContext(source,productCode,decisionContext=null) {
+    if(decisionContext)return decisionContext;
+    const field={smartstore:'smartstore_product_code',makeshop:'makeshop_product_code',ably:'ably_product_code'}[source];
+    if(!field||!productCode)throw Error('판매처와 상품코드를 확인해주세요.');
+    const rows=[];
+    for(let from=0;;from+=1000){
+      const {data,error}=await db.from('operations_hub_matrix_cached').select('sellpia_sku_code').eq(field,productCode).range(from,from+999);
+      if(error)throw readableDatabaseError(error);rows.push(...data||[]);if((data||[]).length<1000)break;
     }
-    const rows = [];
-    for (let from = 0; ; from += 1000) {
-      const {data, error} = await db.from('operations_hub_matrix_cached').select(`sellpia_sku_code,${sourceField}`).eq(sourceField, normalizedProductCode).range(from, from + 999);
-      if (error) throw error;
-      rows.push(...(data || []));
-      if ((data || []).length < 1000) break;
-    }
-    const products = await attachSellerPriceComponents(rows);
-    const batchId = global.crypto?.randomUUID?.() || `seller-discount-${Date.now()}`;
-    const items = [];
-    for (let offset = 0; offset < products.length; offset += 6) {
-      const saved = await Promise.all(products.slice(offset, offset + 6).map(product => {
-        const component = product.__sellerPriceComponents?.[normalizedSource] || {};
-        return saveSellerDiscountDraft({
-          sku:product.sellpia_sku_code,
-          source:normalizedSource,
-          discountTerms,
-          inputMode:'option',
-          optionPrice:component.draft_option_price ?? component.source_option_price ?? 0,
-          batchId
-        }).then(result => ({sku:product.sellpia_sku_code,result}));
-      }));
-      items.push(...saved);
-    }
-    return {items, count:items.length, batchId, atomic:false};
+    if(!rows.length)throw Error('같은 판매처 상품코드에 연결된 SKU를 찾지 못했습니다.');
+    return loadCurrentPriceDecisions({source,skus:rows.map(row=>row.sellpia_sku_code)});
   }
 
-  async function saveSellerProductBaseDrafts({source, productCode, targetBasePrice, basePriceSource = 'manual'}) {
-    const normalizedSource = cleanText(source);
-    const normalizedProductCode = cleanText(productCode);
-    const sourceFields = {
-      smartstore:'smartstore_product_code',
-      makeshop:'makeshop_product_code',
-      ably:'ably_product_code'
-    };
-    const sourceField = sourceFields[normalizedSource];
-    if (!sourceField || !normalizedProductCode) throw new Error('판매처와 상품코드를 확인해주세요.');
-    const rows = [];
-    for (let from = 0; ; from += 1000) {
-      const {data, error} = await db
-        .from('operations_hub_matrix_cached')
-        .select(`sellpia_sku_code,${sourceField}`)
-        .eq(sourceField, normalizedProductCode)
-        .range(from, from + 999);
-      if (error) throw error;
-      rows.push(...(data || []));
-      if ((data || []).length < 1000) break;
-    }
-    const products = await attachSellerPriceComponents(rows);
-    if (!products.length) throw new Error('같은 판매처 상품코드에 연결된 SKU를 찾지 못했습니다.');
-    const batchId = global.crypto?.randomUUID?.() || `seller-base-${Date.now()}`;
-    const items = [];
-    const concurrency = 6;
-    for (let offset = 0; offset < products.length; offset += concurrency) {
-      const chunk = products.slice(offset, offset + concurrency);
-      const saved = await Promise.all(chunk.map(async product => {
-        const component = product.__sellerPriceComponents?.[normalizedSource] || {};
-        const optionPrice = component.draft_option_price ?? component.source_option_price ?? 0;
-        const result = await saveSellerPriceDraft({
-          sku:product.sellpia_sku_code,
-          source:normalizedSource,
-          targetBasePrice:Number(targetBasePrice),
-          inputMode:'option',
-          optionPrice,
-          optionPriceSource:component.option_price_source || 'original',
-          basePriceSource:cleanText(basePriceSource) || 'manual',
-          priceRuleSetId:component.price_rule_set_id || null,
-          batchId
-        });
-        return {sku:product.sellpia_sku_code, result};
-      }));
-      items.push(...saved);
-    }
-    return {source:normalizedSource, productCode:normalizedProductCode, savedCount:items.length, items};
+  async function saveSellerProductDiscountDrafts({source,productCode,anchorSku=null,discountTerms=[],ruleCode=null,calculationMode='forward',decisionContext=null,requestId=null}) {
+    const context=await sellerProductPriceContext(source,productCode,decisionContext),group=context.groups.find(group=>group.seller_product_code===productCode);
+    if(!group)throw Error('최신 판매처 상품 연결을 찾지 못했습니다.');
+    const actions=source!=='ably'?[{kind:'product_discount',product_code:productCode,anchor_sku:anchorSku,discount_terms:discountTerms,rule_code:ruleCode,calculation_mode:calculationMode}]
+      :group.targets.map(target=>({kind:'discount',sku:target.sku,seller_product_code:productCode,seller_option_code:target.seller_option_code,discount_terms:discountTerms,input_mode:'option',option_price:(target.current_state?.price||target.price).option}));
+    const result=await saveManualPriceDecision({source,skus:group.targets.map(target=>target.sku),actions,productCode,decisionContext:context,requestId});
+    return {...result,count:result.items.length,batchId:result.request_id,atomic:true};
+  }
+
+  async function saveSellerProductBaseDrafts({source,productCode,targetBasePrice,basePriceSource='manual',decisionContext=null,requestId=null}) {
+    const context=await sellerProductPriceContext(source,productCode,decisionContext),group=context.groups.find(group=>group.seller_product_code===productCode);
+    if(!group)throw Error('최신 판매처 상품 연결을 찾지 못했습니다.');
+    const actions=group.targets.map(target=>({kind:'price',sku:target.sku,seller_product_code:productCode,seller_option_code:target.seller_option_code,target_base_price:Number(targetBasePrice),input_mode:'option',
+      option_price:(target.current_state?.price||target.price).option,option_price_source:'original',base_price_source:basePriceSource}));
+    const result=await saveManualPriceDecision({source,skus:group.targets.map(target=>target.sku),actions,productCode,decisionContext:context,requestId});
+    return {...result,source,productCode,savedCount:result.items.length};
   }
 
   async function loadPriceRuleTags() {
@@ -4859,6 +4848,9 @@
     loadMatrixStocksForExport,
     loadMatrixExportSnapshot,
     loadCarrierMatrixTargets,
+    loadCurrentPriceDecisions,
+    applyPriceDecision,
+    loadPriceDecisionHistory,
     summarizeMatrixStocksForExport,
     saveTagRule,
     loadAblyComponentStocks,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import '../mockups/operations-hub/current-price-export.js';
 
 const source=fs.readFileSync('mockups/operations-hub/app.js','utf8');
 const start=source.indexOf('async function prepareChangedOnlyExport(');
@@ -10,7 +11,7 @@ assert.ok(start>=0&&end>start);
 const functionSource=source.slice(start,end);
 
 test('changed-only export derives its authoritative scope from carrier identities, never a full Matrix snapshot',async()=>{
- const calls=[];
+ const calls=[];let decisionReads=0;
  const file={name:'actual-carrier.xlsx'};
  const carrierRows=[{product_code:'P1',option_code:'O1',source_row_no:2,stock:4,base_price:1000,discounted_base_price:1000,option_price:0,final_price:1000,discount_terms:[]}];
  const ctx={
@@ -20,24 +21,26 @@ test('changed-only export derives its authoritative scope from carrier identitie
    async downloadLatestSellerOriginals(sources){calls.push(['files',sources]);return new Map([['smartstore',[file]]]);},
    async loadCarrierSellerMappings({source,identities,onQuery}){calls.push(['mapping',source,identities.length]);onQuery({query:'carrier seller identity',scope_count:1,latency_ms:1,status:'ok'});return {rows:[{sku:'S1',product_code:'P1',option_code:'O1'}]};},
    async loadCarrierMatrixTargets({source,skus,onQuery}){calls.push(['targets',source,[...skus]]);onQuery({query:'hub_carrier_targets_read_v1',scope_count:1,latency_ms:2,status:'ok'});return {rows:[{sku:'S1',seller_stock:4,active_price_rule:false}]};},
+   async loadCurrentPriceDecisions(){decisionReads++;return {rows:[],groups:[]};},
    loadMatrixExportSnapshot(){throw Error('full Matrix snapshot must never be called');}
   },
   window:{
    SystemV3SellerParsers:{async parseSellerFiles(){return {normalizedRows:carrierRows};}},
-   HubCurrentPriceExport:{prepareCarrierItems(source,name,rows,snapshot){calls.push(['plan',source,name,rows.length,snapshot.length]);return {operations:[],excludedItems:[]};}}
+   HubCurrentPriceExport:globalThis.HubCurrentPriceExport,
+   HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver
   }
  };
  vm.createContext(ctx);vm.runInContext(functionSource+'\nthis.prepare=prepareChangedOnlyExport;',ctx);
  let reference=null;
  for(let repeat=0;repeat<5;repeat++){
-  const result=await ctx.prepare('smartstore',null,{download:false});
+  const result=await ctx.prepare('smartstore',null,{download:false,includePrice:false,includeStock:true});
   const compact={carrier_rows:result.diagnostics.carrier_rows,sku_count:result.diagnostics.sku_count,query_count:result.diagnostics.query_count,changed:result.changedItems.length};
   if(reference)assert.deepEqual(compact,reference);else reference=compact;
   assert.equal(result.diagnostics.full_snapshot,false);
  }
- assert.deepEqual(reference,{carrier_rows:1,sku_count:1,query_count:2,changed:0});
- assert.equal(calls.filter(call=>call[0]==='targets').length,5);
- assert.ok(calls.filter(call=>call[0]==='targets').every(call=>call[2].length===1&&call[2][0]==='S1'));
+ assert.deepEqual(reference,{carrier_rows:1,sku_count:1,query_count:1,changed:0});
+ assert.equal(calls.filter(call=>call[0]==='targets').length,0,'stock-only preview does not read price targets');
+ assert.equal(decisionReads,0,'stock-only preview never invokes the current-price-decision RPC');
 });
 
 test('carrier RPC migration splits direct SKU and seller identity probes without a broad OR scan',()=>{

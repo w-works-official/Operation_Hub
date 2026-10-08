@@ -14,6 +14,7 @@ const xlsxScript=process.env.XLSX_BROWSER_SCRIPT&&fs.existsSync(process.env.XLSX
  :await (await fetch('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js')).text();
 
 const helpers=workflow.slice(workflow.indexOf(' const ablyPhases='),workflow.indexOf('\n async function loadStatuses('));
+const decisionHelper=workflow.slice(workflow.indexOf(' async function loadCurrentPriceDecisionState('),workflow.indexOf('\n function updateExportPresetState(',workflow.indexOf(' async function loadCurrentPriceDecisionState(')));
 const previewSource=workflow.slice(workflow.indexOf(' async function preview(role)'),workflow.indexOf('\n function previewRowsForFilter('));
 const renderSource=workflow.slice(workflow.indexOf(' function previewRowsForFilter('),workflow.indexOf('\n async function generate('));
 const generateSource=workflow.slice(workflow.indexOf(' async function generate('),workflow.indexOf('\n function renameLegacyExportUi('));
@@ -34,7 +35,7 @@ test('synthetic workbook exercises the actual Ably operator preview, guard, conf
   await page.addScriptTag({content:xlsxScript});
   await page.addScriptTag({content:fs.readFileSync(require.resolve('jszip/dist/jszip.min.js'),'utf8')});
   for(const script of ['discount-price-math.js','current-price-export.js','ably-stock-export.js','seller-export-adapter.js','ably-price-projection.js','ably-playauto-export.js'])await page.addScriptTag({path:path.join(root,script)});
-  await page.evaluate(({bytes,helpers,previewSource,renderSource,generateSource})=>{
+  await page.evaluate(({bytes,helpers,decisionHelper,previewSource,renderSource,generateSource})=>{
    const file=new File([new Uint8Array(bytes)],'ably-price-projection-synthetic.xlsx');
    const state={carrierFiles:new Map([['playauto_product',file]]),ablyJob:null,ablyJobSequence:0,preview:null,previewFilter:'all',previewPage:1};
    const roles={playauto_product:{label:'판매가 + 옵션가',type:'product_price_option'}};
@@ -49,25 +50,27 @@ test('synthetic workbook exercises the actual Ably operator preview, guard, conf
    const scenario={selected:['CASE-C-1'],prices:{'CASE-C-1':32000},policies:[policyDoc('lowest','low','최저가',2)],fingerprint:'case-c-low-v2'};
    let catalogRows=[];
    const D=()=>({
-    loadCarrierSellerMappings:async()=>({rows:[]}),
+   loadCarrierSellerMappings:async()=>({rows:[]}),
+    loadCurrentPriceDecisions:async()=>({rows:[],groups:[]}),
     loadSellpiaSourcePricesForExport:async({skus})=>new Map(skus.map(sku=>[sku,scenario.prices[sku]])),
     loadAblyCarrierPoliciesForSkus:async({skus})=>({rows:skus.map(sku=>({sku,tags:scenario.selected.includes(sku)?structuredClone(scenario.policies):[]})),fingerprint:scenario.fingerprint})
    });
    const A=()=>window.AblyPlayautoExport,P=()=>window.AblyPriceProjection;
    const catalog=async()=>catalogRows;
    const scopeSkus=async()=>new Set(scenario.selected);
-   const preview=Function('state','roles','setStatus','createAblyJob','document','global','blobFile','A','D','P','catalog','scopeSkus','renderPreview','n',`${previewSource};return preview;`)(state,roles,setStatus,createAblyJob,document,window,async()=>file,A,D,P,catalog,scopeSkus,renderPreview,n);
+   const preview=Function('state','roles','setStatus','createAblyJob','document','global','blobFile','A','D','P','catalog','scopeSkus','renderPreview','n',`${decisionHelper};${previewSource};return preview;`)(state,roles,setStatus,createAblyJob,document,window,async()=>file,A,D,P,catalog,scopeSkus,renderPreview,n);
    window.SystemV3SellerExport={...window.SystemV3SellerExport,downloadBlob:(blob,name)=>downloads.push({blob,name}),conflictCsv:()=>''};
-   const generate=Function('state','setStatus','preview','setSellerPanel','document','A','safeName','global','n','roles',`${generateSource};return generate;`)(state,setStatus,preview,setSellerPanel,document,A,value=>String(value).replace(/[^\p{L}\p{N}._-]+/gu,'_'),window,n,roles);
+   const generate=Function('state','setStatus','preview','setSellerPanel','document','A','safeName','global','n','roles','D',`${decisionHelper};${generateSource};return generate;`)(state,setStatus,preview,setSellerPanel,document,A,value=>String(value).replace(/[^\p{L}\p{N}._-]+/gu,'_'),window,n,roles,D);
    window.syntheticQa={state,scenario,messages,downloads,policyDoc,preview,generate,setCatalog:rows=>{catalogRows=rows;}};
-  },{bytes:Array.from(fixture),helpers,previewSource,renderSource,generateSource});
+  },{bytes:Array.from(fixture),helpers,decisionHelper,previewSource,renderSource,generateSource});
 
   await page.evaluate(async()=>{
    const parsed=await AblyPlayautoExport.readTemplate(syntheticQa.state.carrierFiles.get('playauto_product'));
    syntheticQa.setCatalog([...new Map(parsed.items.filter(item=>item.direct_sellpia_sku_code).map(item=>[item.direct_sellpia_sku_code,{sellpia_product_code:item.sellpia_product_code,sellpia_sku_code:item.direct_sellpia_sku_code}])).values()]);
   });
 
-  const lowest=await page.evaluate(async()=>{const preview=await syntheticQa.preview('playauto_product');return {copy:document.getElementById('export-preview-copy').textContent,rows:document.getElementById('export-preview-rows').textContent,disabled:document.getElementById('export-preview-generate').disabled,token:preview.versionToken,counts:preview.counts,output:preview.output.filter(row=>row.source_row_no===4).map(row=>({base:row.target_base_price,option:row.target_option_price,final:row._projectionTargetFinal,preserve:row._preserveUnselected}))};});
+  const lowest=await page.evaluate(async()=>{const preview=await syntheticQa.preview('playauto_product');return {copy:document.getElementById('export-preview-copy').textContent,rows:document.getElementById('export-preview-rows').textContent,disabled:document.getElementById('export-preview-generate').disabled,token:preview?.versionToken,counts:preview?.counts,output:preview?.output?.filter(row=>row.source_row_no===4).map(row=>({base:row.target_base_price,option:row.target_option_price,final:row._projectionTargetFinal,preserve:row._preserveUnselected})),messages:syntheticQa.messages};});
+  assert.ok(lowest.token,JSON.stringify(lowest));
   assert.match(lowest.copy,/Price source: sellpia_source/);assert.match(lowest.copy,/Resolved Ably policy: lowest · tag 최저가 \(v2\)/);
   assert.match(lowest.copy,/같은 PlayAuto 상품 행 전체 T를 다시 계산/);assert.match(lowest.rows,/I 30,000 \/ T 3,500 \/ 최종 33,500/);
   assert.equal(lowest.disabled,false);assert.equal(lowest.counts.pricePreserved,2);

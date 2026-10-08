@@ -9,13 +9,28 @@ import '../mockups/operations-hub/current-price-export.js';
 let JSZip=null;
 try { ({default:JSZip}=await import('jszip')); } catch {}
 const api=globalThis.HubCurrentPriceExport,clone=value=>structuredClone(value),sources=['smartstore','makeshop','ably'];
+{
+ const resolver=globalThis.HubCurrentPriceDecisionResolver,tuple={base:5000,discounted:5000,option:100,final:5100,terms:[]},response={rows:[{sku:'A',source_channel:'smartstore',seller_product_code:'P',seller_option_code:'1',price:tuple,event_id:'event-1',revision:2,decision_source:'manual',effective_at:'2026-10-08T00:00:00Z',mapping_valid:true},{sku:'A',source_channel:'smartstore',seller_product_code:'Q',seller_option_code:'2',price:{...tuple,option:200,final:5200},event_id:'event-2',revision:4,decision_source:'manual',effective_at:'2026-10-08T00:01:00Z',mapping_valid:true}],groups:[{source_channel:'smartstore',seller_product_code:'P',revision:2,mapping_fingerprint:'map-a',input_fingerprints:{source:'a'},snapshot_id:'snap-1',mapping_valid:true,targets:[{sku:'A',member_skus:['A'],seller_product_code:'P',seller_option_code:'1',price:tuple,current_state:{price:tuple,event_id:'event-1',revision:2},source_row_no:4,raw_payload:{private:'excluded from proof'}}]},{source_channel:'smartstore',seller_product_code:'Q',revision:4,mapping_fingerprint:'map-b',input_fingerprints:{source:'b'},snapshot_id:'snap-2',mapping_valid:true,targets:[{sku:'A',member_skus:['A'],seller_product_code:'Q',seller_option_code:'2',price:{...tuple,option:200,final:5200},current_state:{price:{...tuple,option:200,final:5200},event_id:'event-2',revision:4},source_row_no:8}]}]};
+ const first=resolver.normalize(response,{source:'smartstore',skus:['A']}),proof=resolver.proof(first);
+ const attached=resolver.attach([{sku:'A',seller_product_code:'P',seller_option_code:'1'},{sku:'A',seller_product_code:'Q',seller_option_code:'2'}],first,{source:'smartstore'});
+ assert.equal(resolver.decisionForMapping(first,{sku:'A',seller_product_code:'P',seller_option_code:'1'}).event_id,'event-1');
+ assert.equal(resolver.decisionForMapping(first,{sku:'A',seller_product_code:'Q',seller_option_code:'2'}).event_id,'event-2');
+ assert.equal(attached.size,2,'the same SKU can retain distinct current price tuples at different exact seller identities');
+ assert.equal(resolver.decisionForMapping(first,{sku:'A',seller_product_code:'OTHER',seller_option_code:'1'}),null,'SKU-only fanout does not attach a decision to a different carrier identity');
+ assert.throws(()=>resolver.attach([{sku:'A',seller_product_code:'P',seller_option_code:'1'},{sku:'B',seller_product_code:'P',seller_option_code:'1'}],first,{source:'smartstore'}),/여러 SKU/);
+ const noCurrent=resolver.normalize({rows:[],groups:[]},{source:'smartstore',skus:['A']});assert.notEqual(resolver.proof(noCurrent),proof,'no-current proof is explicit');
+ const sameValueReupload=resolver.normalize({...response,rows:[{...response.rows[0],event_id:'event-3',revision:3,effective_at:'2026-10-08T01:00:00Z'},response.rows[1]],groups:[{...response.groups[0],revision:3,snapshot_id:'snap-3'},response.groups[1]]},{source:'smartstore',skus:['A']});
+ assert.notEqual(resolver.proof(sameValueReupload),proof,'a new event/revision remains detectable even when the price tuple is unchanged');
+ assert.ok(!proof.includes('private'),'proof does not copy raw seller payloads');
+ assert.throws(()=>resolver.normalize({rows:[{...response.rows[0],price:{...tuple,final:999}}]},{source:'smartstore',skus:['A']}),/tuple이 일치하지 않습니다/);
+}
 const forbidden=name=>()=>{throw Error('Export must not call '+name);};
 globalThis.HubPlatformRules=new Proxy({}, {get:(_,name)=>forbidden('HubPlatformRules.'+String(name))});
 globalThis.HubRuleRegistry=new Proxy({}, {get:(_,name)=>forbidden('HubRuleRegistry.'+String(name))});
 function fixture(){
  const calls=[];
  const rows=sources.flatMap(source=>['A','B','C','D'].map((sku,i)=>({sellpia_sku_code:sku,source_channel:source,seller_product_code:i<2?'P':'Q',seller_option_code:sku,base_price:i<2?5000:9000,discounted_base_price:i<2?5000:9000,option_price:i%2?2000:0,final_price:5000+i*2000,discount_terms:[],rule_versions:[{id:'stored-rule',version:9}],price_version:9,generation_id:'stored-generation',status:'ready'})));
- const missing=[];
+ const missing=[];let currentDecisionResponse={rows:[],groups:[]};
  const originals=Object.fromEntries(sources.map(source=>[source,['A','B','C','D'].map((sku,i)=>({product_code:i<2?'P':'Q',option_code:sku,base_price:9000,discounted_base_price:9000,option_price:0,final_price:9000,discount_terms:[],source_row_no:i+2,raw_payload:{source_file_name:source+'.csv'}}))]));
  const files=new Map(sources.map(source=>[source,[{name:source+'.csv'}]]));
  globalThis.SystemV3Data={
@@ -25,11 +40,12 @@ function fixture(){
    current_effective_price:r.current_error?null:{platformBase:r.base_price,platformDiscount:Number(r.base_price)-Number(r.discounted_base_price),platformOption:r.option_price,platformFinal:r.final_price,platformTerms:r.discount_terms,versions:r.rule_versions},
    current_effective_error:r.current_error||(r.final_price===null||r.final_price===undefined||r.final_price===''||!Number.isFinite(Number(r.final_price))?'현재 가격 target 계산 실패':null)
   })))};},
+  async loadCurrentPriceDecisions(){return clone(currentDecisionResponse);},
   ruleRegistry:forbidden('ruleRegistry'),workDocument:forbidden('workDocument'),loadFormulaProducts:forbidden('loadFormulaProducts'),loadRulePlatformSiblings:forbidden('loadRulePlatformSiblings'),loadAllFilteredSkus:forbidden('loadAllFilteredSkus'),loadProductsBySkus:forbidden('loadProductsBySkus')
  };
  globalThis.SystemV3SellerParsers={parseSellerFiles:async(source,files)=>{assert.equal(files[0].name,source+'.csv');return {normalizedRows:clone(originals[source])};}};
  const stock={export_item_id:91,sellpia_sku_code:'A',source_channel:'ably',field_key:'sellpia_current_stock',seller_product_code:'P',seller_option_code:'A',source_file_name:'ably.csv',source_row_no:2,expected_source_value:40,after_value:7};
- return {calls,rows,missing,originals,files,stock};
+ return {calls,rows,missing,originals,files,stock,setCurrentDecisionResponse:value=>{currentDecisionResponse=value;}};
 }
 {
  const f=fixture(),stored=f.rows.find(r=>r.source_channel==='ably'&&r.sellpia_sku_code==='A');Object.assign(stored,{base_price:5000,discounted_base_price:4800,option_price:300,final_price:5100,discount_terms:[{term_key:'basic',value:200,unit:'amount',is_baseline:true}],error:'3일 전 materialization timeout'});
@@ -39,7 +55,10 @@ function fixture(){
 }
 {
  const f=fixture(),all=await api.refreshItems([],f.files,{});assert.equal(all.items.length,9,'unchanged current targets produce no operation');assert.equal(all.excludedItems.length,0);assert.equal(f.calls.length,3);assert.ok(f.calls.every(call=>call.skus.length===4),'each carrier is evaluated from its bounded mapped SKU set');
- const queue=[{...f.stock,field_key:'sellpia_sale_price',target_final_price:6200}],explicit=await api.refreshItems(queue,new Map(),{includeRules:false});assert.equal(explicit.items[0],queue[0]);assert.equal(f.calls.length,3,'explicit queue must not call any price read or calculation');
+ const queue=[{...f.stock,source_channel:'smartstore',seller_product_code:'P',seller_option_code:'A',field_key:'sellpia_sale_price',target_final_price:6200}],explicit=await api.refreshItems(queue,f.files,{sources:['smartstore'],skus:['A'],includeRules:false,includeMatrixStock:false});assert.equal(explicit.items[0],queue[0]);assert.equal(f.calls.length,3,'legacy queue without a current decision does not run Rule or Matrix price calculation');
+ const tuple={base:5000,discounted:5000,option:-1100,final:3900,terms:[]},event={sku:'A',source_channel:'smartstore',seller_product_code:'P',seller_option_code:'A',price:tuple,event_id:'queue-current',revision:2,decision_source:'manual',effective_at:'2026-10-08T00:00:00Z',mapping_valid:true};
+ f.setCurrentDecisionResponse({rows:[event],groups:[{source_channel:'smartstore',seller_product_code:'P',revision:2,mapping_fingerprint:'map',input_fingerprints:{},snapshot_id:'snap',mapping_valid:true,targets:[{sku:'A',member_skus:['A'],seller_product_code:'P',seller_option_code:'A',price:{base:9000,discounted:9000,option:0,final:9000,terms:[]},current_state:{price:tuple,event_id:'queue-current',revision:2}}]}]});
+ const current=await api.refreshItems(queue,f.files,{sources:['smartstore'],skus:['A'],includeRules:false,includeMatrixStock:false});assert.equal(current.items[0].after_value,3900,'queue price intent is refreshed from the exact current tuple');assert.equal(current.items[0].current_price_decision_proof.event_id,'queue-current');assert.equal(current.currentPriceDecisionRequests.length,1);
  const empty=await api.refreshItems([f.stock],new Map(),{skus:[]});assert.deepEqual(empty.items,[f.stock]);assert.equal(f.calls.length,3);
 }
 {

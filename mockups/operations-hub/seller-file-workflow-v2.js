@@ -120,9 +120,17 @@
   updateSellerScopeSummary(source);
  }
 
- function standardSelection(source){
+function standardSelection(source){
   const fieldMode=document.querySelector(`[data-standard-field-mode="${source}"]`)?.value||'price_stock',stockOnly=fieldMode==='stock_only',priceOnly=fieldMode==='price_only';
   return {fieldMode,stockOnly,priceOnly,includePrice:!stockOnly,includeStock:!priceOnly,stockSource:stockOnly?(document.querySelector(`[data-standard-stock-source="${source}"]`)?.value||'available_stock'):null,priceMode:document.querySelector(`[data-standard-price-mode="${source}"]`)?.value||'rules'};
+}
+
+ async function loadCurrentPriceDecisionState(source,skus){
+  const resolver=global.HubCurrentPriceDecisionResolver;
+  if(!resolver||!D()?.loadCurrentPriceDecisions)throw Error('현재 가격 결정 조회 모듈을 불러오지 못했습니다.');
+  const response=await D().loadCurrentPriceDecisions({source,skus});
+  const decisions=resolver.normalize(response,{source,skus});
+  return {decisions,proof:resolver.proof(decisions)};
  }
 
  function updateExportPresetState(section=document.getElementById('export-workflow-v2')){
@@ -459,7 +467,7 @@
    const stock=document.querySelector('[data-matrix-stock-status="'+source+'"]');if(stock){stock.className='export-role-status matrix-stock-state ready';stock.textContent='carrier 대상 '+n(result.diagnostics?.sku_count)+' SKU · DB 조회 '+n(result.diagnostics?.query_count)+'회 · 전체 snapshot 없음';}
    if(selection.stockOnly){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,kind:'stock_only'});renderStockOnlyPreview(source,result);}
    else if(selection.priceMode==='sellpia_source'){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,kind:'sellpia_source'});renderSourcePricePreview(source,result);}
-   else standardResult(source,[result.count,result.detail,selection.priceOnly?'재고 변경 0건 · 판매처 원본 재고 보존':'재고는 현재 수정안/판매처 반영 상태만 사용'].filter(Boolean).join(' · '),'success');
+   else{state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,kind:'price'});standardResult(source,[result.count,result.detail,selection.priceOnly?'재고 변경 0건 · 판매처 원본 재고 보존':'재고는 현재 수정안/판매처 반영 상태만 사용','현재 가격 결정과 최신 매핑을 생성 직전에 다시 검증합니다.'].filter(Boolean).join(' · '),'success');}
    setStatus((source==='smartstore'?'스마트스토어':'메이크샵')+(mode==='full_original'?' 전체 원본 미리보기 완료':' 변경분 미리보기 완료'),'success');
   }catch(error){standardResult(source,error?.message||String(error),'error');setStatus('미리보기 실패: '+(error?.message||error),'error');}
   finally{global.__systemV3DirectExportBusy=false;if(button)button.disabled=false;}
@@ -472,8 +480,8 @@
   standardProgress(source,3,'파일 생성 준비','현재 매트릭스 표시값과 최신 원본 위치를 읽습니다.');standardResult(source,'미리보기 계약을 재검증하고 파일을 생성하는 중…');setStatus('판매처 파일 생성 중…');
   try{
    const skus=await directScopeSkus(source),selection=standardSelection(source),scopeKey=skus?JSON.stringify([...skus].sort()):'ALL',preview=state.sourcePricePreviews.get(source);
-   const needsPreview=selection.stockOnly||selection.priceMode==='sellpia_source';
-   if(needsPreview&&(!preview||preview.mode!==mode||preview.scope!==scopeKey||!preview.fingerprint||selection.stockOnly&&(preview.kind!=='stock_only'||preview.stockSource!==selection.stockSource)))throw Error(selection.stockOnly?'같은 범위와 재고 기준의 미리보기를 먼저 확인해주세요.':'셀피아 판매가 기준은 같은 범위의 미리보기를 먼저 확인해야 합니다.');
+   const needsPreview=selection.stockOnly||selection.includePrice;
+   if(needsPreview&&(!preview||preview.mode!==mode||preview.scope!==scopeKey||!preview.fingerprint||selection.stockOnly&&(preview.kind!=='stock_only'||preview.stockSource!==selection.stockSource)||selection.includePrice&&!selection.stockOnly&&preview.kind!== (selection.priceMode==='sellpia_source'?'sellpia_source':'price')))throw Error(selection.stockOnly?'같은 범위와 재고 기준의 미리보기를 먼저 확인해주세요.':'같은 범위와 가격 모드의 가격 미리보기를 먼저 확인해주세요.');
    const request={source,skus,priceMode:selection.priceMode,expectedPlanFingerprint:needsPreview?preview.fingerprint:null};
    const result=selection.stockOnly
     ?await bridge.runStockOnly({source,skus,stockSource:selection.stockSource,mode,expectedPlanFingerprint:preview.fingerprint})
@@ -600,9 +608,14 @@
     }
     const safetySkus=[...new Set(safetyRows.map(item=>item.resolution?.sku).filter(Boolean))];
     job.phaseTo('targets',0,safetySkus.length);
+    const currentDecisionState=stockOnly?{decisions:new Map(),proof:''}:await loadCurrentPriceDecisionState('ably',safetySkus);
+    const decisionMappings=safetyRows.map(item=>({sku:item.resolution?.sku,seller_product_code:item.seller_product_code||item.product_code,seller_option_code:item.seller_option_code??item.option_code??''}));
+    if(!stockOnly)global.HubCurrentPriceDecisionResolver.attach(decisionMappings,currentDecisionState.decisions,{source:'ably'});
+    const sellpiaSourceSkus=!stockOnly&&priceMode==='sellpia_source'?[...new Set(chosen.filter(item=>!global.HubCurrentPriceDecisionResolver.decisionForMapping(currentDecisionState.decisions,
+     {sku:item.resolution?.sku,seller_product_code:item.seller_product_code||item.product_code,seller_option_code:item.seller_option_code??item.option_code??''},{source:'ably'})).map(item=>item.resolution.sku))]:[];
     const [stored,sellpiaPrices,carrierPolicies,stockSources]=await Promise.all([
      !stockOnly&&priceMode==='rules'?D().loadCarrierMatrixTargets({source:'ably',skus:safetySkus,onQuery}):Promise.resolve({rows:[]}),
-     !stockOnly&&priceMode==='sellpia_source'?D().loadSellpiaSourcePricesForExport({skus:[...new Set(chosen.map(item=>item.resolution.sku))],onQuery}):Promise.resolve(null),
+     sellpiaSourceSkus.length?D().loadSellpiaSourcePricesForExport({skus:sellpiaSourceSkus,onQuery}):!stockOnly&&priceMode==='sellpia_source'?Promise.resolve(new Map()):Promise.resolve(null),
      role==='playauto_product'?D().loadAblyCarrierPoliciesForSkus({skus:safetySkus}):Promise.resolve({rows:[],fingerprint:'[]'}),
      stockOnly?D().loadSellpiaStockSourcesForExport({skus:safetySkus,onQuery}):Promise.resolve(null)
     ]);
@@ -614,8 +627,10 @@
    const sourceRows=role==='playauto_option'&&!scope?resolved:safetyRows;
    job.phaseTo('guards',0,sourceRows.length);
     const prepared=await job.mapRows(sourceRows,item=>{
-     const sku=item.resolution?.sku,row=sku?targetMap.get(sku):null,inScope=sku?chosenSet.has(`${item.source_row_no}|${item.option_index??''}|${sku}`):!scope;
+     const sku=item.resolution?.sku,baseRow=sku?targetMap.get(sku):null,row=baseRow?{...baseRow,current_price_decision:stockOnly?null:global.HubCurrentPriceDecisionResolver.decisionForMapping(currentDecisionState.decisions,{sku,seller_product_code:item.seller_product_code||item.product_code,seller_option_code:item.seller_option_code??item.option_code??''},{source:'ably'})}:null,inScope=sku?chosenSet.has(`${item.source_row_no}|${item.option_index??''}|${sku}`):!scope;
      const out={...item,resolution:item.resolution,_inScope:inScope,_status:'ready',_error:'',_changedFields:[]};
+     if(row?.current_price_decision){const decision=row.current_price_decision;out._currentPriceDecision=decision;out._currentPriceDecisionProof={event_id:String(decision.event_id),revision:Number(decision.revision),decision_source:String(decision.decision_source||''),effective_at:String(decision.effective_at||''),price:decision.price};}
+     if(item.carrier_identity_error){out._status='ambiguous';out._error=item.carrier_identity_error;return out;}
      if(stockOnly){
       return A().prepareStockOnlyRow(out,row,{stockSource,inScope});
      }
@@ -643,6 +658,9 @@
         if(Number.isSafeInteger(targetBase))legacyRulesBaseBySku.set(sku,targetBase);
        }
      }else{
+      if(inScope&&row?.current_price_decision&&(row.current_price_decision.price.base!==sourceBase||row.current_price_decision.price.discounted!==sourceBase||row.current_price_decision.price.option!==row.current_price_decision.price.final-sourceBase)){
+       out._status='warn_keep_original';out._error='현재 가격 결정은 옵션가 전용 파일에서 공통 기준가격까지 함께 반영할 수 없습니다.';return out;
+      }
       if(inScope)out.target_option_price=matrixTarget?Number(matrixTarget.option):sourceOption;
       if(!priceOnly){
        const matrixStock=global.HubCurrentPriceExport?.matrixStockTarget(row);
@@ -691,7 +709,7 @@
     const unresolved=output.filter(item=>!item.resolution?.sku).length,ready=output.filter(item=>item._status==='ready').length,changed=output.filter(item=>item._status==='ready'&&item._changed).length,preserved=output.filter(item=>item._blankStockPreserved).length,warned=output.filter(item=>item._status==='warn_keep_original').length,blocked=output.filter(item=>item._status!=='ready'&&item._status!=='warn_keep_original').length;
     const policySummaries=[...new Map(output.filter(item=>item._projection?.policy).map(item=>{const policy=item._projection.policy,key=JSON.stringify([policy.strategy,policy.sourceLabel]);return [key,policy];})).values()];
     const policyDownloadBlocked=output.some(item=>item._inScope&&item._projection?.policy?.strategy==='lower_middle');
-    const versionToken=JSON.stringify([priceMode,stockOnly,priceOnly,stockSource,stockSources?.snapshotId||'',carrierPolicies.fingerprint||'[]',...output.map(item=>[item.source_row_no,item.option_index??'',item.resolution?.sku||'',item.resolution?.method||'',item._status,item._changedFields,item._current,item._target,item._error,item._projection?.policy?.strategy||'',item._projection?.policy?.sourceLabel||'',item._projectionTargetFinal??'',item._projectionOptionDelta??''])]);
+    const versionToken=JSON.stringify([priceMode,stockOnly,priceOnly,stockSource,stockSources?.snapshotId||'',carrierPolicies.fingerprint||'[]',currentDecisionState.proof||'',...output.map(item=>[item.source_row_no,item.option_index??'',item.resolution?.sku||'',item.resolution?.method||'',item._status,item._changedFields,item._current,item._target,item._error,item._projection?.policy?.strategy||'',item._projection?.policy?.sourceLabel||'',item._projectionTargetFinal??'',item._projectionOptionDelta??'',item._currentPriceDecisionProof||null])]);
    job.check();job.phaseTo('preview',output.length,output.length);
    let shadowDiagnostics=[];
    if(global.HubMatrixShadow&&D().loadMatrixShadowMetadata&&global.HubMatrixShadowEnabled!==false){
@@ -707,7 +725,7 @@
     }catch(error){shadowDiagnostics=[{sku:'진단',lookup:'unavailable',reason:error?.message||String(error)}];}
     job.check();
    }
-    state.preview={role,priceMode,stockOnly,priceOnly,stockSource,record,file,parsed,items:prepared,output,versionToken,policySummaries,policyDownloadBlocked,timings:job.timings,shadowDiagnostics,counts:{template:parsed.items.length,matched:resolvedWithSku.length,selected:chosen.length,pricePreserved:output.filter(item=>item._preserveUnselected).length,mappingOverrides:output.filter(item=>item._status==='ready'&&item.resolution?.mapping_override).length,ready,changed,unchanged:ready-changed,warned,blocked,unresolved,preserved}};
+    state.preview={role,priceMode,stockOnly,priceOnly,stockSource,record,file,parsed,items:prepared,output,versionToken,currentPriceDecisionProof:currentDecisionState.proof||'',currentPriceDecisionSkus:stockOnly?[]:safetySkus,policySummaries,policyDownloadBlocked,timings:job.timings,shadowDiagnostics,counts:{template:parsed.items.length,matched:resolvedWithSku.length,selected:chosen.length,pricePreserved:output.filter(item=>item._preserveUnselected).length,mappingOverrides:output.filter(item=>item._status==='ready'&&item.resolution?.mapping_override).length,ready,changed,unchanged:ready-changed,warned,blocked,unresolved,preserved}};
    renderPreview();job.finish();setStatus(`${roles[role].label} 미리보기 완료 · 변경 ${n(changed)} · 원본 유지 경고 ${n(warned)} · 치명적 차단 ${n(blocked)}`,'success');return state.preview;
   }catch(error){if(error?.name==='CarrierCancelledError'||state.ablyJob!==job||job.cancelled)return;job.finish(error);setStatus(`미리보기 실패: ${error?.message||error}`,'error');}
  }
@@ -781,6 +799,10 @@
     if(!D()?.recordStockExportAudit)throw Error('재고 내보내기 감사 기록 기능을 불러오지 못했습니다. migration 적용 상태를 확인해주세요.');
     const itemCount=p.output.filter(item=>item._status==='ready'&&item._changedFields?.includes('stock')).length;
     await D().recordStockExportAudit({batchId:global.crypto.randomUUID(),sources:['ably'],stockSource:p.stockSource,itemCount,manifest:[{source_channel:'ably',source_file_name:p.file.name,item_count:itemCount,stock_source:p.stockSource,role:p.role}]});
+   }
+   if(!p.stockOnly){
+    const finalDecisionState=await loadCurrentPriceDecisionState('ably',p.currentPriceDecisionSkus||[]);
+    global.HubCurrentPriceDecisionResolver.assertProof(p.currentPriceDecisionProof,finalDecisionState.proof);
    }
    global.SystemV3SellerExport.downloadBlob(blob,`${base}_SystemV3_${suffix}_${new Date().toISOString().slice(0,10)}.xlsx`);
    const excluded=p.output.filter(item=>item._status!=='ready').map(item=>({item:{source_channel:'ably',sellpia_sku_code:item.resolution?.sku||'',field_key:p.role==='playauto_product'||p.priceOnly?'sellpia_sale_price':'sellpia_current_stock',seller_product_code:item.seller_product_code||item.product_code||'',seller_option_code:item.seller_option_code||item.option_code||'',source_file_name:p.file.name,source_row_no:item.source_row_no},reason:item._error||item._status}));
