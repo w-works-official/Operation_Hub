@@ -1,7 +1,7 @@
 (function initSellerFileWorkflowV2(global){
  'use strict';
  const D=()=>global.SystemV3Data,A=()=>global.AblyPlayautoExport,P=()=>global.AblyPriceProjection;
- const state={files:[],catalog:null,catalogKey:'',preview:null,previewFilter:'all',previewPage:1,role:null,loading:false,carrierFiles:new Map(),standardCarrierFiles:new Map(),standardCarrierPlans:new Map(),standardCarrierViews:new Map(),sourcePricePreviews:new Map(),tagCatalogRows:null,tagCatalogPromise:null,ablyJob:null,ablyJobSequence:0};
+ const state={files:[],catalog:null,catalogKey:'',preview:null,previewFilter:'all',previewPage:1,role:null,loading:false,carrierFiles:new Map(),activeAblyCarrierRole:null,standardCarrierFiles:new Map(),standardCarrierPlans:new Map(),standardCarrierViews:new Map(),sourcePricePreviews:new Map(),tagCatalogRows:null,tagCatalogPromise:null,ablyJob:null,ablyJobSequence:0};
  const roles={
   playauto_product:{label:'PlayAuto · 판매가 + 옵션가',type:'product_price_option',hint:'쇼핑몰상품 시트',fileLabel:'쇼핑몰상품.xlsx'},
   playauto_option:{label:'PlayAuto · 옵션가 + 재고',type:'option_price_stock',hint:'옵션기본 시트 · V 추가 금액 / X *판매수량(실재고) / W 원본 보존',fileLabel:'옵션기본.xlsx'}
@@ -12,7 +12,7 @@
  const currentFile=role=>state.files.find(row=>row.source_role===role)||null;
  const safeName=v=>String(v||'file').replace(/[\\/:*?"<>|]+/g,'_').trim().slice(0,120)||'file';
 
- const standardUiJobs=new Map(),standardLastActions=new Map(),standardRequests=new Map();
+ const standardUiJobs=new Map(),standardLastActions=new Map(),standardRequests=new Map(),standardBusy=new Map();
  function sellerPanel(source){return document.querySelector(`[data-seller-panel="${source}"]`);}
  function setSellerPanel(source,phase,message=''){
   const panel=sellerPanel(source);if(!panel)return;
@@ -29,7 +29,7 @@
  }
  function resetSeller(source){
   if(source==='ably'){
-   state.ablyJob?.cancel(false);state.ablyJob=null;state.preview=null;state.carrierFiles.clear();renderExportStatuses();
+   state.ablyJob?.cancel(false);state.ablyJob=null;state.preview=null;state.carrierFiles.clear();state.activeAblyCarrierRole=null;renderExportStatuses();
   }else{
    standardRequests.set(source,(standardRequests.get(source)||0)+1);
    state.standardCarrierFiles.delete(source);state.standardCarrierPlans.delete(source);state.standardCarrierViews.delete(source);state.sourcePricePreviews.delete(source);
@@ -40,7 +40,34 @@
  }
  function lockStandardGeneration(source,locked){
   const card=document.querySelector(`[data-standard-source="${source}"]`);if(!card)return;
-  for(const node of card.querySelectorAll('[data-seller-reset],[data-standard-carrier-input],[data-standard-carrier-pick]'))node.disabled=locked;
+  for(const node of card.querySelectorAll('button,input,select,textarea')){
+   if(locked){if(!node.hasAttribute('data-standard-disabled-before'))node.dataset.standardDisabledBefore=String(Boolean(node.disabled));node.disabled=true;}
+   else if(node.hasAttribute('data-standard-disabled-before')){node.disabled=node.dataset.standardDisabledBefore==='true';delete node.dataset.standardDisabledBefore;}
+  }
+ }
+ function syncExportPresetLock(){
+  const section=document.getElementById('export-workflow-v2');if(!section)return;
+  const locked=standardBusy.size>0||Boolean(state.ablyJob?.running);
+  for(const button of section.querySelectorAll('[data-export-field-preset]')){
+   if(locked){if(!button.hasAttribute('data-export-preset-disabled-before'))button.dataset.exportPresetDisabledBefore=String(Boolean(button.disabled));button.disabled=true;}
+   else if(button.hasAttribute('data-export-preset-disabled-before')){button.disabled=button.dataset.exportPresetDisabledBefore==='true';delete button.dataset.exportPresetDisabledBefore;}
+  }
+ }
+ function syncDirectExportBusy(){global.__systemV3DirectExportBusy=standardBusy.size>0;syncExportPresetLock();}
+ function beginStandardRequest(source,kind){
+  if(standardBusy.has(source))return null;
+  const token=(standardRequests.get(source)||0)+1;standardRequests.set(source,token);standardBusy.set(source,{token,kind});
+  lockStandardGeneration(source,true);syncDirectExportBusy();return token;
+ }
+ function isStandardRequestCurrent(source,token){return standardRequests.get(source)===token&&standardBusy.get(source)?.token===token;}
+ function finishStandardRequest(source,token){
+  if(standardBusy.get(source)?.token!==token)return;
+  standardBusy.delete(source);lockStandardGeneration(source,false);syncDirectExportBusy();
+ }
+ function invalidateStandardRequest(source){
+  standardRequests.set(source,(standardRequests.get(source)||0)+1);
+  const active=standardBusy.get(source);
+  if(active&&active.kind.endsWith('preview')){standardBusy.delete(source);lockStandardGeneration(source,false);syncDirectExportBusy();}
  }
  function arrangeSellerRows(section,page){
   const cards=section.querySelectorAll('.export-channel-card');
@@ -101,7 +128,8 @@ function bindSellerScope(section,source){
   if(!mode)return;
   const invalidate=message=>{
    state.sourcePricePreviews.delete(source);state.standardCarrierPlans.delete(source);state.standardCarrierViews.delete(source);
-   if(source==='ably'){state.preview=null;setSellerPanel('ably','idle',message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.');}
+   if(source!=='ably')invalidateStandardRequest(source);
+   if(source==='ably'){state.preview=null;const status=document.querySelector('[data-ably-action-status]');if(status){status.className='export-role-status';status.textContent=message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.';}setSellerPanel('ably','idle',message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.');}
    else setSellerPanel(source,'idle',message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.');
   };
   mode.onchange=()=>{
@@ -183,7 +211,7 @@ function formatScopeSummary(summary={}){
  function createAblyJob(role,file){
   if(state.ablyJob?.running)state.ablyJob.cancel(false);
   const started=carrierNow(),job={id:++state.ablyJobSequence,role,file,running:true,phase:'read',processed:null,total:null,started,lastProgress:started,phaseStarted:started,timings:[],error:'',cancelled:false};
-  state.ablyJob=job;
+  state.ablyJob=job;syncExportPresetLock();
   job.check=()=>{if(job.cancelled||state.ablyJob!==job)throw carrierCancelled();};
   job.render=()=>{
    if(state.ablyJob!==job)return;
@@ -207,13 +235,13 @@ function formatScopeSummary(summary={}){
   job.finish=error=>{
    if(state.ablyJob!==job||job.cancelled)return;
    const now=carrierNow();job.timings.push({phase:job.phase,ms:Math.round(now-job.phaseStarted),processed:job.processed,total:job.total});
-   job.totalMs=Math.round(now-started);job.error=error?String(error?.message||error):'';job.running=false;if(!error)job.phase='done';global.clearInterval(job.timer);job.render();
+   job.totalMs=Math.round(now-started);job.error=error?String(error?.message||error):'';job.running=false;if(!error)job.phase='done';global.clearInterval(job.timer);job.render();syncExportPresetLock();
    const timing=job.timings.map(item=>`${item.phase} ${item.ms}ms`).join(' · '),detail=document.querySelector('[data-ably-progress-detail]');
    const queries=(job.queries||[]).map(query=>`${query.query}: ${query.scope_count}개 / ${query.latency_ms}ms / ${query.status}`).join(' · ');
    if(detail)detail.textContent=(job.error?job.error+' · ':'')+`${file.name} · 총 ${job.totalMs}ms · ${timing} · DB 조회 ${(job.queries||[]).length}회${queries?' · '+queries:''}`;
   };
   job.cancel=visible=>{
-   job.cancelled=true;job.running=false;global.clearInterval(job.timer);
+   job.cancelled=true;job.running=false;global.clearInterval(job.timer);syncExportPresetLock();
    if(state.ablyJob!==job)return;
    state.preview=null;const previewBox=document.getElementById('export-preview-v2');if(previewBox)previewBox.hidden=true;
    if(visible){if(state.carrierFiles.get(role)===file)state.carrierFiles.delete(role);renderExportStatuses();job.render();setStatus('파일 처리를 취소했습니다. 다른 공식 수정파일을 선택할 수 있습니다.');}
@@ -309,10 +337,12 @@ function formatScopeSummary(summary={}){
     <div class="export-channel-grid">
       <article class="export-channel-card" data-standard-source="smartstore"><header><h4>스마트스토어</h4><span>원본 양식</span></header><p>매트릭스 가격·재고와 최신 보관 원본을 대조합니다.</p><div class="export-role-status" data-standard-status="smartstore">원본 상태 확인 중…</div><div class="export-role-status matrix-stock-state" data-matrix-stock-status="smartstore">재고 상태 확인 전 · 새 수정안을 계산하지 않습니다.</div>${sellerScopeMarkup('smartstore')}<div class="direct-export-actions"><button class="btn" type="button" data-standard-preview="smartstore">변경사항 미리보기</button><button class="btn primary" type="button" data-standard-run="smartstore">XLSX 생성</button></div><details class="seller-advanced"><summary>고급 기능 · 공식 수정파일 / 전체 원본</summary><input type="file" data-standard-carrier-input="smartstore" accept=".xlsx,.xls"><div class="direct-export-actions"><button class="btn" type="button" data-standard-full-preview="smartstore">전체 원본 미리보기</button><button class="btn primary" type="button" data-standard-full-run="smartstore">전체 원본 XLSX 생성</button><button class="btn" type="button" data-standard-carrier-pick="smartstore">수정파일 선택</button><button class="btn primary" type="button" data-standard-carrier-run="smartstore" aria-disabled="true">선택 파일 변환</button></div></details><details class="seller-recalculate"><summary>가격 재계산</summary><p>선택 범위의 내부 가격과 판매처 활성 Rule 계산 결과를 다시 저장합니다.</p><button class="btn wide" type="button" data-standard-recalculate="smartstore">선택 범위 가격 재계산</button></details><div class="direct-export-progress" data-standard-progress="smartstore" hidden><div class="direct-export-progress-head"><b data-progress-title>파일 생성 준비</b><span data-progress-percent>0%</span></div><div class="direct-export-progress-track"><i data-progress-bar style="width:0%"></i></div><small data-progress-detail>대상 범위와 원본을 확인합니다.</small></div><div class="direct-export-preview" data-standard-result="smartstore">변경사항 미리보기를 실행하세요.</div></article>
       <article class="export-channel-card" data-standard-source="makeshop"><header><h4>메이크샵</h4><span>원본 양식</span></header><p>매트릭스 가격·재고와 최신 보관 원본을 대조합니다.</p><div class="export-role-status" data-standard-status="makeshop">원본 상태 확인 중…</div><div class="export-role-status matrix-stock-state" data-matrix-stock-status="makeshop">재고 상태 확인 전 · 새 수정안을 계산하지 않습니다.</div>${sellerScopeMarkup('makeshop')}<div class="direct-export-actions"><button class="btn" type="button" data-standard-preview="makeshop">변경사항 미리보기</button><button class="btn primary" type="button" data-standard-run="makeshop">XLSX 생성</button></div><details class="seller-advanced"><summary>고급 기능 · 공식 수정파일 / 전체 원본</summary><input type="file" data-standard-carrier-input="makeshop" accept=".xlsx,.xls"><div class="direct-export-actions"><button class="btn" type="button" data-standard-full-preview="makeshop">전체 원본 미리보기</button><button class="btn primary" type="button" data-standard-full-run="makeshop">전체 원본 XLSX 생성</button><button class="btn" type="button" data-standard-carrier-pick="makeshop">수정파일 선택</button><button class="btn primary" type="button" data-standard-carrier-run="makeshop" aria-disabled="true">선택 파일 변환</button></div></details><details class="seller-recalculate"><summary>가격 재계산</summary><p>선택 범위의 내부 가격과 판매처 활성 Rule 계산 결과를 다시 저장합니다.</p><button class="btn wide" type="button" data-standard-recalculate="makeshop">선택 범위 가격 재계산</button></details><div class="direct-export-progress" data-standard-progress="makeshop" hidden><div class="direct-export-progress-head"><b data-progress-title>파일 생성 준비</b><span data-progress-percent>0%</span></div><div class="direct-export-progress-track"><i data-progress-bar style="width:0%"></i></div><small data-progress-detail>대상 범위와 원본을 확인합니다.</small></div><div class="direct-export-preview" data-standard-result="makeshop">변경사항 미리보기를 실행하세요.</div></article>
-      <article class="export-channel-card"><header><h4>에이블리 · PlayAuto 빠른 변환</h4><span>전용 양식</span></header><p>두 공식 수정파일 모두 Storage에 저장하지 않고 브라우저 메모리에서 미리보기 후 변환합니다. 장기 원본은 별도로 유지됩니다.</p><div class="export-role-status">에이블리 할인은 공식 파일에 지원 컬럼이 없어 자동 반영하지 않습니다. 판매처 관리자에서 수동 관리하세요.</div>${sellerScopeMarkup('ably')}
+      <article class="export-channel-card" data-standard-source="ably"><header><h4>에이블리 · PlayAuto 빠른 변환</h4><span>전용 양식</span></header><p>두 공식 수정파일 모두 Storage에 저장하지 않고 브라우저 메모리에서 미리보기 후 변환합니다. 장기 원본은 별도로 유지됩니다.</p><div class="export-role-status">에이블리 할인은 공식 파일에 지원 컬럼이 없어 자동 반영하지 않습니다. 판매처 관리자에서 수동 관리하세요.</div>${sellerScopeMarkup('ably')}
       <div class="export-role-status" data-export-file="playauto_product"></div>
       <div class="export-role-status" data-export-file="playauto_option"></div>
-      <input type="file" data-carrier-input="playauto_product" accept=".xlsx,.xls"><input type="file" data-carrier-input="playauto_option" accept=".xlsx,.xls"><div class="ably-export-actions"><button class="btn" type="button" data-carrier-pick="playauto_product">판매가 + 옵션가 파일 선택</button><button class="btn" type="button" data-carrier-pick="playauto_option">옵션가 + 재고 파일 선택</button><button class="btn wide" type="button" data-page-upload-ably>장기 원본 관리</button></div>
+      <div class="export-role-status" data-ably-action-status aria-live="polite">선택한 범위와 필드로 변경사항을 미리본 뒤 XLSX를 생성하세요.</div>
+      <div class="direct-export-actions"><button class="btn" type="button" data-ably-standard-preview>변경사항 미리보기</button><button class="btn primary" type="button" data-ably-standard-run>XLSX 생성</button></div>
+      <details class="seller-advanced"><summary>고급 기능 · 공식 수정파일 선택 / 장기 원본 관리</summary><input type="file" data-carrier-input="playauto_product" accept=".xlsx,.xls" aria-label="PlayAuto 판매가 + 옵션가 공식 수정파일 선택"><input type="file" data-carrier-input="playauto_option" accept=".xlsx,.xls" aria-label="PlayAuto 옵션가 + 재고 공식 수정파일 선택"><div class="ably-export-actions"><button class="btn" type="button" data-carrier-pick="playauto_product">판매가 + 옵션가 파일 선택</button><button class="btn" type="button" data-carrier-pick="playauto_option">옵션가 + 재고 파일 선택</button><button class="btn wide" type="button" data-page-upload-ably>장기 원본 관리</button></div></details>
       <div class="direct-export-progress" data-ably-progress hidden aria-live="polite"><div class="direct-export-progress-head"><b data-ably-progress-title>파일 읽기</b><button class="btn" type="button" data-ably-progress-cancel>취소 / 초기화</button></div><div class="direct-export-progress-track"><i data-ably-progress-bar style="width:0%"></i></div><small data-ably-progress-detail></small></div>
     </article>
    </div>
@@ -338,8 +368,10 @@ function formatScopeSummary(summary={}){
   section.querySelectorAll('[data-standard-recalculate]').forEach(btn=>btn.onclick=()=>void recalculateStandardScope(btn.dataset.standardRecalculate));
   section.querySelector('[data-page-upload-ably]').onclick=()=>{document.querySelector('.nav-item[data-page="upload"]')?.click();setTimeout(()=>{const source=document.getElementById('source-select');if(source){source.value='ably';source.dispatchEvent(new Event('change',{bubbles:true}));}},80);};
   section.querySelectorAll('[data-preview-role]').forEach(btn=>btn.onclick=()=>void preview(btn.dataset.previewRole));
+  section.querySelector('[data-ably-standard-preview]').onclick=()=>void previewSelectedAbly();
+  section.querySelector('[data-ably-standard-run]').onclick=()=>void generateSelectedAbly();
   section.querySelectorAll('[data-carrier-pick]').forEach(btn=>btn.onclick=()=>section.querySelector(`[data-carrier-input="${btn.dataset.carrierPick}"]`)?.click());
-  section.querySelectorAll('[data-carrier-input]').forEach(input=>input.onchange=()=>{const file=input.files?.[0];if(file){state.carrierFiles.set(input.dataset.carrierInput,file);renderExportStatuses();void preview(input.dataset.carrierInput);}input.value='';});
+  section.querySelectorAll('[data-carrier-input]').forEach(input=>input.onchange=()=>{const file=input.files?.[0];if(file){const role=input.dataset.carrierInput;state.carrierFiles.set(role,file);state.activeAblyCarrierRole=role;renderExportStatuses();if(role===selectedAblyRole())void preview(role);else showAblyPrerequisite(`${roles[role].label} 파일은 현재 선택한 필드 모드에 맞지 않습니다. 필드 모드를 바꾸거나 해당 모드의 공식 파일을 선택해주세요.`,true);}input.value='';});
   document.getElementById('export-preview-close').onclick=()=>setSellerPanel('ably','idle','미리보기를 닫았습니다. 파일을 다시 선택하거나 재시도할 수 있습니다.');
   document.getElementById('export-preview-generate').onclick=()=>void generate();
   void loadStatuses();renameLegacyExportUi();
@@ -470,75 +502,79 @@ function formatScopeSummary(summary={}){
 
 async function previewStandard(source,mode=null){
   const bridge=global.SystemV3SellerExportBridge;if(!bridge){standardResult(source,'직접 내보내기 연결 모듈을 불러오지 못했습니다. 새로고침해주세요.','error');return;}
+  const request=beginStandardRequest(source,'preview');if(request===null)return;
   const selection=standardSelection(source);mode=mode||(selection.outputMode||'target_all');
-  const button=document.querySelector('[data-standard-preview="'+source+'"]');if(button)button.disabled=true;global.__systemV3DirectExportBusy=true;
+  state.sourcePricePreviews.delete(source);
   standardResult(source,'선택 범위의 현재 가격·재고와 원본 위치를 검증하는 중…');
   standardProgress(source,3,'변경사항 조회','선택 범위의 현재 매트릭스 값과 최신 원본을 비교합니다.');
   try{
-   const skus=await directScopeSkus(source),scopeKey=skus?JSON.stringify([...skus].sort()):'ALL';
+   const skus=await directScopeSkus(source);if(!isStandardRequestCurrent(source,request))return;
+   const scopeKey=skus?JSON.stringify([...skus].sort()):'ALL',isCurrent=()=>isStandardRequestCurrent(source,request);
    const result=selection.stockOnly
-    ?await bridge.previewStockOnly({source,skus,stockSource:selection.stockSource,mode})
+    ?await bridge.previewStockOnly({source,skus,stockSource:selection.stockSource,mode,isCurrent})
     :selection.priceOnly
-      ?await bridge.previewPriceOnly({source,skus,priceMode:selection.priceMode,mode})
-      :mode==='full_original'?await bridge.previewFullOriginal({source,skus,priceMode:selection.priceMode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource}):mode==='target_all'?await bridge.previewTargetAll({source,skus,priceMode:selection.priceMode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource}):await bridge.previewChangedOnly({source,skus,priceMode:selection.priceMode,mode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource});
+      ?await bridge.previewPriceOnly({source,skus,priceMode:selection.priceMode,mode,isCurrent})
+      :mode==='full_original'?await bridge.previewFullOriginal({source,skus,priceMode:selection.priceMode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,isCurrent}):mode==='target_all'?await bridge.previewTargetAll({source,skus,priceMode:selection.priceMode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,isCurrent}):await bridge.previewChangedOnly({source,skus,priceMode:selection.priceMode,mode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,isCurrent});
+   if(!isCurrent())return;
    const stock=document.querySelector('[data-matrix-stock-status="'+source+'"]');if(stock){stock.className='export-role-status matrix-stock-state ready';stock.textContent='carrier 대상 '+n(result.diagnostics?.sku_count)+' SKU · DB 조회 '+n(result.diagnostics?.query_count)+'회 · 전체 snapshot 없음';}
    if(selection.stockOnly){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,kind:'stock_only'});renderStockOnlyPreview(source,result);}
    else if(selection.priceMode==='sellpia_source'){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,kind:'sellpia_source'});renderSourcePricePreview(source,result);}
    else{state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,kind:'price'});standardResult(source,[`출력 범위 ${mode==='target_all'?'대상 전체':'실제 변경분만'}`,formatScopeSummary(result.scopeSummary),result.count,result.detail,selection.priceOnly?'재고 변경 0건 · 판매처 원본 재고 보존':`재고 기준 ${selection.stockSource==='stock'?'재고':'가용재고'}`,'현재 가격 결정과 최신 매핑을 생성 직전에 다시 검증합니다.'].filter(Boolean).join(' · '),'success');}
    setStatus((source==='smartstore'?'스마트스토어':'메이크샵')+(mode==='target_all'?' 대상 전체 미리보기 완료':mode==='full_original'?' 전체 원본 미리보기 완료':' 변경분 미리보기 완료'),'success');
-  }catch(error){standardResult(source,error?.message||String(error),'error');setStatus('미리보기 실패: '+(error?.message||error),'error');}
-  finally{global.__systemV3DirectExportBusy=false;if(button)button.disabled=false;}
- }
+  }catch(error){if(!isStandardRequestCurrent(source,request))return;standardResult(source,error?.message||String(error),'error');setStatus('미리보기 실패: '+(error?.message||error),'error');}
+  finally{finishStandardRequest(source,request);}
+}
 
 async function runStandard(source,mode=null){
   const bridge=global.SystemV3SellerExportBridge;if(!bridge){standardResult(source,'직접 내보내기 연결 모듈을 불러오지 못했습니다. 새로고침해주세요.','error');return;}
+  const requestToken=beginStandardRequest(source,'run');if(requestToken===null)return;
   const selection=standardSelection(source);mode=mode||(selection.outputMode||'target_all');
-  const button=document.querySelector('[data-standard-run="'+source+'"]');if(button)button.disabled=true;global.__systemV3DirectExportBusy=true;
-  if(typeof lockStandardGeneration==='function')lockStandardGeneration(source,true);
   standardProgress(source,3,'파일 생성 준비','현재 매트릭스 표시값과 최신 원본 위치를 읽습니다.');standardResult(source,'미리보기 계약을 재검증하고 파일을 생성하는 중…');setStatus('판매처 파일 생성 중…');
   try{
-   const skus=await directScopeSkus(source),scopeKey=skus?JSON.stringify([...skus].sort()):'ALL',preview=state.sourcePricePreviews.get(source);
+   const skus=await directScopeSkus(source);if(!isStandardRequestCurrent(source,requestToken))return;
+   const scopeKey=skus?JSON.stringify([...skus].sort()):'ALL',preview=state.sourcePricePreviews.get(source);
    const needsPreview=selection.stockOnly||selection.includePrice;
    if(needsPreview&&(!preview||preview.mode!==mode||preview.scope!==scopeKey||!preview.fingerprint||selection.stockOnly&&(preview.kind!=='stock_only'||preview.stockSource!==selection.stockSource)||selection.includePrice&&!selection.stockOnly&&(preview.kind!==(selection.priceMode==='sellpia_source'?'sellpia_source':'price')||preview.stockSource!==selection.stockSource)))throw Error(selection.stockOnly?'같은 범위와 재고 기준의 미리보기를 먼저 확인해주세요.':'같은 범위와 가격 모드의 가격 미리보기를 먼저 확인해주세요.');
-   const request={source,skus,priceMode:selection.priceMode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,expectedPlanFingerprint:needsPreview?preview.fingerprint:null};
+   const isCurrent=()=>isStandardRequestCurrent(source,requestToken),request={source,skus,priceMode:selection.priceMode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,expectedPlanFingerprint:needsPreview?preview.fingerprint:null,isCurrent};
    const result=selection.stockOnly
-    ?await bridge.runStockOnly({source,skus,stockSource:selection.stockSource,mode,expectedPlanFingerprint:preview.fingerprint})
+    ?await bridge.runStockOnly({source,skus,stockSource:selection.stockSource,mode,expectedPlanFingerprint:preview.fingerprint,isCurrent})
     :selection.priceOnly
-      ?await bridge.runPriceOnly({source,skus,priceMode:selection.priceMode,mode,expectedPlanFingerprint:needsPreview?preview.fingerprint:null})
+      ?await bridge.runPriceOnly({source,skus,priceMode:selection.priceMode,mode,expectedPlanFingerprint:needsPreview?preview.fingerprint:null,isCurrent})
     :mode==='full_original'?await bridge.runFullOriginal(request):mode==='target_all'?await bridge.runTargetAll(request):await bridge.runChangedOnly({...request,mode});
+   if(!isCurrent())return;
    if(needsPreview)state.sourcePricePreviews.delete(source);
    const stock=document.querySelector('[data-matrix-stock-status="'+source+'"]');if(stock){stock.className='export-role-status matrix-stock-state ready';stock.textContent='carrier 대상 '+n(result.diagnostics?.sku_count)+' SKU · DB 조회 '+n(result.diagnostics?.query_count)+'회 · 전체 snapshot 없음';}
    standardProgress(source,100,selection.stockOnly?'재고-only 파일 생성 완료':selection.priceOnly?'가격-only 파일 생성 완료':mode==='full_original'?'전체 원본 파일 생성 완료':mode==='target_all'?'대상 전체 파일 생성 완료':'변경분 파일 생성 완료',selection.stockOnly?'선택한 재고 기준만 반영하고 가격·기타 셀은 보존했습니다.':selection.priceOnly?'가격·옵션가만 반영하고 재고·기타 셀은 보존했습니다.':mode==='full_original'?'원본의 모든 데이터 행을 유지하고 안전한 변경 셀만 반영했습니다.':mode==='target_all'?'선택 범위의 안전한 매칭 행을 유지하고 변경된 셀만 반영했습니다.':'실제 변경이 있는 상품 묶음만 연속 행으로 남겼습니다.','done');
    standardResult(source,[formatScopeSummary(result.scopeSummary),result.title,result.progressDetail].filter(Boolean).join(' · ')||'파일 생성 완료','success');setStatus(selection.stockOnly?'재고-only 파일 생성 완료':selection.priceOnly?'가격-only 파일 생성 완료':mode==='full_original'?'전체 원본 파일 생성 완료':mode==='target_all'?'대상 전체 파일 생성 완료':'변경분 파일 생성 완료','success');
   }catch(error){standardProgress(source,100,'파일 생성 중단',error?.message||String(error),'error');standardResult(source,error?.message||String(error),'error');setStatus('파일 생성 실패: '+(error?.message||error),'error');}
-  finally{global.__systemV3DirectExportBusy=false;if(button)button.disabled=false;if(typeof lockStandardGeneration==='function')lockStandardGeneration(source,false);}
- }
+  finally{finishStandardRequest(source,requestToken);}
+}
 
  async function previewStandardCarrier(source,file=state.standardCarrierFiles.get(source)){
   const bridge=global.SystemV3SellerExportBridge,button=document.querySelector('[data-standard-carrier-run="'+source+'"]');
   if(!bridge?.previewCarrier){standardResult(source,'공식 수정파일 변환 모듈을 불러오지 못했습니다. 새로고침해주세요.','error');return;}
   if(!file){standardResult(source,'공식 수정 XLSX를 선택해주세요.','error');return;}
-  const request=(standardRequests.get(source)||0)+1;standardRequests.set(source,request);
+  const request=beginStandardRequest(source,'carrier_preview');if(request===null)return;
   state.standardCarrierPlans.delete(source);standardLastActions.set(source,()=>previewStandardCarrier(source,file));
   const selected=document.querySelector(`[data-selected-carrier="${source}"]`);if(selected)selected.textContent=`${file.name} · 선택 ${fmtTime(new Date())}`;
-  if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
+  if(button)button.setAttribute('aria-busy','true');
   standardResult(source,`${file.name} · 브라우저 메모리에서 매칭 확인 중…`);
   standardProgress(source,3,'공식 수정파일 확인',`${file.name} · 파일 읽기 / 파싱 준비`);
-  try{const result=await bridge.previewCarrier({source,file,isCurrent:()=>standardRequests.get(source)===request});if(standardRequests.get(source)!==request)return;state.standardCarrierViews.set(source,{filter:'all',page:1});renderTransformationPlan(source,file,result);setStatus((source==='smartstore'?'스마트스토어':'메이크샵')+' TransformationPlan 미리보기 완료','success');}
-  catch(error){if(standardRequests.get(source)!==request)return;standardResult(source,'공식 수정파일 확인 실패: '+(error?.message||error),'error');setStatus('공식 수정파일 확인 실패: '+(error?.message||error),'error');}
-  finally{if(button&&standardRequests.get(source)===request){button.disabled=false;button.removeAttribute('aria-busy');if(!state.standardCarrierPlans.get(source))button.setAttribute('aria-disabled','true');}}
+  try{const result=await bridge.previewCarrier({source,file,isCurrent:()=>isStandardRequestCurrent(source,request)});if(!isStandardRequestCurrent(source,request))return;state.standardCarrierViews.set(source,{filter:'all',page:1});renderTransformationPlan(source,file,result);setStatus((source==='smartstore'?'스마트스토어':'메이크샵')+' TransformationPlan 미리보기 완료','success');}
+  catch(error){if(!isStandardRequestCurrent(source,request))return;standardResult(source,'공식 수정파일 확인 실패: '+(error?.message||error),'error');setStatus('공식 수정파일 확인 실패: '+(error?.message||error),'error');}
+  finally{const current=standardRequests.get(source)===request;finishStandardRequest(source,request);if(button&&current){button.removeAttribute('aria-busy');button.disabled=!state.standardCarrierPlans.get(source)?.canGenerate;button.setAttribute('aria-disabled',String(!state.standardCarrierPlans.get(source)?.canGenerate));}}
  }
 
  async function runStandardCarrier(source){
   const bridge=global.SystemV3SellerExportBridge,file=state.standardCarrierFiles.get(source),plan=state.standardCarrierPlans.get(source),button=document.querySelector('[data-standard-carrier-run="'+source+'"]');
   if(!bridge?.runCarrier||!file||!plan){const reason='먼저 공식 수정 XLSX의 미리보기를 확인해주세요.';standardResult(source,reason,'error');setStatus(reason,'error');return;}
   if(!plan.canGenerate){const reason=plan.safety?.reason||'가격/매칭 상태가 안전하지 않아 XLSX 생성을 차단했습니다.';standardResult(source,reason,'error');setStatus('공식 수정파일 변환 차단: '+reason,'error');return;}
-  if(button){button.disabled=true;button.setAttribute('aria-busy','true');}
-  if(typeof lockStandardGeneration==='function')lockStandardGeneration(source,true);
+  const request=beginStandardRequest(source,'carrier_run');if(request===null)return;
+  if(button)button.setAttribute('aria-busy','true');
   standardProgress(source,5,'공식 수정파일 변환 시작','미리보기 때 확인한 대상만 다시 검증합니다.');standardResult(source,`${file.name} · 현재 매트릭스 표시값으로 변환 중…`);setStatus('공식 수정파일 변환 중…');
-  try{const result=await bridge.runCarrier({source,file,plan});standardProgress(source,100,'공식 수정파일 변환 완료',result.progressDetail||'변환된 XLSX 다운로드를 시작했습니다.','done');standardResult(source,[result.title,result.progressDetail,'Storage 저장 안 함'].filter(Boolean).join(' · ')||'공식 수정파일 변환 완료','success');setStatus('공식 수정파일 변환 완료','success');}
-  catch(error){const reason=error?.message||String(error);standardProgress(source,100,'공식 수정파일 변환 중단',reason,'error');standardResult(source,'공식 수정파일 변환 실패: '+reason,'error');setStatus('공식 수정파일 변환 실패: '+reason,'error');}
-  finally{if(typeof lockStandardGeneration==='function')lockStandardGeneration(source,false);if(button){button.disabled=false;button.removeAttribute('aria-busy');button.setAttribute('aria-disabled',String(!state.standardCarrierPlans.get(source)?.canGenerate));}}
+  try{const result=await bridge.runCarrier({source,file,plan,isCurrent:()=>isStandardRequestCurrent(source,request)});if(!isStandardRequestCurrent(source,request))return;standardProgress(source,100,'공식 수정파일 변환 완료',result.progressDetail||'변환된 XLSX 다운로드를 시작했습니다.','done');standardResult(source,[result.title,result.progressDetail,'Storage 저장 안 함'].filter(Boolean).join(' · ')||'공식 수정파일 변환 완료','success');setStatus('공식 수정파일 변환 완료','success');}
+  catch(error){if(!isStandardRequestCurrent(source,request))return;const reason=error?.message||String(error);standardProgress(source,100,'공식 수정파일 변환 중단',reason,'error');standardResult(source,'공식 수정파일 변환 실패: '+reason,'error');setStatus('공식 수정파일 변환 실패: '+reason,'error');}
+  finally{const current=standardRequests.get(source)===request;finishStandardRequest(source,request);if(button&&current){button.removeAttribute('aria-busy');button.disabled=!state.standardCarrierPlans.get(source)?.canGenerate;button.setAttribute('aria-disabled',String(!state.standardCarrierPlans.get(source)?.canGenerate));}}
  }
 
  function renderExportStatuses(){
@@ -588,6 +624,44 @@ async function runStandard(source,mode=null){
   return new File([blob],record.file_name,{type:record.mime_type||blob.type||'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
  }
 
+ function selectedAblyRole(){
+  const fieldMode=document.querySelector('[data-ably-field-mode]')?.value||'option_stock';
+  if(fieldMode!=='price_only')return 'playauto_option';
+  const active=state.activeAblyCarrierRole;
+  if(active&&state.carrierFiles.has(active))return active;
+  if(state.carrierFiles.has('playauto_product'))return 'playauto_product';
+  if(state.carrierFiles.has('playauto_option'))return 'playauto_option';
+  if(currentFile('playauto_product'))return 'playauto_product';
+  if(currentFile('playauto_option'))return 'playauto_option';
+  return 'playauto_product';
+ }
+
+ function showAblyPrerequisite(message,openAdvanced=false){
+  const status=document.querySelector('[data-ably-action-status]');
+  if(status){status.className='export-role-status missing';status.textContent=message;}
+  if(openAdvanced){const details=document.querySelector('[data-standard-source="ably"] .seller-advanced');if(details)details.open=true;}
+  setStatus(message,'error');
+ }
+
+ async function previewSelectedAbly(){
+  const role=selectedAblyRole(),record=currentFile(role);
+  if(!state.carrierFiles.has(role)&&!record){
+   const label=role==='playauto_product'?'판매가 + 옵션가':'옵션가 + 재고';
+   showAblyPrerequisite(`${label} 공식 파일이 없습니다. 고급 기능을 열어 파일을 선택하거나 장기 원본을 등록해주세요.`,true);return;
+  }
+  if(role==='playauto_product'&&document.querySelector('[data-ably-field-mode]')?.value==='stock_only'){
+   showAblyPrerequisite('재고-only는 옵션가 + 재고 공식 파일이 필요합니다.',true);return;
+  }
+  await preview(role);
+ }
+
+ async function generateSelectedAbly(){
+  const role=selectedAblyRole(),planned=state.preview;
+  if(!planned){showAblyPrerequisite('XLSX 생성 전에 변경사항 미리보기를 먼저 확인해주세요.',true);return;}
+  if(planned.role!==role){showAblyPrerequisite('필드 모드 또는 공식 파일이 미리보기 이후 바뀌었습니다. 새 미리보기를 확인해주세요.',true);return;}
+  await generate();
+ }
+
  async function preview(role){
   const selection=standardSelection('ably'),priceMode=selection.priceMode,fieldMode=selection.fieldMode,outputMode=selection.outputMode;
   const stockOnly=role==='playauto_option'&&fieldMode==='stock_only';
@@ -598,7 +672,7 @@ async function runStandard(source,mode=null){
   if(priceMode==='sellpia_source'&&role!=='playauto_product'){setStatus('셀피아 판매가 기준은 PlayAuto 판매가 + 옵션가 파일에서만 사용합니다.','error');return;}
   if(priceMode==='sellpia_source'&&(document.querySelector('[data-seller-scope-mode="ably"]')?.value||'all')==='all'){setStatus('셀피아 판매가 기준은 SKU 직접 입력 또는 태그 적용 SKU 범위를 선택해주세요.','error');return;}
   const carrier=state.carrierFiles.get(role)||null,record=carrier?null:currentFile(role);
-  if(!record&&!carrier){setStatus(`${roles[role].label} 공식 수정파일을 선택해주세요.`,'error');return;}
+  if(!record&&!carrier){showAblyPrerequisite(`${roles[role].label} 공식 수정파일을 선택해주세요.`,true);return;}
   const job=createAblyJob(role,carrier||{name:record.file_name});
   job.queries=[];const onQuery=query=>{job.queries.push(query);};
   state.role=role;state.preview=null;state.previewFilter='all';state.previewPage=1;setStatus(`${roles[role].label} 원본과 저장값을 비교하는 중…`);
@@ -752,7 +826,7 @@ async function runStandard(source,mode=null){
    }
     const displayOutput=outputMode==='changed_only'?output.filter(item=>item._changed||item._status!=='ready'):output;
     state.preview={role,priceMode,outputMode,stockOnly,priceOnly,stockSource,record,file,parsed,items:prepared,output,displayOutput,versionToken,currentPriceDecisionProof:currentDecisionState.proof||'',currentPriceDecisionSkus:stockOnly?[]:safetySkus,policySummaries,policyDownloadBlocked,timings:job.timings,shadowDiagnostics,counts:{template:parsed.items.length,matched:resolvedWithSku.length,selected:chosen.length,pricePreserved:output.filter(item=>item._preserveUnselected).length,mappingOverrides:output.filter(item=>item._status==='ready'&&item.resolution?.mapping_override).length,ready,changed,unchanged:ready-changed,warned,blocked,unresolved,preserved}};
-   renderPreview();job.finish();setStatus(`${roles[role].label} 미리보기 완료 · 변경 ${n(changed)} · 원본 유지 경고 ${n(warned)} · 치명적 차단 ${n(blocked)}`,'success');return state.preview;
+    renderPreview();job.finish();const actionStatus=document.querySelector('[data-ably-action-status]');if(actionStatus){actionStatus.className='export-role-status ready';actionStatus.textContent=`${roles[role].label} 미리보기 완료 · 변경 ${n(changed)} · 원본 유지 경고 ${n(warned)} · 치명적 차단 ${n(blocked)}`;}setStatus(`${roles[role].label} 미리보기 완료 · 변경 ${n(changed)} · 원본 유지 경고 ${n(warned)} · 치명적 차단 ${n(blocked)}`,'success');return state.preview;
   }catch(error){if(error?.name==='CarrierCancelledError'||state.ablyJob!==job||job.cancelled)return;job.finish(error);setStatus(`미리보기 실패: ${error?.message||error}`,'error');}
  }
 

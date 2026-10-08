@@ -35,6 +35,26 @@ try{
  await page.addScriptTag({content:workflow});
  await page.waitForSelector('#export-workflow-v2');
 
+ const ordinaryPreview=page.locator('[data-standard-preview], [data-ably-standard-preview]'),ordinaryRun=page.locator('[data-standard-run], [data-ably-standard-run]');
+ assert.equal(await ordinaryPreview.count(),3,'all three seller cards expose one ordinary preview action');
+ assert.equal(await ordinaryRun.count(),3,'all three seller cards expose one ordinary XLSX action');
+ assert.equal(await page.locator('[data-ably-standard-preview]').evaluate(node=>node.closest('details')===null),true);
+ assert.equal(await page.locator('[data-ably-standard-run]').evaluate(node=>node.closest('details')===null),true);
+ assert.equal(await page.locator('[data-carrier-input="playauto_product"]').evaluate(node=>node.closest('details')!==null),true,'official carrier picker stays available under advanced features');
+ assert.equal(await page.locator('[data-page-upload-ably]').evaluate(node=>node.closest('details')!==null),true,'long-term source management is under advanced features');
+ await page.locator('[data-ably-standard-preview]').click();
+ assert.match(await page.locator('[data-ably-action-status]').innerText(),/공식 파일이 없습니다/);
+ assert.equal(await page.locator('[data-standard-source="ably"] details.seller-advanced').evaluate(node=>node.open),true,'missing applicable source opens advanced prerequisites');
+ await page.locator('[data-ably-field-mode]').selectOption('price_only');
+ assert.equal(await ordinaryPreview.count(),3,'ordinary actions remain visible after changing the field selection');
+ assert.equal(await ordinaryRun.count(),3);
+ await page.locator('[data-ably-field-mode]').selectOption('option_stock');
+ await page.locator('[data-seller-scope-mode="ably"]').selectOption('tag');
+ await page.waitForFunction(()=>document.querySelector('[data-seller-scope-tag="ably"] option[value="7"]'));
+ await page.locator('[data-seller-scope-tag="ably"]').selectOption('7');
+ assert.equal(await ordinaryPreview.count(),3,'ordinary preview actions remain available after selecting tag scope');
+ assert.equal(await ordinaryRun.count(),3,'ordinary generation actions remain available after selecting tag scope');
+
  assert.equal(await page.locator('[data-standard-output-mode="smartstore"]').inputValue(),'target_all');
  assert.equal(await page.locator('[data-standard-preview="smartstore"]').count(),1);
  assert.equal(await page.locator('[data-standard-run="smartstore"]').count(),1);

@@ -12,7 +12,7 @@ test('Ably mapping panel invalidates stale previews and imports the selected fil
   try{
     const page=await browser.newPage();
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
-    await page.setContent('<!doctype html><html><body><div id="ably-mapping-management"></div></body></html>');
+    await page.setContent('<!doctype html><html><body class="operations-auth-locked"><div id="ably-mapping-management"></div></body></html>');
     await page.evaluate(({header})=>{
       const matrixByKey={
         A:[header,['PRODUCT-A','OPTION-A','','sellpia_SKU-A',5,0]],
@@ -31,8 +31,12 @@ test('Ably mapping panel invalidates stale previews and imports the selected fil
       };
     },{header});
     await page.addScriptTag({path:modulePath});
+    await page.waitForFunction(()=>document.querySelector('#ably-map-status')?.textContent.includes('운영 로그인 후'));
+    assert.equal(await page.evaluate(()=>mappingTest.loadCalls),0,'locked panel cannot load server mappings');
+    await page.evaluate(()=>document.body.classList.remove('operations-auth-locked'));
     await page.waitForFunction(()=>document.querySelector('#ably-map-rows')?.textContent.includes('SAVED-PRODUCT'));
     assert.equal(await page.evaluate(()=>mappingTest.loadCalls),1,'initial server list loads after mount');
+    assert.match(await page.locator('#ably-map-status').textContent(),/저장된 에이블리 매핑 1건을 조회/,'login transition replaces the locked guidance with loaded status');
 
     const fileInput=page.locator('#ably-map-file'),preview=page.locator('#ably-map-preview'),importButton=page.locator('#ably-map-import');
     await fileInput.setInputFiles({name:'A.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('A')});
