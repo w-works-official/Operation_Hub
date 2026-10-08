@@ -23,7 +23,6 @@
   "operationsHubPriceDecisions.db.test.mjs",
   "operationsHubPriceDecisionsLegacy.db.test.mjs",
   "operationsHubAblySyntheticWorkbookRoundtrip.ui.test.mjs",
-  "operationsHubCurrentPriceDecisionSmartStoreRoundtrip.ui.test.mjs",
   "operationsHubPriceDecisionDataService.mock.test.mjs",
   "operationsHubPlatformRuleCandidate.mock.test.mjs",
   "operationsHubMatrixMultiListing.mock.test.mjs",
