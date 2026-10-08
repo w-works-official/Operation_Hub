@@ -77,16 +77,23 @@ function buildHarness({statusOverride=null,changeSecondSnapshot=false}={}){
  const skuByIdentity=new Map([['1001\u00005001','1001-1'],['1002\u00005002','1002-1'],['2001\u00005003','2001-1'],['4001\u00001001-1','1001-1'],['4001\u00001002-1','1002-1'],['4001\u00002001-1','2001-1']]);
  const stockBySku=new Map([['1001-1',{sellpia_current_stock:11,sellpia_available_stock:-3}],['1002-1',{sellpia_current_stock:8,sellpia_available_stock:5}],['2001-1',{sellpia_current_stock:3,sellpia_available_stock:9}]]);
  const originals={smartstore:[],makeshop:[]};
- const snapshotId='snap-1';let stockRead=0,downloadCalls=0,statusCalls=0;const stockSkuSets=[];
+ const snapshotId='snap-1';let stockRead=0,downloadCalls=0,statusCalls=0;const stockSkuSets=[];const workflow={active:false,snapshotId:'snap-1',failNextStockRead:false,failWaitCalls:0,uploadGate:null,sessionAuthenticated:true,checkSessionCalls:0,timeline:[],uploadCalls:0,waitCalls:0,refreshCalls:[]};
  const status=[{source:'smartstore',snapshotId:'ss-1',available:true,files:[{name:'ss-a.xlsx',size:1},{name:'ss-b.xlsx',size:1}]},{source:'makeshop',snapshotId:'ms-1',available:true,files:[{name:'ms-a.xlsx',size:1}]}];
  const liveData={
   loadLatestSellerOriginalStatus:async()=>{statusCalls++;return statusOverride||structuredClone(status);},
   downloadLatestSellerOriginals:async()=>{downloadCalls++;return new Map([['smartstore',originals.smartstore],['makeshop',originals.makeshop]]);},
   loadCarrierSellerMappings:async({source,identities})=>({rows:identities.map(row=>{const sku=skuByIdentity.get(`${row.product_code}\u0000${row.option_code||''}`)||(/^sellpia_.+-\d+$/.test(row.seller_option_code||'')?(row.seller_option_code||'').replace(/^sellpia_/,''):null);return {...row,sku};}).filter(row=>row.sku)}),
   loadPlayautoSellpiaCatalog:async productCodes=>[...stockBySku.keys()].map((sku,index)=>({sellpia_product_code:['1001','1002','2001'][index],sellpia_sku_code:sku,sellpia_option_name:`Option ${['5001','5002','5003'][index]}`})).filter(row=>productCodes.includes(row.sellpia_product_code)),
-  loadSellpiaStockSourcesForExport:async({skus})=>{stockRead++;stockSkuSets.push([...skus]);return {snapshotId:changeSecondSnapshot&&stockRead===2?'snap-2':snapshotId,bySku:new Map(skus.filter(sku=>stockBySku.has(sku)).map(sku=>[sku,stockBySku.get(sku)]))};}
+  loadSellpiaStockSourcesForExport:async({skus})=>{stockRead++;stockSkuSets.push([...skus]);workflow.timeline.push(`stock-read-${stockRead}`);if(workflow.failNextStockRead){workflow.failNextStockRead=false;throw Error('synthetic export source failed');}const selectedSnapshot=workflow.active?workflow.snapshotId:changeSecondSnapshot&&stockRead===2?'snap-2':snapshotId;return {snapshotId:selectedSnapshot,bySku:new Map(skus.filter(sku=>stockBySku.has(sku)).map(sku=>[sku,stockBySku.get(sku)]))};},
+  previewSellpiaInventoryCount:async()=>workflow.expectedPreview,
+  checkOperationsHubSession:async()=>{workflow.checkSessionCalls++;workflow.timeline.push('session');return {authenticated:workflow.sessionAuthenticated};},
+  uploadSellpiaInventoryCount:async(_files,expected)=>{workflow.uploadCalls++;workflow.timeline.push('upload');if(workflow.uploadGate)await workflow.uploadGate;for(const row of expected.changedRows||[]){const current=stockBySku.get(row.sellpia_sku_code);if(current)Object.assign(current,{sellpia_current_stock:row.stock,sellpia_available_stock:row.available_stock});}return {...expected,snapshotId:'snap-2',uploadMode:'inventory_count',uploadedRowCount:expected.changedRows.length,matrixAffectedSkus:['1001-1']};},
+  waitForSellpiaMatrixRebuild:async id=>{workflow.waitCalls++;workflow.timeline.push('wait');if(workflow.failWaitCalls>0){workflow.failWaitCalls--;throw Error('synthetic matrix rebuild timeout');}return {matrix_snapshot_id:id,rebuild_pending:false};}
  };
- const ctx={console,Blob:BlobClass,File:class TestFile extends BlobClass{constructor(parts,name,options={}){super(parts,options);this.name=name;}},JSZip,Uint8Array,ArrayBuffer,TextEncoder,TextDecoder,Date,Math,Map,Set,Number,String,JSON,RegExp,Error,Promise,setTimeout,performance:{now:()=>Date.now()},CustomEvent:class CustomEvent{constructor(type,init){this.type=type;this.detail=init?.detail;}},dispatchEvent(){},liveData,sellerExportState:{running:false},formatNumber:value=>String(value),CHANNEL_LABELS:{smartstore:'스마트스토어',makeshop:'메이크샵'},window:{__systemV3InventoryBatchBusy:false,__systemV3DirectExportBusy:false},SystemV3SellerExportBridge:{},SystemV3SellerParsers:null,HubCurrentPriceExport:null,AblyPlayautoExport:null,SystemV3SellpiaInventoryCount:null,XLSX:null,systemV3OriginalFileBoundaryDiagnostics:null};
+ const resolverCalls=[];
+ const forbiddenPriceResolver=new Proxy({}, {get(_target,method){return (...args)=>{resolverCalls.push({method:String(method),args});throw Error(`stock-only batch must not invoke current-price decision ${String(method)}`);};}});
+ const ctx={console,Blob:BlobClass,File:class TestFile extends BlobClass{constructor(parts,name,options={}){super(parts,options);this.name=name;}},JSZip,Uint8Array,ArrayBuffer,TextEncoder,TextDecoder,Date,Math,Map,Set,Number,String,JSON,RegExp,Error,Promise,setTimeout,performance:{now:()=>Date.now()},CustomEvent:class CustomEvent{constructor(type,init){this.type=type;this.detail=init?.detail;}},dispatchEvent(){},liveData,sellerExportState:{running:false},formatNumber:value=>String(value),CHANNEL_LABELS:{smartstore:'스마트스토어',makeshop:'메이크샵'},window:{__systemV3InventoryBatchBusy:false,__systemV3DirectExportBusy:false,HubCurrentPriceDecisionResolver:forbiddenPriceResolver},SystemV3SellerExportBridge:{},SystemV3SellerParsers:null,HubCurrentPriceExport:null,AblyPlayautoExport:null,SystemV3SellpiaInventoryCount:null,XLSX:null,systemV3OriginalFileBoundaryDiagnostics:null,inventoryBatchRecovery:null,HubCurrentPriceDecisionResolver:forbiddenPriceResolver};
+ ctx.refreshMatrixSkus=async skus=>{workflow.refreshCalls.push([...skus]);workflow.timeline.push('refresh');return [...skus];};
  ctx.globalThis=ctx;ctx.window.globalThis=ctx;ctx.window.liveData=liveData;
  ctx.JSZip=class TransportZip extends JSZip{file(name,value,...rest){return super.file(name,value instanceof BlobClass?value.arrayBuffer().then(bytes=>new Uint8Array(bytes)):value,...rest);}};
  ctx.window.JSZip=ctx.JSZip;
@@ -102,10 +109,17 @@ function buildHarness({statusOverride=null,changeSecondSnapshot=false}={}){
  const sellerSource=inventorySource;
  const prepare=extractFunction(sellerSource,'async function prepareChangedOnlyExport(','async function prepareChangedOnlyExport');
  const bridge=extractFunction(sellerSource,'async runInventoryBatch(','async function runInventoryBatch');
+ const updateBridge=extractFunction(sellerSource,'async runInventoryUpdateBatch(','async function runInventoryUpdateBatch');
+ const retryBridge=extractFunction(sellerSource,'async retryInventoryBatchExport(','async function retryInventoryBatchExport');
  vm.runInContext(prepare+'; this.__prepareChangedOnlyExport=prepareChangedOnlyExport;',ctx,{filename:'prepareChangedOnlyExport.js'});
  vm.runInContext(bridge+'; this.__runInventoryBatch=runInventoryBatch;',ctx,{filename:'runInventoryBatch.js'});
+ vm.runInContext(updateBridge+'; this.__runInventoryUpdateBatch=runInventoryUpdateBatch;',ctx,{filename:'runInventoryUpdateBatch.js'});
+ vm.runInContext(retryBridge+'; this.__retryInventoryBatchExport=retryInventoryBatchExport;',ctx,{filename:'retryInventoryBatchExport.js'});
+ ctx.SystemV3SellerExportBridge.runInventoryBatch=options=>ctx.__runInventoryBatch(options);
+ ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch=options=>ctx.__runInventoryUpdateBatch.call(ctx.SystemV3SellerExportBridge,options);
+ ctx.SystemV3SellerExportBridge.retryInventoryBatchExport=options=>ctx.__retryInventoryBatchExport.call(ctx.SystemV3SellerExportBridge,options);
  ctx.window.__prepareChangedOnlyExport=ctx.__prepareChangedOnlyExport;
- return {ctx,run:ctx.__runInventoryBatch,liveData,originals,stockBySku,status,stockSkuSets,get counts(){return {stockRead,downloadCalls,statusCalls};}};
+ return {ctx,run:ctx.__runInventoryBatch,liveData,originals,stockBySku,status,stockSkuSets,workflow,resolverCalls,get counts(){return {stockRead,downloadCalls,statusCalls};}};
 }
 
 async function makeHarnessFiles(harness,{duplicateCarrier=false}={}){
@@ -126,6 +140,13 @@ async function writeQaOutput(result,details){
  fs.mkdirSync(outputDir,{recursive:true});
  fs.writeFileSync(path.join(outputDir,'QA-fixture-inventory-batch.zip'),Buffer.from(await result.blob.arrayBuffer()));
  fs.writeFileSync(path.join(outputDir,'QA-fixture-inventory-batch-summary.json'),JSON.stringify({synthetic_fixture:true,live_data_used:false,archive_file_name:result.fileName,archive_members:details.archiveMembers,source_identity:details.sourceIdentity,stock_modes:['available_stock','stock'],matched_sku_count:result.matchedSkuCount,stock_snapshot_reads:details.stockReads,stock_snapshot_read_sku_sets:details.stockSkuSets,negative_available_stock_source:-3,negative_available_stock_export:0,source_snapshot_preserved:true,parser_row_counts:details.rowCounts,ably_columns_preserved:['V','W'],ably_stock_column:'X'},null,2)+'\n','utf8');
+}
+
+async function writeInventoryUpdateQaOutput(result,details){
+ const outputDir=process.env.INVENTORY_UPDATE_QA_OUTPUT;if(!outputDir)return;
+ fs.mkdirSync(outputDir,{recursive:true});
+ fs.writeFileSync(path.join(outputDir,'QA-fixture-inventory-update.zip'),Buffer.from(await result.blob.arrayBuffer()));
+ fs.writeFileSync(path.join(outputDir,'QA-fixture-inventory-update-summary.json'),JSON.stringify({synthetic_fixture:true,live_data_used:false,upload_mode:'inventory_count',base_snapshot_id:'snap-1',export_snapshot_id:result.stockSnapshotId,stock_source:result.stockSource,uploaded_changed_sku_count:result.uploadResult.uploadedRowCount,matched_sku_count:result.matchedSkuCount,changed_row_stock_after_upload:7,unchanged_matched_sku_stock_after_upload:5,archive_file_name:result.fileName,archive_members:details.archiveMembers,parser_row_counts:details.rowCounts,upload_call_count:details.uploadCalls,matrix_refresh_calls:details.refreshCalls},null,2)+'\n','utf8');
 }
 
 test('inventory batch emits four full originals, parser round-trips stock-only values and preserves PlayAuto V/W',async()=>{
@@ -203,4 +224,122 @@ test('ambiguous PlayAuto carrier rows warn and keep original stock while the bat
 
 test('snapshot drift aborts the batch before the ZIP is returned',async()=>{
  const h=buildHarness({changeSecondSnapshot:true}),file=await makeHarnessFiles(h);await assert.rejects(()=>h.run({file,stockSource:'available_stock'}),/snapshot이 변경되었습니다/);assert.equal(h.counts.stockRead,2);
+});
+
+test('inventory update uploads once, waits for snapshot B, refreshes affected Matrix SKUs, then exports and reopens four XLSX files from B',async()=>{
+ const h=buildHarness(),ablyFile=await makeHarnessFiles(h),countFile=asFile('inventory-count.xlsx',new Uint8Array([1,2,3]));
+ const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'proof-A',summary:{changedSkuCount:1,errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1',stock:10,available_stock:7}]};
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;
+ const result=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file:ablyFile,stockSource:'available_stock'});
+ assert.equal(h.workflow.uploadCalls,1);assert.equal(h.workflow.checkSessionCalls,1);assert.equal(h.workflow.waitCalls,1);assert.equal(result.stockSnapshotId,'snap-2');assert.equal(result.uploadResult.snapshotId,'snap-2');
+ assert.deepEqual(h.resolverCalls,[],'stock-only batch never invokes current-price decision normalization or proof logic');
+ assert.deepEqual(h.workflow.refreshCalls,[['1001-1']]);
+ assert.deepEqual(h.workflow.timeline,['session','upload','wait','refresh','stock-read-1','stock-read-2']);
+ const {zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);assert.ok(names.every(name=>name.endsWith('.xlsx')));
+ const parsed=[];for(const name of names){const file=asFile(name,await zip.file(name).async('uint8array'));if(name.startsWith('스마트스토어_'))parsed.push(...(await h.ctx.SystemV3SellerParsers.parseSellerFiles('smartstore',[file],{inventory:true,price:false})).normalizedRows);else if(name.startsWith('메이크샵_')){const makeRows=(await h.ctx.SystemV3SellerParsers.parseSellerFiles('makeshop',[file],{inventory:true,price:false})).normalizedRows;assert.equal(makeRows.length,1);assert.equal(makeRows[0].stock,9);}else{const ably=await h.ctx.AblyPlayautoExport.readTemplate(file);assert.equal(ably.items.length,3);assert.deepEqual(ably.items.map(row=>row.sales_quantity),[7,5,null],'the uploaded changed row uses snapshot B, every matched carrier row is retained, and a blank source X stays blank');}}
+ assert.equal(parsed.length,2);assert.deepEqual(parsed.map(row=>row.stock).sort((a,b)=>a-b),[5,7],'the changed row comes from B and the SKU absent from the changed-row list remains in the full-original export');
+ await writeInventoryUpdateQaOutput(result,{archiveMembers:names,rowCounts:{smartstore:parsed.length,makeshop:1,ably:3},uploadCalls:h.workflow.uploadCalls,refreshCalls:h.workflow.refreshCalls});
+ const retriedAfterDownloadFailure=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file:ablyFile,stockSource:'available_stock'});
+ assert.equal(h.workflow.uploadCalls,1,'re-running the same confirmed proof after a client-side download failure reuses the completed upload');
+ assert.equal(retriedAfterDownloadFailure.uploaded,true);assert.equal(retriedAfterDownloadFailure.stockSnapshotId,'snap-2');
+ assert.equal((await archiveXlsx(retriedAfterDownloadFailure.blob)).names.length,4);
+});
+
+test('inventory update clamps negative available stock across every matched XLSX while preserving negative snapshot values and blank Ably X',async()=>{
+ const h=buildHarness(),ablyFile=await makeHarnessFiles(h),countFile=asFile('negative-count.xlsx',new Uint8Array([1,2,3]));
+ for(const row of h.stockBySku.values())row.sellpia_available_stock=-3;
+ const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'proof-negative',summary:{changedSkuCount:1,errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1',stock:10,available_stock:-3}]};
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;
+ const result=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file:ablyFile,stockSource:'available_stock'});
+ const {zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);
+ const smartRows=[];
+ for(const name of names){
+  const file=asFile(name,await zip.file(name).async('uint8array'));
+  if(name.startsWith('스마트스토어_'))smartRows.push(...(await h.ctx.SystemV3SellerParsers.parseSellerFiles('smartstore',[file],{inventory:true,price:false})).normalizedRows);
+  else if(name.startsWith('메이크샵_'))assert.equal((await h.ctx.SystemV3SellerParsers.parseSellerFiles('makeshop',[file],{inventory:true,price:false})).normalizedRows[0].stock,0);
+  else assert.deepEqual((await h.ctx.AblyPlayautoExport.readTemplate(file)).items.map(item=>item.sales_quantity),[0,0,null]);
+ }
+ assert.deepEqual(smartRows.map(row=>row.stock),[0,0]);
+ for(const value of h.stockBySku.values())assert.equal(value.sellpia_available_stock,-3,'export clamp never mutates snapshot source values');
+});
+
+test('inventory update rejects preview errors before upload and rejects stale base snapshot A after the upload boundary',async()=>{
+ const invalid=buildHarness(),invalidFile=await makeHarnessFiles(invalid),invalidPreview={baseSnapshotId:'snap-1',fingerprint:'fatal',summary:{errorRowCount:1,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1'}]};
+ await assert.rejects(()=>invalid.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:invalidPreview,file:invalidFile}),/숫자 오류|중복 충돌/);
+ assert.equal(invalid.workflow.uploadCalls,0);assert.equal(invalid.counts.stockRead,0);
+
+ const duplicate=buildHarness(),duplicateFile=await makeHarnessFiles(duplicate),duplicatePreview={baseSnapshotId:'snap-1',fingerprint:'duplicate',summary:{errorRowCount:0,duplicateConflictCount:1},changedRows:[{sellpia_sku_code:'1001-1'}]};
+ await assert.rejects(()=>duplicate.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:duplicatePreview,file:duplicateFile}),/숫자 오류|중복 충돌/);
+ assert.equal(duplicate.workflow.uploadCalls,0);assert.equal(duplicate.counts.stockRead,0);
+
+ const stale=buildHarness(),staleFile=await makeHarnessFiles(stale),preview={baseSnapshotId:'snap-1',fingerprint:'proof-stale',summary:{errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1'}]};
+ stale.workflow.active=true;stale.workflow.snapshotId='snap-1';stale.workflow.expectedPreview=preview;
+ await assert.rejects(()=>stale.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:preview,file:staleFile}),/업로드\/미리보기 기준과 달라 ZIP을 만들지 않았습니다/);
+ assert.equal(stale.workflow.uploadCalls,1);assert.equal(stale.workflow.waitCalls,1);assert.equal(stale.counts.stockRead,1);
+
+ const invalidAbly=buildHarness(),fatalAbly=asFile('not-an-ably-template.xlsx',new Uint8Array([7,8,9])),validPreview={baseSnapshotId:'snap-1',fingerprint:'proof-valid',summary:{errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1'}]};
+ invalidAbly.workflow.active=true;invalidAbly.workflow.snapshotId='snap-2';invalidAbly.workflow.expectedPreview=validPreview;
+ await assert.rejects(()=>invalidAbly.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:validPreview,file:fatalAbly}));
+ assert.equal(invalidAbly.workflow.uploadCalls,0,'invalid Ably workbook is rejected before the DB write');assert.equal(invalidAbly.counts.stockRead,0);
+});
+
+test('missing required SmartStore or MakeShop originals fail before inventory upload',async()=>{
+ const preview={baseSnapshotId:'snap-1',fingerprint:'proof-originals',summary:{errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1'}]};
+ const cases=[
+  [[{source:'smartstore',snapshotId:'ss-1',available:false,files:[]},{source:'makeshop',snapshotId:'ms-1',available:true,files:[{name:'make.xlsx',size:1}]}],/스마트스토어/],
+  [[{source:'smartstore',snapshotId:'ss-1',available:true,files:[{name:'ss-a.xlsx',size:1},{name:'ss-b.xlsx',size:1}]},{source:'makeshop',snapshotId:'ms-1',available:false,files:[]}],/메이크샵/]
+ ];
+ for(const [status,expected] of cases){
+  const h=buildHarness({statusOverride:status}),ably=asFile('ably.xlsx',new Uint8Array([1]));
+  await assert.rejects(()=>h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([2]))],expectedPreview:preview,file:ably}),expected);
+  assert.equal(h.workflow.uploadCalls,0);assert.equal(h.counts.stockRead,0);
+ }
+});
+
+test('new inventory update rechecks authentication before upload and prevents concurrent duplicate submits',async()=>{
+ const unauthenticated=buildHarness(),file=await makeHarnessFiles(unauthenticated),preview={baseSnapshotId:'snap-1',fingerprint:'auth-proof',summary:{errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1'}]};
+ unauthenticated.workflow.sessionAuthenticated=false;unauthenticated.workflow.expectedPreview=preview;
+ await assert.rejects(()=>unauthenticated.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:preview,file}),/세션이 만료|다시 로그인/);
+ assert.equal(unauthenticated.workflow.checkSessionCalls,1);assert.equal(unauthenticated.workflow.uploadCalls,0);assert.equal(unauthenticated.counts.stockRead,0);
+
+ const h=buildHarness(),ablyFile=await makeHarnessFiles(h),deferred={};deferred.promise=new Promise(resolve=>{deferred.resolve=resolve;});
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=preview;h.workflow.uploadGate=deferred.promise;
+ const options={files:[asFile('count.xlsx',new Uint8Array([1]))],expectedPreview:preview,file:ablyFile};
+ const first=h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch(options);
+ await new Promise(resolve=>setTimeout(resolve,0));
+ await assert.rejects(()=>h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch(options),/다른 내보내기 작업/);
+ deferred.resolve();await first;
+ assert.equal(h.workflow.uploadCalls,1,'the busy guard allows only one concurrent inventory upload');
+});
+
+test('no-change inventory preview skips upload and exports the current complete four-file batch',async()=>{
+ const h=buildHarness(),file=await makeHarnessFiles(h),countFile=asFile('same-count.xlsx',new Uint8Array([2]));
+ const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'proof-no-change',summary:{changedSkuCount:0,errorRowCount:0,duplicateConflictCount:0},changedRows:[]};
+ h.workflow.active=true;h.workflow.snapshotId='snap-1';h.workflow.expectedPreview=expectedPreview;
+ const result=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file,stockSource:'stock'});
+ assert.equal(h.workflow.uploadCalls,0);assert.equal(h.workflow.waitCalls,1);assert.equal(h.workflow.refreshCalls.length,0);assert.equal(result.stockSnapshotId,'snap-1');
+ assert.deepEqual(h.workflow.timeline,['session','wait','stock-read-1','stock-read-2'],'the unchanged path waits for the current base snapshot without writing or refreshing affected SKUs');
+ const {zip,names}=await archiveXlsx(result.blob);assert.equal(names.length,4);assert.ok(names.every(name=>name.endsWith('.xlsx')));
+ for(const name of names.filter(name=>name.startsWith('스마트스토어_'))){const parsed=await h.ctx.SystemV3SellerParsers.parseSellerFiles('smartstore',[asFile(name,await zip.file(name).async('uint8array'))],{inventory:true,price:false});assert.equal(parsed.normalizedRows.length,1);}
+});
+
+test('export failure after a ready inventory upload can retry from retained snapshot B without uploading again',async()=>{
+ const h=buildHarness(),file=await makeHarnessFiles(h),countFile=asFile('inventory-count.xlsx',new Uint8Array([4,5,6]));
+ const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'proof-retry',summary:{errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1',stock:10,available_stock:7}]};
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;h.workflow.failNextStockRead=true;
+ await assert.rejects(()=>h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file,stockSource:'available_stock'}),error=>error.code==='INVENTORY_EXPORT_FAILED_AFTER_UPDATE'&&error.uploaded&&error.retryAvailable);
+ assert.equal(h.workflow.uploadCalls,1);assert.equal(h.counts.stockRead,1);
+ const retried=await h.ctx.SystemV3SellerExportBridge.retryInventoryBatchExport({stockSource:'available_stock'});
+ assert.equal(h.workflow.uploadCalls,1,'retry uses the retained successful DB upload');assert.equal(retried.uploaded,true);assert.equal(retried.stockSnapshotId,'snap-2');assert.equal(h.workflow.checkSessionCalls,2,'retry validates the current Operations Hub session again');
+ const {names}=await archiveXlsx(retried.blob);assert.equal(names.length,4);
+});
+
+test('matrix rebuild timeout can be retried from the completed upload without a second upload',async()=>{
+ const h=buildHarness(),file=await makeHarnessFiles(h),countFile=asFile('inventory-count.xlsx',new Uint8Array([5]));
+ const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'proof-wait-retry',summary:{errorRowCount:0,duplicateConflictCount:0},changedRows:[{sellpia_sku_code:'1001-1',stock:10,available_stock:7}]};
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;h.workflow.failWaitCalls=1;
+ await assert.rejects(()=>h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[countFile],expectedPreview,file}),error=>error.code==='INVENTORY_EXPORT_FAILED_AFTER_UPDATE'&&error.uploaded&&error.retryAvailable);
+ assert.equal(h.workflow.uploadCalls,1);assert.equal(h.workflow.waitCalls,1);assert.equal(h.counts.stockRead,0);
+ const result=await h.ctx.SystemV3SellerExportBridge.retryInventoryBatchExport({});
+ assert.equal(h.workflow.uploadCalls,1);assert.equal(h.workflow.waitCalls,2);assert.equal(result.stockSnapshotId,'snap-2');assert.equal(h.counts.stockRead,2);
 });

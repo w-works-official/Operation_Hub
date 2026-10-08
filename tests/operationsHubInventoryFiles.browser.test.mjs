@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import {createRequire} from 'node:module';
@@ -17,63 +16,119 @@ async function fixture(t){
   await page.setContent(`<!doctype html><main id="inventory">
     <input type="radio" name="inventory-stock-source" value="available_stock" checked>
     <input type="radio" name="inventory-stock-source" value="stock">
+    <input id="inventory-sellpia-files" type="file" accept=".xlsx" multiple>
+    <p id="inventory-sellpia-file-status"></p>
     <input id="inventory-ably-file" type="file" accept=".xlsx">
     <p id="inventory-file-status"></p>
-    <button id="inventory-batch-run">재고 파일 4개 ZIP 생성</button>
+    <section id="inventory-update-preview" data-state="idle"><b id="inventory-preview-title"></b><span id="inventory-preview-message"></span>
+      <dl id="inventory-preview-summary" hidden>${['files','read-rows','valid-skus','changed','unchanged','unconfirmed','duplicate-same','duplicate-conflict','errors'].map(id=>`<dd id="inventory-preview-${id}"></dd>`).join('')}</dl>
+    </section>
+    <button id="inventory-batch-run" disabled>재고 반영 후 4개 ZIP 생성</button>
     <div id="inventory-batch-status" hidden><b id="inventory-batch-title"></b><progress id="inventory-batch-progress" max="100" hidden></progress><p id="inventory-batch-detail"></p></div>
     <div id="inventory-batch-result" hidden></div></main>`);
   await page.addScriptTag({path:uiPath});
   t.after(async()=>{await context.close();await browser.close();});
   return page;
 }
+const xlsx=(name,contents='fixture')=>({name,mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(contents)});
+const preview=(overrides={})=>({fingerprint:'fixture-fingerprint',baseSnapshotId:'fixture-snapshot',changedRows:[{sellpia_sku_code:'A-1'}],summary:{fileCount:2,readRowCount:16,validSkuCount:14,changedSkuCount:2,unchangedSkuCount:12,unknownSkuCount:1,duplicateSameCount:3,duplicateConflictCount:0,errorRowCount:0,...overrides}});
 
-test('missing PlayAuto source shows the exact guidance and never calls the bridge',async t=>{
+test('multi-file selection automatically previews all required counts and gates the final button',async t=>{
   const page=await fixture(t);
-  await page.evaluate(()=>{window.__batchCalls=0;window.SystemV3SellerExportBridge={runInventoryBatch(){window.__batchCalls++;}};});
-  await page.locator('#inventory-batch-run').click();
-  assert.equal(await page.locator('#inventory-batch-detail').textContent(),'에이블리 PlayAuto 원본 파일을 먼저 선택해주세요.');
-  assert.equal(await page.evaluate(()=>window.__batchCalls),0);
+  await page.evaluate(()=>{window.__previewCalls=0;window.SystemV3Data={previewSellpiaInventoryCount:async files=>{window.__previewCalls++;return {fingerprint:'f1',summary:{fileCount:files.length,readRowCount:16,validSkuCount:14,changedSkuCount:2,unchangedSkuCount:12,unknownSkuCount:1,duplicateSameCount:3,duplicateConflictCount:0,errorRowCount:0}};}};});
+  await page.locator('#inventory-sellpia-files').setInputFiles([xlsx('count-1.xlsx'),xlsx('count-2.xlsx')]);
+  await page.waitForFunction(()=>document.querySelector('#inventory-preview-title')?.textContent==='재고 반영 미리보기 완료');
+  assert.equal(await page.locator('#inventory-preview-files').textContent(),'2');
+  assert.equal(await page.locator('#inventory-preview-read-rows').textContent(),'16');
+  assert.equal(await page.locator('#inventory-preview-valid-skus').textContent(),'14');
+  assert.equal(await page.locator('#inventory-preview-changed').textContent(),'2');
+  assert.equal(await page.locator('#inventory-preview-unchanged').textContent(),'12');
+  assert.equal(await page.locator('#inventory-preview-unconfirmed').textContent(),'1');
+  assert.equal(await page.locator('#inventory-preview-duplicate-same').textContent(),'3');
+  assert.equal(await page.locator('#inventory-preview-duplicate-conflict').textContent(),'0');
+  assert.equal(await page.locator('#inventory-preview-errors').textContent(),'0');
+  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),true,'the separate PlayAuto source remains required');
+  await page.locator('#inventory-ably-file').setInputFiles(xlsx('playauto.xlsx'));
+  await page.waitForFunction(()=>window.__previewCalls===2,'changing either source file invalidates and refreshes the current preview');
+  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),false,'a valid read-only preview and both inputs enable the final action');
 });
 
-test('batch locks controls, prevents duplicate work, and downloads one four-file ZIP',async t=>{
+test('preview conflicts and fatal rows block the final action',async t=>{
   const page=await fixture(t);
-  await page.evaluate(()=>{
-    window.__batchCalls=0;window.__downloadClicks=0;
-    const click=HTMLAnchorElement.prototype.click;
-    HTMLAnchorElement.prototype.click=function(){window.__downloadClicks++;return click.call(this);};
-    window.SystemV3SellerExportBridge={runInventoryBatch:async({file,stockSource,onProgress})=>{
-      window.__batchCalls++;window.__batchArgs={fileName:file.name,stockSource};
-      onProgress({message:'원본 1/4 처리 중',percent:25});
-      await new Promise(resolve=>window.__finishBatch=resolve);
-      return {blob:new Blob(['zip-fixture'],{type:'application/zip'}),fileName:'재고_4개.zip',files:['smartstore-a.xlsx','smartstore-b.xlsx','makeshop.xlsx','ably.xlsx'],warnings:[]};
-    }};
+  await page.evaluate(()=>{window.__previewCounts={duplicateConflictCount:0,errorRowCount:0};window.SystemV3Data={previewSellpiaInventoryCount:async()=>({summary:{fileCount:1,readRowCount:4,validSkuCount:2,changedSkuCount:1,unchangedSkuCount:1,unknownSkuCount:0,duplicateSameCount:0,...window.__previewCounts}})};});
+  await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('count.xlsx'));
+  await page.locator('#inventory-ably-file').setInputFiles(xlsx('playauto.xlsx'));
+  await page.waitForFunction(()=>document.querySelector('#inventory-batch-run')?.disabled===false);
+  await page.evaluate(()=>{window.__previewCounts={duplicateConflictCount:1,errorRowCount:0};});
+  await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('count-conflict.xlsx'));
+  await page.waitForFunction(()=>document.querySelector('#inventory-preview-title')?.textContent.includes('오류를 확인'));
+  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),true);
+  await page.evaluate(()=>{window.__previewCounts={duplicateConflictCount:0,errorRowCount:1};});
+  await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('count-invalid.xlsx'));
+  await page.waitForFunction(()=>document.querySelector('#inventory-preview-summary')?.hidden===false&&document.querySelector('#inventory-preview-errors')?.textContent==='1');
+  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),true);
+});
+
+test('update flow locks every control, prevents duplicate clicks, and downloads one four-file ZIP',async t=>{
+  const page=await fixture(t);
+  await page.evaluate(()=>{window.__batchCalls=0;window.__downloadClicks=0;window.__finishBatch=null;window.__expectedPreview={fingerprint:'fixture-fingerprint',summary:{changedSkuCount:2}};
+    window.SystemV3Data={previewSellpiaInventoryCount:async()=>window.__expectedPreview};
+    const click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){window.__downloadClicks++;return click.call(this);};
+    window.SystemV3SellerExportBridge={runInventoryUpdateBatch:async({files,expectedPreview,file,stockSource,onProgress})=>{window.__batchCalls++;window.__batchArgs={files:files.map(item=>item.name),previewFingerprint:expectedPreview.fingerprint,fileName:file.name,stockSource};onProgress({message:'셀피아 원본 반영 중',percent:25});await new Promise(resolve=>window.__finishBatch=resolve);return {blob:new Blob(['zip-fixture'],{type:'application/zip'}),fileName:'재고_4개.zip',files:['smartstore-a.xlsx','smartstore-b.xlsx','makeshop.xlsx','ably.xlsx'],warnings:[]};}};
   });
-  await page.locator('#inventory-ably-file').setInputFiles({name:'PlayAuto.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('fixture')});
+  await page.locator('#inventory-sellpia-files').setInputFiles([xlsx('count-a.xlsx'),xlsx('count-b.xlsx')]);
+  await page.locator('#inventory-ably-file').setInputFiles(xlsx('PlayAuto.xlsx'));
+  await page.waitForFunction(()=>document.querySelector('#inventory-batch-run')?.disabled===false);
   await page.locator('input[name="inventory-stock-source"][value="stock"]').check();
   await page.locator('#inventory-batch-run').click();
   await page.waitForFunction(()=>window.__batchCalls===1);
-  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),true);
-  assert.equal(await page.locator('#inventory-ably-file').isDisabled(),true);
-  assert.equal(await page.locator('input[name="inventory-stock-source"][value="available_stock"]').isDisabled(),true);
+  for(const selector of ['#inventory-sellpia-files','#inventory-ably-file','input[name="inventory-stock-source"][value="stock"]','#inventory-batch-run'])assert.equal(await page.locator(selector).isDisabled(),true,`${selector} is locked while work is running`);
   await page.locator('#inventory-batch-run').click({force:true});
-  assert.equal(await page.evaluate(()=>window.__batchCalls),1,'a second click cannot start a concurrent batch');
-  assert.equal(await page.locator('#inventory-batch-detail').textContent(),'원본 1/4 처리 중');
+  assert.equal(await page.evaluate(()=>window.__batchCalls),1,'a second click cannot start concurrent work');
+  assert.equal(await page.locator('#inventory-batch-detail').textContent(),'셀피아 원본 반영 중');
   await page.evaluate(()=>window.__finishBatch());
   await page.waitForFunction(()=>document.querySelector('#inventory-batch-result')?.hidden===false);
-  assert.equal(await page.evaluate(()=>window.__batchArgs.stockSource),'stock');
-  assert.equal(await page.evaluate(()=>window.__downloadClicks),1,'the batch creates exactly one browser download');
-  assert.equal(await page.locator('#inventory-batch-title').textContent(),'재고 파일 생성 완료');
+  assert.deepEqual(await page.evaluate(()=>window.__batchArgs),{files:['count-a.xlsx','count-b.xlsx'],previewFingerprint:'fixture-fingerprint',fileName:'PlayAuto.xlsx',stockSource:'stock'});
+  assert.equal(await page.evaluate(()=>window.__downloadClicks),1);
+  assert.equal(await page.locator('#inventory-batch-title').textContent(),'재고 반영 및 ZIP 생성 완료');
   assert.deepEqual(await page.locator('#inventory-batch-result li').allTextContents(),['smartstore-a.xlsx','smartstore-b.xlsx','makeshop.xlsx','ably.xlsx']);
-  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),false,'controls unlock after completion');
+  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),false);
 });
 
-test('bridge errors unlock controls and do not download',async t=>{
+test('post-update ZIP failure exposes retry-only path and file changes clear it',async t=>{
   const page=await fixture(t);
-  await page.evaluate(()=>{window.__downloadClicks=0;const click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){window.__downloadClicks++;return click.call(this);};window.SystemV3SellerExportBridge={runInventoryBatch:async()=>{throw Error('blocked fixture');}};});
-  await page.locator('#inventory-ably-file').setInputFiles({name:'PlayAuto.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('fixture')});
+  await page.evaluate(()=>{window.__updates=0;window.__retries=0;window.__downloadClicks=0;
+    window.SystemV3Data={previewSellpiaInventoryCount:async()=>({fingerprint:'retry-fingerprint',summary:{changedSkuCount:1,duplicateConflictCount:0,errorRowCount:0}})};
+    const click=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){window.__downloadClicks++;return click.call(this);};
+    window.SystemV3SellerExportBridge={runInventoryUpdateBatch:async()=>{window.__updates++;const error=Error('fixture ZIP failure');error.uploaded=true;error.retryAvailable=true;throw error;},retryInventoryBatchExport:async({file,stockSource})=>{window.__retries++;window.__retryArgs={file:file.name,stockSource};return {blob:new Blob(['zip-fixture']),fileName:'retry.zip',files:['a.xlsx','b.xlsx','c.xlsx','d.xlsx']};}};
+  });
+  await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('count.xlsx'));
+  await page.locator('#inventory-ably-file').setInputFiles(xlsx('playauto.xlsx'));
+  await page.waitForFunction(()=>document.querySelector('#inventory-batch-run')?.disabled===false);
   await page.locator('#inventory-batch-run').click();
-  await page.waitForFunction(()=>document.querySelector('#inventory-batch-title')?.textContent==='재고 파일 생성 중단');
-  assert.match(await page.locator('#inventory-batch-detail').textContent(),/blocked fixture/);
-  assert.equal(await page.evaluate(()=>window.__downloadClicks),0);
-  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),false);
+  await page.waitForFunction(()=>document.querySelector('#inventory-batch-run')?.textContent==='판매처 파일 다시 생성');
+  assert.match(await page.locator('#inventory-batch-detail').textContent(),/DB 재고 반영은 완료됐지만 ZIP은 생성되지 않았습니다/);
+  assert.equal(await page.evaluate(()=>window.__downloadClicks),0,'a failed ZIP does not create a partial download');
+  await page.locator('#inventory-batch-run').click();
+  await page.waitForFunction(()=>window.__retries===1&&document.querySelector('#inventory-batch-result')?.hidden===false);
+  assert.equal(await page.evaluate(()=>window.__updates),1,'retry never uploads Sellpia files again');
+  assert.deepEqual(await page.evaluate(()=>window.__retryArgs),{file:'playauto.xlsx',stockSource:'available_stock'});
+  assert.equal(await page.evaluate(()=>window.__downloadClicks),1);
+  await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('replacement-count.xlsx'));
+  await page.waitForFunction(()=>document.querySelector('#inventory-preview-title')?.textContent==='재고 반영 미리보기 완료');
+  assert.equal(await page.locator('#inventory-batch-run').textContent(),'재고 반영 후 4개 ZIP 생성','changing files invalidates the export-only retry state');
+});
+
+test('preview failures disable final action and stale preview results are ignored',async t=>{
+  const page=await fixture(t);
+  await page.evaluate(()=>{window.__previewCount=0;window.__firstPreviewResolve=null;window.SystemV3Data={previewSellpiaInventoryCount:async files=>{window.__previewCount++;if(files[0].name==='slow.xlsx')return new Promise(resolve=>window.__firstPreviewResolve=resolve);throw Error('fixture preview failure');}};});
+  await page.locator('#inventory-ably-file').setInputFiles(xlsx('playauto.xlsx'));
+  await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('slow.xlsx'));
+  await page.waitForFunction(()=>window.__firstPreviewResolve!==null);
+  await page.locator('#inventory-sellpia-files').setInputFiles(xlsx('broken.xlsx'));
+  await page.waitForFunction(()=>document.querySelector('#inventory-preview-title')?.textContent==='재고 반영 미리보기 실패');
+  await page.evaluate(()=>window.__firstPreviewResolve({summary:{fileCount:1,changedSkuCount:1,duplicateConflictCount:0,errorRowCount:0}}));
+  await page.waitForTimeout(20);
+  assert.equal(await page.locator('#inventory-preview-title').textContent(),'재고 반영 미리보기 실패','the late first response cannot replace the current failure');
+  assert.equal(await page.locator('#inventory-batch-run').isDisabled(),true);
 });

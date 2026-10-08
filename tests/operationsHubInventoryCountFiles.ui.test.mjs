@@ -4,7 +4,7 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 
 test('inventory-count uploader shows only the files that were selected', async () => {
-  const browser = await chromium.launch({ channel: 'msedge', headless: true });
+  const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } : process.platform === 'win32' ? { channel: 'msedge' } : {}) });
   try {
     const html = fs.readFileSync('mockups/operations-hub/index.html', 'utf8')
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')

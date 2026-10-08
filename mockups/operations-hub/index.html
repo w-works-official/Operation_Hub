@@ -21,7 +21,7 @@
       <link rel="stylesheet" href="./ui-cleanup-v1.css?v=20260912-queue-count-clarity-v1">
       <link rel="stylesheet" href="./tag-management-v2.css?v=20260929-ably-carrier-policy-v1">
       <link rel="stylesheet" href="./seller-file-workflow-v2.css?v=20261008-inventory-batch-v1">
-      <link rel="stylesheet" href="./inventory-batch.css?v=20261008-inventory-batch-v1">
+      <link rel="stylesheet" href="./inventory-batch.css?v=20261008-inventory-update-v2">
   </head>
   <body class="operations-auth-locked">
     <section id="operations-auth-gate" class="operations-auth-gate" aria-labelledby="operations-auth-title">
@@ -566,26 +566,44 @@
           </div>
           <div id="inventory" class="page inventory-page">
             <div class="page-head">
-              <div><h2>재고 관리</h2><p>판매처 재고 파일 4개를 한 번에 생성합니다.</p></div>
+              <div><h2>재고 관리</h2><p>셀피아 재고 조사 파일을 DB에 반영한 뒤 판매처 파일 4개를 생성합니다.</p></div>
             </div>
-            <section class="panel inventory-export-config" aria-label="재고 내보내기 설정">
-              <div class="inventory-config-grid">
-                <fieldset class="inventory-stock-source"><legend>재고 기준</legend>
-                  <label><input type="radio" name="inventory-stock-source" value="available_stock" checked> 가용재고</label>
-                  <label><input type="radio" name="inventory-stock-source" value="stock"> 재고</label>
-                </fieldset>
-              </div>
+            <section class="panel inventory-export-config" aria-label="셀피아 재고 반영 및 판매처 파일 생성">
               <div class="inventory-file-picker">
-                <label for="inventory-ably-file">에이블리 PlayAuto 원본</label>
+                <label for="inventory-sellpia-files">1. 셀피아 재고 조사 결과 (여러 파일)</label>
+                <input id="inventory-sellpia-files" type="file" accept=".xlsx" multiple aria-describedby="inventory-sellpia-hint inventory-sellpia-file-status">
+                <small id="inventory-sellpia-hint">상품코드·가용재고·재고 컬럼이 있는 XLSX를 여러 개 선택하면 현재 DB와 자동 비교합니다.</small>
+                <p id="inventory-sellpia-file-status" role="status" aria-live="polite">선택한 파일 없음</p>
+              </div>
+              <section id="inventory-update-preview" class="inventory-update-preview" data-state="idle" aria-label="재고 반영 미리보기">
+                <div class="inventory-preview-heading"><b id="inventory-preview-title">재고 반영 미리보기</b><span id="inventory-preview-message">셀피아 파일을 선택하면 현재 DB와 자동 비교합니다.</span></div>
+                <dl id="inventory-preview-summary" class="inventory-preview-summary" hidden>
+                  <div><dt>선택 파일</dt><dd id="inventory-preview-files">0</dd></div>
+                  <div><dt>읽은 행</dt><dd id="inventory-preview-read-rows">0</dd></div>
+                  <div><dt>유효 SKU</dt><dd id="inventory-preview-valid-skus">0</dd></div>
+                  <div><dt>변경</dt><dd id="inventory-preview-changed">0</dd></div>
+                  <div><dt>동일</dt><dd id="inventory-preview-unchanged">0</dd></div>
+                  <div><dt>미확인</dt><dd id="inventory-preview-unconfirmed">0</dd></div>
+                  <div><dt>중복 동일</dt><dd id="inventory-preview-duplicate-same">0</dd></div>
+                  <div><dt>중복 충돌</dt><dd id="inventory-preview-duplicate-conflict">0</dd></div>
+                  <div><dt>오류 행</dt><dd id="inventory-preview-errors">0</dd></div>
+                </dl>
+              </section>
+              <fieldset class="inventory-stock-source"><legend>2. 판매처 파일 재고 기준</legend>
+                <label><input type="radio" name="inventory-stock-source" value="available_stock" checked> 가용재고</label>
+                <label><input type="radio" name="inventory-stock-source" value="stock"> 재고</label>
+              </fieldset>
+              <div class="inventory-file-picker">
+                <label for="inventory-ably-file">3. 에이블리 PlayAuto 옵션 + 재고 원본</label>
                 <input id="inventory-ably-file" type="file" accept=".xlsx" aria-describedby="inventory-file-hint inventory-file-status">
-                <small id="inventory-file-hint">PlayAuto 옵션 + 재고 XLSX를 선택해주세요.</small>
+                <small id="inventory-file-hint">선택한 PlayAuto XLSX로 에이블리 파일을 만들며, 파일 선택 자체로 업로드하지 않습니다.</small>
                 <p id="inventory-file-status" role="status" aria-live="polite">선택한 파일 없음</p>
               </div>
-              <p class="inventory-export-guidance">전체 매칭 SKU의 재고를 반영합니다. 스마트스토어와 메이크샵은 최신 보관 원본을 사용하며, 원본의 모든 행과 가격·기타 값은 유지됩니다.</p>
-              <button id="inventory-batch-run" class="btn primary" type="button">재고 파일 4개 ZIP 생성</button>
+              <p class="inventory-export-guidance">미리보기는 읽기 전용입니다. 최종 버튼을 누르면 변경 SKU만 DB에 반영하고, 최신 DB 재고로 스마트스토어 2개·메이크샵 1개·에이블리 1개를 생성합니다.</p>
+              <button id="inventory-batch-run" class="btn primary" type="button" disabled>재고 반영 후 4개 ZIP 생성</button>
               <div id="inventory-batch-status" class="inventory-batch-status" role="status" aria-live="polite" hidden>
                 <b id="inventory-batch-title"></b>
-                <progress id="inventory-batch-progress" max="100" value="0" aria-label="재고 파일 생성 진행률" hidden></progress>
+                <progress id="inventory-batch-progress" max="100" value="0" aria-label="재고 반영 및 파일 생성 진행률" hidden></progress>
                 <p id="inventory-batch-detail"></p>
               </div>
               <div id="inventory-batch-result" class="inventory-batch-result" hidden></div>
@@ -1030,7 +1048,7 @@
     <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./app.js?v=20261008-price-decisions-v1"></script>
+  <script src="./app.js?v=20261008-inventory-update-v2"></script>
     <script src="./mapping-import.js?v=20260910-rule-destination-v111"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
@@ -1054,7 +1072,7 @@
       <script src="./ui-cleanup-v1.js?v=20261007-inventory-tab-v1"></script>
       <script src="./tag-management-v2.js?v=20260929-ably-carrier-policy-v1"></script>
       <script src="./seller-file-workflow-v2.js?v=20261008-price-decisions-v1"></script>
-      <script src="./inventory-batch-ui.js?v=20261008-inventory-batch-v1"></script>
+      <script src="./inventory-batch-ui.js?v=20261008-inventory-update-v2"></script>
 <link rel="stylesheet" href="./price-decision-workspace.css?v=20261008-price-decisions-v1">
 <script src="./price-decision-workspace.js?v=20261008-price-decisions-v1"></script>
   </body>
