@@ -18,6 +18,7 @@ async function fixture(t){
  await page.setContent('<!doctype html><main><div id="jobs" class="page"><div class="page-head"><h2>jobs</h2></div></div></main>');
  await page.evaluate(()=>{
   window.pendingPreviews=[];window.pendingRuns=[];window.ablyReads=[];window.pendingAblyReads=[];window.ablyBuilds=[];window.downloads=[];window.stockAudits=[];
+  if(!window.crypto.randomUUID)Object.defineProperty(window.crypto,'randomUUID',{value:()=>`fixture-${Date.now()}`});
   window.ablyStock=9;window.ablySnapshot='snapshot-1';window.decisionProof='proof-1';
   const summary={selectedSkuCount:1,matchedOptionCount:1,changedOptionCount:1,unchangedOptionCount:0,unmatchedSkuCount:0,blockedCount:0,preservedCount:0,outputRowCount:1};
   const delayed=(list,name,args)=>new Promise(resolve=>list.push({name,args,resolve}));
@@ -50,6 +51,19 @@ const primary=(source,action)=>`[data-standard-${action}="${source}"]`;
 const card=source=>`[data-standard-source="${source}"]`;
 async function dispatchClicks(page,selectors){await page.evaluate(selectors=>{for(const selector of selectors)document.querySelector(selector).dispatchEvent(new MouseEvent('click',{bubbles:true}));},selectors);}
 async function controlsLocked(page,source){const controls=await page.locator(`${card(source)} button,${card(source)} input,${card(source)} select,${card(source)} textarea`).evaluateAll(nodes=>nodes.map(node=>({tag:node.tagName,disabled:node.disabled})));assert.ok(controls.length>10);assert.ok(controls.every(node=>node.disabled),`${source} controls must all remain disabled`);}
+async function ablyCriteriaLocked(page){
+ const selectors=['[data-seller-scope-mode="ably"]','[data-seller-scope-manual="ably"]','[data-seller-scope-tag="ably"]','[data-ably-field-mode]','[data-ably-stock-source]','[data-standard-price-mode="ably"]','[data-standard-output-mode="ably"]'];
+ for(const selector of selectors)assert.equal(await page.locator(selector).isDisabled(),true,`${selector} should lock while its preview is pending`);
+ for(const selector of ['[data-seller-scope-mode="ably"]','[data-ably-field-mode]','[data-ably-stock-source]','[data-standard-price-mode="ably"]','[data-standard-output-mode="ably"]'])
+  assert.equal(await page.locator(selector).locator('..').locator('.seller-choice-options input[type="radio"]').evaluateAll(nodes=>nodes.every(node=>node.disabled)),true,`${selector} radio choices should lock while preview is pending`);
+ assert.equal(await page.locator('[data-carrier-pick="playauto_option"]').isDisabled(),true,'advanced file picker locks while preview is pending');
+ assert.equal(await page.locator('[data-carrier-input="playauto_option"]').isDisabled(),true,'advanced file input locks while preview is pending');
+ assert.equal(await page.locator('[data-ably-standard-preview]').isDisabled(),true);assert.equal(await page.locator('[data-ably-standard-run]').isDisabled(),true);
+}
+async function ablyCriteriaUnlocked(page){
+ for(const selector of ['[data-seller-scope-mode="ably"]','[data-seller-scope-tag="ably"]','[data-ably-field-mode]','[data-ably-stock-source]','[data-standard-output-mode="ably"]','[data-carrier-pick="playauto_option"]','[data-carrier-input="playauto_option"]','[data-ably-standard-preview]','[data-ably-standard-run]'])
+  assert.equal(await page.locator(selector).isDisabled(),false,`${selector} should unlock after the Ably job ends`);
+}
 async function readyPreview(page,source,index,fingerprint){await page.locator(primary(source,'preview')).click();await page.waitForFunction(index=>pendingPreviews.length>index,index);await page.evaluate(({index,fingerprint})=>resolvePreview(index,fingerprint),{index,fingerprint});await page.waitForFunction(source=>document.querySelector(`[data-standard-preview="${source}"]`).disabled===false,source);}
 const carrierFile=name=>({name,mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('UI fixture')});
 
@@ -120,6 +134,82 @@ test('Ably ordinary generation rechecks the stock snapshot and blocks a changed 
  await page.evaluate(()=>{window.ablyStock=12;window.ablySnapshot='snapshot-2';});await page.locator('[data-ably-standard-run]').click();
  await page.waitForFunction(()=>document.querySelector('#export-workflow-status').textContent.includes('가격/재고 상태가 변경되었습니다'));
  assert.equal(await page.evaluate(()=>ablyReads.length),2);assert.equal(await page.evaluate(()=>ablyBuilds.length),0);assert.equal(await page.evaluate(()=>downloads.length),0);assert.equal(await page.evaluate(()=>stockAudits.length),0);
+});
+
+test('Ably pending preview locks its criteria and advanced picker, leaves cancel enabled, and unlocks on completion',async t=>{
+ const page=await fixture(t);await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open=true);
+ await page.evaluate(()=>window.deferAblyReads=true);await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile('option-finish.xlsx'));
+ await page.waitForFunction(()=>pendingAblyReads.length===1);await ablyCriteriaLocked(page);
+ assert.equal(await page.locator('[data-ably-progress-cancel]').isDisabled(),false,'the in-flight job remains cancellable');
+ await page.evaluate(()=>pendingAblyReads[0]());await page.waitForFunction(()=>document.querySelector('[data-ably-action-status]').textContent.includes('미리보기 완료'));
+ await ablyCriteriaUnlocked(page);assert.equal(await page.locator('[data-ably-progress-cancel]').isDisabled(),true,'cancel is disabled after the job finishes');
+});
+
+test('changing Ably field mode while a file read is pending cancels the old job and ignores its late preview',async t=>{
+ const page=await fixture(t);await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open=true);
+ await page.evaluate(()=>window.deferAblyReads=true);await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile('option-stale.xlsx'));
+ await page.waitForFunction(()=>pendingAblyReads.length===1);await ablyCriteriaLocked(page);
+ await page.evaluate(()=>{const mode=document.querySelector('[data-ably-field-mode]');mode.value='price_only';mode.dispatchEvent(new Event('change',{bubbles:true}));});
+ await ablyCriteriaUnlocked(page);assert.equal(await page.locator('[data-ably-progress-cancel]').isDisabled(),true);
+ await page.evaluate(()=>pendingAblyReads[0]());await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)));
+ assert.equal(await page.locator('#export-preview-v2').isHidden(),true,'the old carrier read cannot expose a preview for stale criteria');
+ assert.equal(await page.evaluate(()=>ablyBuilds.length),0);assert.equal(await page.evaluate(()=>downloads.length),0);
+ assert.match(await page.locator('[data-ably-action-status]').innerText(),/가격-only/);
+});
+
+test('Ably serialization keeps card settings and shared presets locked, then unlocks after success or failure',async t=>{
+ const presets='[data-export-field-preset]';
+ const prepare=async name=>{
+  const page=await fixture(t);await chooseRadio(page,'[data-ably-field-mode]','stock_only');await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open=true);
+  await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile(name));await page.waitForFunction(()=>document.querySelector('[data-ably-action-status]').textContent.includes('미리보기 완료'));
+  await page.evaluate(()=>{window.AblyPlayautoExport.buildOptionPriceStock=()=>new Promise((resolve,reject)=>{window.pendingBuildStarted=true;window.resolveAblyBuild=()=>resolve(new Blob(['serialized']));window.rejectAblyBuild=()=>reject(Error('fixture serialization failure'));});});
+  await page.locator('[data-ably-standard-run]').click();await page.waitForFunction(()=>window.pendingBuildStarted===true);
+  await ablyCriteriaLocked(page);assert.deepEqual(await page.locator(presets).evaluateAll(nodes=>nodes.map(node=>node.disabled)),[true,true,true]);
+  assert.equal(await page.locator('[data-ably-progress-cancel]').isDisabled(),false,'serialization remains cancellable');
+  return page;
+ };
+ const success=await prepare('option-success.xlsx');await success.evaluate(()=>resolveAblyBuild());
+ await success.waitForFunction(()=>downloads.length===1||document.querySelector('[data-ably-progress]').dataset.state==='error');
+ assert.equal(await success.evaluate(()=>downloads.length),1,await success.locator('[data-ably-progress-detail]').innerText());await ablyCriteriaUnlocked(success);
+ assert.deepEqual(await success.locator(presets).evaluateAll(nodes=>nodes.map(node=>node.disabled)),[false,false,false]);
+ assert.equal(await success.locator('[data-ably-progress-cancel]').isDisabled(),true);
+
+ const failure=await prepare('option-failure.xlsx');await failure.evaluate(()=>rejectAblyBuild());
+ await failure.waitForFunction(()=>document.querySelector('[data-ably-progress]').dataset.state==='error');await ablyCriteriaUnlocked(failure);
+ assert.deepEqual(await failure.locator(presets).evaluateAll(nodes=>nodes.map(node=>node.disabled)),[false,false,false]);
+ assert.equal(await failure.locator('[data-ably-progress-cancel]').isDisabled(),true);
+});
+
+test('cancelling Ably while stock audit is pending blocks download when the audit later resolves',async t=>{
+ const page=await fixture(t);await chooseRadio(page,'[data-ably-field-mode]','stock_only');await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open=true);
+ await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile('option-audit-cancel.xlsx'));
+ await page.waitForFunction(()=>document.querySelector('[data-ably-action-status]').textContent.includes('미리보기 완료'));
+ await page.evaluate(()=>{
+  window.AblyPlayautoExport.buildOptionPriceStock=async()=>new Blob(['serialized']);
+  window.SystemV3Data.recordStockExportAudit=args=>{window.stockAudits.push(args);return new Promise(resolve=>window.releaseStockAudit=resolve);};
+ });
+ await page.locator('[data-ably-standard-run]').click();await page.waitForFunction(()=>window.releaseStockAudit);
+ await ablyCriteriaLocked(page);assert.equal(await page.locator('[data-ably-progress-cancel]').isDisabled(),false);
+ await page.locator('[data-ably-progress-cancel]').click();await ablyCriteriaUnlocked(page);
+ await page.evaluate(()=>window.releaseStockAudit({ok:true}));await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)));
+ assert.equal(await page.evaluate(()=>stockAudits.length),1);assert.equal(await page.evaluate(()=>downloads.length),0,'a cancelled audit continuation cannot download the generated workbook');
+ assert.equal(await page.locator('[data-ably-progress]').getAttribute('data-state'),'cancelled');
+});
+
+test('an old Ably build rejection after a replacement preview cannot overwrite the new preview state',async t=>{
+ const page=await fixture(t);await chooseRadio(page,'[data-ably-field-mode]','stock_only');await page.locator('[data-standard-source="ably"] .seller-advanced').evaluate(node=>node.open=true);
+ await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile('option-old-build.xlsx'));
+ await page.waitForFunction(()=>document.querySelector('[data-ably-action-status]').textContent.includes('미리보기 완료'));
+ await page.evaluate(()=>{window.pendingAblyBuilds=[];window.AblyPlayautoExport.buildOptionPriceStock=()=>new Promise((resolve,reject)=>window.pendingAblyBuilds.push({resolve,reject}));});
+ await page.locator('[data-ably-standard-run]').click();await page.waitForFunction(()=>pendingAblyBuilds.length===1);await ablyCriteriaLocked(page);
+ await page.locator('[data-ably-progress-cancel]').click();await ablyCriteriaUnlocked(page);
+ await page.locator('[data-carrier-input="playauto_option"]').setInputFiles(carrierFile('option-new-preview.xlsx'));
+ await page.waitForFunction(()=>ablyReads.length===3&&document.querySelector('[data-ably-progress]').dataset.state==='done');
+ await page.evaluate(()=>pendingAblyBuilds[0].reject(Error('late old build failure')));await page.evaluate(()=>new Promise(resolve=>setTimeout(resolve,0)));
+ assert.equal(await page.locator('[data-ably-progress]').getAttribute('data-state'),'done','old rejected serialization must not replace the newer job panel');
+ assert.equal(await page.locator('#export-preview-v2').isHidden(),false,'the new preview remains visible');
+ assert.match(await page.locator('[data-ably-action-status]').innerText(),/미리보기 완료/);
+ assert.equal(await page.evaluate(()=>downloads.length),0);await ablyCriteriaUnlocked(page);
 });
 
 test('shared field presets remain locked until both standard seller previews and the pending Ably file job finish',async t=>{

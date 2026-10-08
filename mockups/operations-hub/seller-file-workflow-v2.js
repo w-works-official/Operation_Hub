@@ -41,6 +41,7 @@
  function lockStandardGeneration(source,locked){
   const card=document.querySelector(`[data-standard-source="${source}"]`);if(!card)return;
   for(const node of card.querySelectorAll('button,input,select,textarea')){
+   if(node.matches('[data-ably-progress-cancel]'))continue;
    if(locked){if(!node.hasAttribute('data-standard-disabled-before'))node.dataset.standardDisabledBefore=String(Boolean(node.disabled));node.disabled=true;}
    else if(node.hasAttribute('data-standard-disabled-before')){node.disabled=node.dataset.standardDisabledBefore==='true';delete node.dataset.standardDisabledBefore;}
   }
@@ -156,7 +157,7 @@ function bindSellerScope(section,source){
   const invalidate=message=>{
    state.sourcePricePreviews.delete(source);state.standardCarrierPlans.delete(source);state.standardCarrierViews.delete(source);
    if(source!=='ably')invalidateStandardRequest(source);
-   if(source==='ably'){state.preview=null;const status=document.querySelector('[data-ably-action-status]');if(status){status.className='export-role-status';status.textContent=message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.';}setSellerPanel('ably','idle',message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.');}
+   if(source==='ably'){if(state.ablyJob?.running)state.ablyJob.cancel(false);state.preview=null;const status=document.querySelector('[data-ably-action-status]');if(status){status.className='export-role-status';status.textContent=message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.';}setSellerPanel('ably','idle',message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.');}
    else setSellerPanel(source,'idle',message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.');
   };
   mode.onchange=()=>{
@@ -238,7 +239,7 @@ function formatScopeSummary(summary={}){
  function createAblyJob(role,file){
   if(state.ablyJob?.running)state.ablyJob.cancel(false);
   const started=carrierNow(),job={id:++state.ablyJobSequence,role,file,running:true,phase:'read',processed:null,total:null,started,lastProgress:started,phaseStarted:started,timings:[],error:'',cancelled:false};
-  state.ablyJob=job;syncExportPresetLock();
+  state.ablyJob=job;lockStandardGeneration('ably',true);syncExportPresetLock();
   job.check=()=>{if(job.cancelled||state.ablyJob!==job)throw carrierCancelled();};
   job.render=()=>{
    if(state.ablyJob!==job)return;
@@ -261,6 +262,7 @@ function formatScopeSummary(summary={}){
   };
   job.finish=error=>{
    if(state.ablyJob!==job||job.cancelled)return;
+   lockStandardGeneration('ably',false);
    const now=carrierNow();job.timings.push({phase:job.phase,ms:Math.round(now-job.phaseStarted),processed:job.processed,total:job.total});
    job.totalMs=Math.round(now-started);job.error=error?String(error?.message||error):'';job.running=false;if(!error)job.phase='done';global.clearInterval(job.timer);job.render();syncExportPresetLock();
    const timing=job.timings.map(item=>`${item.phase} ${item.ms}ms`).join(' · '),detail=document.querySelector('[data-ably-progress-detail]');
@@ -270,6 +272,8 @@ function formatScopeSummary(summary={}){
   job.cancel=visible=>{
    job.cancelled=true;job.running=false;global.clearInterval(job.timer);syncExportPresetLock();
    if(state.ablyJob!==job)return;
+   lockStandardGeneration('ably',false);
+   const cancel=document.querySelector('[data-ably-progress-cancel]');if(cancel)cancel.disabled=true;
    state.preview=null;const previewBox=document.getElementById('export-preview-v2');if(previewBox)previewBox.hidden=true;
    if(visible){if(state.carrierFiles.get(role)===file)state.carrierFiles.delete(role);renderExportStatuses();job.render();setStatus('파일 처리를 취소했습니다. 다른 공식 수정파일을 선택할 수 있습니다.');}
   };
@@ -854,7 +858,7 @@ async function runStandard(source,mode=null){
    }
     const displayOutput=outputMode==='changed_only'?output.filter(item=>item._changed||item._status!=='ready'):output;
     state.preview={role,priceMode,outputMode,stockOnly,priceOnly,stockSource,record,file,parsed,items:prepared,output,displayOutput,versionToken,currentPriceDecisionProof:currentDecisionState.proof||'',currentPriceDecisionSkus:stockOnly?[]:safetySkus,policySummaries,policyDownloadBlocked,timings:job.timings,shadowDiagnostics,counts:{template:parsed.items.length,matched:resolvedWithSku.length,selected:chosen.length,pricePreserved:output.filter(item=>item._preserveUnselected).length,mappingOverrides:output.filter(item=>item._status==='ready'&&item.resolution?.mapping_override).length,ready,changed,unchanged:ready-changed,warned,blocked,unresolved,preserved}};
-    renderPreview();job.finish();const actionStatus=document.querySelector('[data-ably-action-status]');if(actionStatus){actionStatus.className='export-role-status ready';actionStatus.textContent=`${roles[role].label} 미리보기 완료 · 변경 ${n(changed)} · 원본 유지 경고 ${n(warned)} · 치명적 차단 ${n(blocked)}`;}setStatus(`${roles[role].label} 미리보기 완료 · 변경 ${n(changed)} · 원본 유지 경고 ${n(warned)} · 치명적 차단 ${n(blocked)}`,'success');return state.preview;
+    job.finish();renderPreview();const actionStatus=document.querySelector('[data-ably-action-status]');if(actionStatus){actionStatus.className='export-role-status ready';actionStatus.textContent=`${roles[role].label} 미리보기 완료 · 변경 ${n(changed)} · 원본 유지 경고 ${n(warned)} · 치명적 차단 ${n(blocked)}`;}setStatus(`${roles[role].label} 미리보기 완료 · 변경 ${n(changed)} · 원본 유지 경고 ${n(warned)} · 치명적 차단 ${n(blocked)}`,'success');return state.preview;
   }catch(error){if(error?.name==='CarrierCancelledError'||state.ablyJob!==job||job.cancelled)return;job.finish(error);setStatus(`미리보기 실패: ${error?.message||error}`,'error');}
  }
 
@@ -901,7 +905,9 @@ async function runStandard(source,mode=null){
   const p=state.preview;if(!p)return;
   if(p.policyDownloadBlocked){setStatus('lower_middle은 PlayAuto/Ably 음수 옵션가와 허용범위 확인 전까지 다운로드할 수 없습니다.','error');return;}
   setStatus('현재 매트릭스 표시값이 미리보기 이후 바뀌지 않았는지 확인하는 중…');
-  const revalidated=await preview(p.role);
+  const revalidationPromise=preview(p.role),revalidationJob=state.ablyJob;
+  const revalidated=await revalidationPromise;
+  if(revalidationJob?.cancelled||state.ablyJob!==revalidationJob)return;
   if(!revalidated||revalidated.versionToken!==p.versionToken){
    if(revalidated){state.ablyJob?.finish(Error('가격/재고 상태가 변경되었습니다. 미리보기를 다시 확인해주세요.'));setSellerPanel('ably','error');}
    setStatus('가격/재고 상태가 변경되었습니다. 미리보기를 다시 확인해주세요.','error');return;
@@ -916,7 +922,7 @@ async function runStandard(source,mode=null){
   const generateButton=document.getElementById('export-preview-generate');if(generateButton)generateButton.disabled=true;
   setStatus('PlayAuto XLSX 생성 중 · 25% · 원본 템플릿 준비');
   try{
-   serializationJob.check();serializationJob.running=true;serializationJob.phaseTo('serialize');serializationJob.timer=global.setInterval(serializationJob.render,1000);
+   serializationJob.check();serializationJob.running=true;lockStandardGeneration('ably',true);syncExportPresetLock();serializationJob.phaseTo('serialize');serializationJob.timer=global.setInterval(serializationJob.render,1000);
    setSellerPanel('ably','processing');
    setStatus('PlayAuto XLSX 생성 중 · 55% · 수정 셀 반영');
    const blob=p.role==='playauto_product'?await A().buildProductPriceOption(p.file,items):await A().buildOptionPriceStock(p.file,items);
@@ -933,14 +939,15 @@ async function runStandard(source,mode=null){
     const finalDecisionState=await loadCurrentPriceDecisionState('ably',p.currentPriceDecisionSkus||[]);
     global.HubCurrentPriceDecisionResolver.assertProof(p.currentPriceDecisionProof,finalDecisionState.proof);
    }
+   serializationJob.check();
    global.SystemV3SellerExport.downloadBlob(blob,`${base}_SystemV3_${suffix}_${new Date().toISOString().slice(0,10)}.xlsx`);
    const excluded=p.output.filter(item=>item._status!=='ready').map(item=>({item:{source_channel:'ably',sellpia_sku_code:item.resolution?.sku||'',field_key:p.role==='playauto_product'||p.priceOnly?'sellpia_sale_price':'sellpia_current_stock',seller_product_code:item.seller_product_code||item.product_code||'',seller_option_code:item.seller_option_code||item.option_code||'',source_file_name:p.file.name,source_row_no:item.source_row_no},reason:item._error||item._status}));
    if(excluded.length)global.SystemV3SellerExport.downloadBlob(new Blob([global.SystemV3SellerExport.conflictCsv(excluded)],{type:'text/csv;charset=utf-8'}),`${base}_SystemV3_${suffix}_경고.csv`);
    serializationJob.finish();
    setStatus(`에이블리 ${roles[p.role].label} XLSX 생성 완료 · 원본 유지 경고/차단 ${n(excluded.length)}건`,'success');
    setSellerPanel('ably','success',`${p.file.name} · XLSX 생성 완료. 경고/차단 행은 빨간색과 별도 CSV로 확인하세요.`);
-  }catch(error){if(error?.name!=='CarrierCancelledError'){serializationJob?.finish(error);setSellerPanel('ably','error');setStatus(`XLSX 생성 실패: ${error?.message||error}`,'error');}}
-  finally{if(progressBox)delete progressBox.dataset.generating;if(generateButton&&state.ablyJob===serializationJob)generateButton.disabled=!state.preview?.counts?.selected||state.preview?.policyDownloadBlocked;}
+  }catch(error){if(error?.name!=='CarrierCancelledError'&&state.ablyJob===serializationJob&&!serializationJob.cancelled){serializationJob.finish(error);setSellerPanel('ably','error');setStatus(`XLSX 생성 실패: ${error?.message||error}`,'error');}}
+  finally{if(state.ablyJob===serializationJob){if(progressBox)delete progressBox.dataset.generating;if(generateButton)generateButton.disabled=!state.preview?.counts?.selected||state.preview?.policyDownloadBlocked;}}
  }
 
  function renameLegacyExportUi(){
