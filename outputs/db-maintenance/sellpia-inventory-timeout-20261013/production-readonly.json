@@ -1,0 +1,545 @@
+{
+  "project_id": "bpgvqmtsjgegnrdzmpep",
+  "observed_date_kst": "2026-10-13",
+  "repository": "w-works-official/Operation_Hub",
+  "base_sha": "e0f5aabc8c667863a6a186018484a39df4bf6b12",
+  "mode": "READ ONLY; no EXPLAIN ANALYZE on production",
+  "catalog": {
+    "locks": null,
+    "sizes": [
+      {
+        "heap": 49152,
+        "total": 172032,
+        "relation": "sellpia_stock_snapshots"
+      },
+      {
+        "heap": 209117184,
+        "total": 236183552,
+        "relation": "sellpia_stock_snapshot_rows"
+      }
+    ],
+    "indexes": [
+      {
+        "indexdef": "CREATE INDEX ix_sellpia_stock_snapshot_rows_sku ON public.sellpia_stock_snapshot_rows USING btree (sellpia_sku_code)",
+        "indexname": "ix_sellpia_stock_snapshot_rows_sku"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX sellpia_stock_snapshot_rows_pkey ON public.sellpia_stock_snapshot_rows USING btree (snapshot_id, sellpia_sku_code)",
+        "indexname": "sellpia_stock_snapshot_rows_pkey"
+      },
+      {
+        "indexdef": "CREATE UNIQUE INDEX sellpia_stock_snapshots_pkey ON public.sellpia_stock_snapshots USING btree (snapshot_id)",
+        "indexname": "sellpia_stock_snapshots_pkey"
+      },
+      {
+        "indexdef": "CREATE INDEX ix_sellpia_stock_snapshots_ready_created ON public.sellpia_stock_snapshots USING btree (upload_status, created_at DESC)",
+        "indexname": "ix_sellpia_stock_snapshots_ready_created"
+      }
+    ],
+    "settings": [
+      {
+        "name": "lock_timeout",
+        "unit": "ms",
+        "setting": "0"
+      },
+      {
+        "name": "plan_cache_mode",
+        "unit": null,
+        "setting": "auto"
+      },
+      {
+        "name": "server_version",
+        "unit": null,
+        "setting": "17.6"
+      },
+      {
+        "name": "statement_timeout",
+        "unit": "ms",
+        "setting": "120000"
+      },
+      {
+        "name": "track_functions",
+        "unit": null,
+        "setting": "none"
+      },
+      {
+        "name": "track_io_timing",
+        "unit": null,
+        "setting": "off"
+      },
+      {
+        "name": "work_mem",
+        "unit": "kB",
+        "setting": "3500"
+      }
+    ],
+    "triggers": [
+      {
+        "name": "RI_ConstraintTrigger_a_106845",
+        "function": "\"RI_FKey_noaction_del\"()",
+        "internal": true,
+        "definition": "CREATE CONSTRAINT TRIGGER \"RI_ConstraintTrigger_a_106845\" AFTER DELETE ON public.sellpia_stock_snapshots FROM operations_private.operations_hub_original_upload_intents NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION \"RI_FKey_noaction_del\"()",
+        "table_name": "sellpia_stock_snapshots"
+      },
+      {
+        "name": "RI_ConstraintTrigger_a_106846",
+        "function": "\"RI_FKey_noaction_upd\"()",
+        "internal": true,
+        "definition": "CREATE CONSTRAINT TRIGGER \"RI_ConstraintTrigger_a_106846\" AFTER UPDATE ON public.sellpia_stock_snapshots FROM operations_private.operations_hub_original_upload_intents NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION \"RI_FKey_noaction_upd\"()",
+        "table_name": "sellpia_stock_snapshots"
+      },
+      {
+        "name": "RI_ConstraintTrigger_a_18168",
+        "function": "\"RI_FKey_cascade_del\"()",
+        "internal": true,
+        "definition": "CREATE CONSTRAINT TRIGGER \"RI_ConstraintTrigger_a_18168\" AFTER DELETE ON public.sellpia_stock_snapshots FROM sellpia_stock_snapshot_rows NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION \"RI_FKey_cascade_del\"()",
+        "table_name": "sellpia_stock_snapshots"
+      },
+      {
+        "name": "RI_ConstraintTrigger_a_18169",
+        "function": "\"RI_FKey_noaction_upd\"()",
+        "internal": true,
+        "definition": "CREATE CONSTRAINT TRIGGER \"RI_ConstraintTrigger_a_18169\" AFTER UPDATE ON public.sellpia_stock_snapshots FROM sellpia_stock_snapshot_rows NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION \"RI_FKey_noaction_upd\"()",
+        "table_name": "sellpia_stock_snapshots"
+      },
+      {
+        "name": "RI_ConstraintTrigger_c_18170",
+        "function": "\"RI_FKey_check_ins\"()",
+        "internal": true,
+        "definition": "CREATE CONSTRAINT TRIGGER \"RI_ConstraintTrigger_c_18170\" AFTER INSERT ON public.sellpia_stock_snapshot_rows FROM sellpia_stock_snapshots NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION \"RI_FKey_check_ins\"()",
+        "table_name": "sellpia_stock_snapshot_rows"
+      },
+      {
+        "name": "RI_ConstraintTrigger_c_18171",
+        "function": "\"RI_FKey_check_upd\"()",
+        "internal": true,
+        "definition": "CREATE CONSTRAINT TRIGGER \"RI_ConstraintTrigger_c_18171\" AFTER UPDATE ON public.sellpia_stock_snapshot_rows FROM sellpia_stock_snapshots NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION \"RI_FKey_check_upd\"()",
+        "table_name": "sellpia_stock_snapshot_rows"
+      }
+    ],
+    "constraints": [
+      {
+        "name": "ck_sellpia_stock_snapshots_status",
+        "table": "sellpia_stock_snapshots",
+        "definition": "CHECK ((upload_status = ANY (ARRAY['uploading'::text, 'ready'::text, 'failed'::text, 'archived'::text])))"
+      },
+      {
+        "name": "sellpia_stock_snapshots_pkey",
+        "table": "sellpia_stock_snapshots",
+        "definition": "PRIMARY KEY (snapshot_id)"
+      },
+      {
+        "name": "sellpia_stock_snapshot_rows_pkey",
+        "table": "sellpia_stock_snapshot_rows",
+        "definition": "PRIMARY KEY (snapshot_id, sellpia_sku_code)"
+      },
+      {
+        "name": "sellpia_stock_snapshot_rows_snapshot_id_fkey",
+        "table": "sellpia_stock_snapshot_rows",
+        "definition": "FOREIGN KEY (snapshot_id) REFERENCES sellpia_stock_snapshots(snapshot_id) ON DELETE CASCADE"
+      }
+    ],
+    "table_stats": [
+      {
+        "relname": "sellpia_stock_snapshots",
+        "n_tup_ins": 5,
+        "n_tup_upd": 10,
+        "n_dead_tup": 6,
+        "n_live_tup": 5,
+        "last_analyze": null,
+        "last_autoanalyze": null
+      },
+      {
+        "relname": "sellpia_stock_snapshot_rows",
+        "n_tup_ins": 118163,
+        "n_tup_upd": 7123,
+        "n_dead_tup": 0,
+        "n_live_tup": 286539,
+        "last_analyze": null,
+        "last_autoanalyze": "2026-10-08T06:10:58.587099+00:00"
+      }
+    ],
+    "column_stats": [
+      {
+        "attname": "snapshot_id",
+        "avg_width": 16,
+        "n_distinct": 11
+      },
+      {
+        "attname": "sellpia_sku_code",
+        "avg_width": 8,
+        "n_distinct": 23782
+      },
+      {
+        "attname": "sellpia_product_code",
+        "avg_width": 5,
+        "n_distinct": 3368
+      },
+      {
+        "attname": "sellpia_product_name",
+        "avg_width": 72,
+        "n_distinct": 3401
+      },
+      {
+        "attname": "sellpia_option_name",
+        "avg_width": 27,
+        "n_distinct": 22790
+      },
+      {
+        "attname": "own_sku",
+        "avg_width": 14,
+        "n_distinct": 15727
+      },
+      {
+        "attname": "stock",
+        "avg_width": 4,
+        "n_distinct": 195
+      },
+      {
+        "attname": "available_stock",
+        "avg_width": 4,
+        "n_distinct": 196
+      },
+      {
+        "attname": "integrated_available_stock",
+        "avg_width": 4,
+        "n_distinct": 187
+      },
+      {
+        "attname": "safety_stock",
+        "avg_width": 4,
+        "n_distinct": 1
+      },
+      {
+        "attname": "source_row_no",
+        "avg_width": 4,
+        "n_distinct": 22468
+      },
+      {
+        "attname": "raw_payload",
+        "avg_width": 349,
+        "n_distinct": 24361
+      },
+      {
+        "attname": "created_at",
+        "avg_width": 8,
+        "n_distinct": 190
+      },
+      {
+        "attname": "supplier_code",
+        "avg_width": 3,
+        "n_distinct": 140
+      },
+      {
+        "attname": "supplier_name",
+        "avg_width": 22,
+        "n_distinct": 141
+      },
+      {
+        "attname": "supplier_group",
+        "avg_width": 0,
+        "n_distinct": 0
+      },
+      {
+        "attname": "supplier_address",
+        "avg_width": 38,
+        "n_distinct": 47
+      },
+      {
+        "attname": "supplier_market_name",
+        "avg_width": 19,
+        "n_distinct": 46
+      },
+      {
+        "attname": "supplier_phone",
+        "avg_width": 8,
+        "n_distinct": 64
+      },
+      {
+        "attname": "purchase_product_name",
+        "avg_width": 15,
+        "n_distinct": 18
+      },
+      {
+        "attname": "purchase_option_name",
+        "avg_width": 61,
+        "n_distinct": 4849
+      },
+      {
+        "attname": "purchase_price",
+        "avg_width": 5,
+        "n_distinct": 698
+      },
+      {
+        "attname": "order_unit",
+        "avg_width": 4,
+        "n_distinct": 38
+      },
+      {
+        "attname": "minimum_order_unit",
+        "avg_width": 4,
+        "n_distinct": 20
+      }
+    ]
+  },
+  "row_sizes": {
+    "count": 23816,
+    "row_avg": 743.8803325495466,
+    "raw_text_avg": 339.3249916022842,
+    "raw_text_max": 603,
+    "raw_physical_avg": 392.37227074235807
+  },
+  "incident_snapshot": {
+    "snapshot_id": "a5557de2-4eca-46fe-afdc-af4b5f5b24de",
+    "status": "failed",
+    "rows": 76,
+    "intent_id": "7a4b7906-735d-43ab-be81-12090a92b88a",
+    "intent_status": "aborted"
+  },
+  "compare": {
+    "comparison": {
+      "failed_joined": 76,
+      "missing_latest": 0,
+      "current_equals_base": 76,
+      "failed_differs_base": 76,
+      "current_equals_failed": 0
+    },
+    "failed_rows": 76,
+    "matrix_state": {
+      "latest_ready_at": "2026-10-08T06:14:07.650857+00:00",
+      "rebuild_pending": false,
+      "matrix_row_count": 23816,
+      "matrix_snapshot_id": "a9878cb5-1a35-4537-9741-a2b840ebd6ad",
+      "matrix_refreshed_at": "2026-10-08T06:15:02.719004+00:00",
+      "latest_ready_row_count": 23816,
+      "latest_ready_snapshot_id": "a9878cb5-1a35-4537-9741-a2b840ebd6ad"
+    },
+    "latest_master": {
+      "row_count": 23816,
+      "snapshot_ids": [
+        "a9878cb5-1a35-4537-9741-a2b840ebd6ad"
+      ]
+    },
+    "stats_histogram": {
+      "histogram": null,
+      "frequencies": "{0.0937,0.0931,0.0917,0.0916333,0.0913333,0.0911333,0.0901333,0.0898333,0.0893333,0.0892,0.0889}",
+      "common_values": "{50aad3f9-7390-4e20-8a1a-26abfff35431,54bf02d6-a1b6-4826-b3fc-013e09eaf40b,297cac20-a1df-4e4d-be47-740638ed297f,4b63b6a2-ca6b-4e9c-80e0-d7dea73ae569,c3373809-5aaa-4c31-a043-28931bb9dae6,eb69ee32-40f3-4d81-adb4-6102e5782a06,c9d0287e-fef0-4b6c-acb0-a0bd5bbf1d8d,b7aae87c-cc22-42b3-801b-cb0bad0afa32,052bdfdc-04f3-4340-a359-41badaecd3e7,a701dfd0-ffc2-4971-b336-2d0b4bf4e45d,08e90f43-17dc-4b95-8376-439351178018}"
+    }
+  },
+  "operational_master": {
+    "master_present": 76,
+    "max_updated_at": "2026-10-06T08:47:47.661377+00:00",
+    "failed_sku_count": 76,
+    "max_stock_updated_at": "2026-09-15T05:47:13.22053+00:00",
+    "master_stock_equals_base": 25,
+    "master_stock_equals_failed": 37,
+    "master_any_updated_after_intent": 0,
+    "master_stock_updated_after_intent": 0
+  },
+  "original_plan": [
+    {
+      "QUERY PLAN": [
+        {
+          "Plan": {
+            "Node Type": "ModifyTable",
+            "Operation": "Insert",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Relation Name": "sellpia_stock_snapshot_rows",
+            "Schema": "public",
+            "Alias": "sellpia_stock_snapshot_rows",
+            "Startup Cost": 0.84,
+            "Total Cost": 4.2,
+            "Plan Rows": 0,
+            "Plan Width": 0,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Join Type": "Anti",
+                "Startup Cost": 0.84,
+                "Total Cost": 4.2,
+                "Plan Rows": 1,
+                "Plan Width": 413,
+                "Output": [
+                  "'a5557de2-4eca-46fe-afdc-af4b5f5b24de'::uuid",
+                  "base.sellpia_sku_code",
+                  "base.sellpia_product_code",
+                  "base.sellpia_product_name",
+                  "base.sellpia_option_name",
+                  "base.own_sku",
+                  "base.stock",
+                  "base.available_stock",
+                  "base.integrated_available_stock",
+                  "base.safety_stock",
+                  "base.source_row_no",
+                  "(COALESCE(base.raw_payload, '{}'::jsonb) || jsonb_build_object('preserved_from_snapshot_id', 'a9878cb5-1a35-4537-9741-a2b840ebd6ad'::uuid))",
+                  "now()",
+                  "base.supplier_code",
+                  "base.supplier_name",
+                  "base.supplier_group",
+                  "base.supplier_address",
+                  "base.supplier_market_name",
+                  "base.supplier_phone",
+                  "base.purchase_product_name",
+                  "base.purchase_option_name",
+                  "base.purchase_price",
+                  "base.order_unit",
+                  "base.minimum_order_unit"
+                ],
+                "Inner Unique": false,
+                "Join Filter": "(patch.sellpia_sku_code = base.sellpia_sku_code)",
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Forward",
+                    "Index Name": "sellpia_stock_snapshot_rows_pkey",
+                    "Relation Name": "sellpia_stock_snapshot_rows",
+                    "Schema": "public",
+                    "Alias": "base",
+                    "Startup Cost": 0.42,
+                    "Total Cost": 2.64,
+                    "Plan Rows": 1,
+                    "Plan Width": 706,
+                    "Output": [
+                      "base.snapshot_id",
+                      "base.sellpia_sku_code",
+                      "base.sellpia_product_code",
+                      "base.sellpia_product_name",
+                      "base.sellpia_option_name",
+                      "base.own_sku",
+                      "base.stock",
+                      "base.available_stock",
+                      "base.integrated_available_stock",
+                      "base.safety_stock",
+                      "base.source_row_no",
+                      "base.raw_payload",
+                      "base.created_at",
+                      "base.supplier_code",
+                      "base.supplier_name",
+                      "base.supplier_group",
+                      "base.supplier_address",
+                      "base.supplier_market_name",
+                      "base.supplier_phone",
+                      "base.purchase_product_name",
+                      "base.purchase_option_name",
+                      "base.purchase_price",
+                      "base.order_unit",
+                      "base.minimum_order_unit"
+                    ],
+                    "Index Cond": "(base.snapshot_id = 'a9878cb5-1a35-4537-9741-a2b840ebd6ad'::uuid)"
+                  },
+                  {
+                    "Node Type": "Index Only Scan",
+                    "Parent Relationship": "Inner",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Forward",
+                    "Index Name": "sellpia_stock_snapshot_rows_pkey",
+                    "Relation Name": "sellpia_stock_snapshot_rows",
+                    "Schema": "public",
+                    "Alias": "patch",
+                    "Startup Cost": 0.42,
+                    "Total Cost": 1.54,
+                    "Plan Rows": 1,
+                    "Plan Width": 8,
+                    "Output": [
+                      "patch.snapshot_id",
+                      "patch.sellpia_sku_code"
+                    ],
+                    "Index Cond": "(patch.snapshot_id = 'a5557de2-4eca-46fe-afdc-af4b5f5b24de'::uuid)"
+                  }
+                ]
+              }
+            ]
+          },
+          "Query Identifier": 5197866130345351000
+        }
+      ]
+    }
+  ],
+  "optimized_select_plan": [
+    {
+      "QUERY PLAN": [
+        {
+          "Plan": {
+            "Node Type": "Index Scan",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Scan Direction": "Forward",
+            "Index Name": "sellpia_stock_snapshot_rows_pkey",
+            "Relation Name": "sellpia_stock_snapshot_rows",
+            "Schema": "public",
+            "Alias": "base",
+            "Startup Cost": 1.99,
+            "Total Cost": 4.21,
+            "Plan Rows": 1,
+            "Plan Width": 357,
+            "Output": [
+              "base.sellpia_sku_code",
+              "base.raw_payload"
+            ],
+            "Index Cond": "(base.snapshot_id = 'a9878cb5-1a35-4537-9741-a2b840ebd6ad'::uuid)",
+            "Filter": "(NOT (ANY (base.sellpia_sku_code = (hashed SubPlan 2).col1)))",
+            "Plans": [
+              {
+                "Node Type": "Index Only Scan",
+                "Parent Relationship": "InitPlan",
+                "Subplan Name": "CTE uploaded_skus",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Scan Direction": "Forward",
+                "Index Name": "sellpia_stock_snapshot_rows_pkey",
+                "Relation Name": "sellpia_stock_snapshot_rows",
+                "Schema": "public",
+                "Alias": "sellpia_stock_snapshot_rows",
+                "Startup Cost": 0.42,
+                "Total Cost": 1.54,
+                "Plan Rows": 1,
+                "Plan Width": 8,
+                "Output": [
+                  "sellpia_stock_snapshot_rows.sellpia_sku_code"
+                ],
+                "Index Cond": "(sellpia_stock_snapshot_rows.snapshot_id = 'a5557de2-4eca-46fe-afdc-af4b5f5b24de'::uuid)"
+              },
+              {
+                "Node Type": "CTE Scan",
+                "Parent Relationship": "SubPlan",
+                "Subplan Name": "SubPlan 2",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "CTE Name": "uploaded_skus",
+                "Alias": "uploaded_skus",
+                "Startup Cost": 0,
+                "Total Cost": 0.02,
+                "Plan Rows": 1,
+                "Plan Width": 32,
+                "Output": [
+                  "uploaded_skus.sellpia_sku_code"
+                ]
+              }
+            ]
+          },
+          "Query Identifier": 7008754709285216000
+        }
+      ]
+    }
+  ],
+  "log": {
+    "timestamp_utc": "2026-10-13T04:44:32.862Z",
+    "sqlstate": "57014",
+    "context": "finalize_operations_hub_sellpia_inventory_count line24 INSERT; hub_sellpia_upload_complete_v2 line14 assignment",
+    "statement_timeout": "90s",
+    "lock_timeout": "5s"
+  },
+  "limitations": [
+    "Production historical WAL/IO/locks per statement are not measured; track_io_timing off and track_functions none.",
+    "Optimization timings are isolated test measurements, not production timings.",
+    "Operational stock_quantity is a separate system value; coincidental equality with uploaded source values does not demonstrate application. No master timestamps changed since the failed upload."
+  ]
+}

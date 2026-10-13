@@ -17,6 +17,7 @@
   "operationsHubInventoryDraftCancel.mock.test.mjs",
   "operationsHubInventoryCountStatic.mock.test.mjs",
   "operationsHubInventoryCountUpdate.functional.test.mjs",
+  "operationsHubInventoryCountFailure.functional.test.mjs",
   "operationsHubInventoryTab.browser.test.mjs",
   "operationsHubMultiLink.mock.test.mjs",
   "operationsHubNestedRelationFolders.mock.test.mjs",
@@ -64,5 +65,7 @@
   "operationsHubAblyMappingScaleDatabase.test.mjs",
   "operationsHubIntegratedMappingExport.test.mjs",
   "operationsHubAblyMappingPrefetchFixtureDatabase.test.mjs",
-  "operationsHubWorksheetDimension.test.mjs"
+  "operationsHubWorksheetDimension.test.mjs",
+  "operationsHubSellpiaAbortRace.mock.test.mjs",
+  "operationsHubSellpiaInventoryCountTimeout.db.test.mjs"
 ]
