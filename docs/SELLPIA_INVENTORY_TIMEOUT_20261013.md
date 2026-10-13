@@ -4,7 +4,7 @@ Repository: `w-works-official/Operation_Hub`
 Base: `e0f5aabc8c667863a6a186018484a39df4bf6b12` (freshly fetched company `origin/main`)
 Branch: `codex/sellpia-inventory-timeout-20261013`
 Date: 2026-10-13 KST
-Production writes, migration applies, uploads, snapshot cleanup, main merges and Pages deployments: **0**
+Initial implementation and isolated verification performed no Production writes. The separately approved Production deployment is recorded in section 11.
 
 ## 1. Direct cause
 
@@ -135,7 +135,7 @@ The worktree and branch are independent of `codex/sellpia-one-click-sync-2026101
 
 ## 10. Approved application and rollback procedure
 
-This procedure is prepared for a later explicit Production approval. It has **not** been executed on Production.
+This procedure was prepared before approval; its approved Production execution is recorded in section 11. The rollback procedure remains available.
 
 1. Re-fetch company main and compare relevant DB definitions and original-files code with this reviewed baseline. Re-read current source/Matrix state. Preserve the failed snapshot as investigation evidence.
 2. Back up the current three function definitions, their settings/ACL/owners and the deployed original-files revision. Apply the SQL file in a single explicit transaction. Its drift guard must pass; any drift means stop and revise/review, rather than bypassing the guard.
@@ -163,4 +163,20 @@ The harness resets only the named isolated fixture schemas/database. It must nev
 
 Artifacts: `outputs/db-maintenance/sellpia-inventory-timeout-20261013/production-readonly.json`, `outputs/sellpia-inventory-count-timeout-results.json`, `outputs/sellpia-inventory-count-timeout-final-validation.json`, and `outputs/db-maintenance/sellpia-inventory-timeout-20261013/npm-test.log`.
 
-**Ready for Production Approval:** Implementation, isolated performance reproduction, rollback and regression validation are complete. Production application awaits approval.
+**Production deployed:** The user explicitly approved deployment on October 13. Implementation, isolated performance reproduction, rollback and regression validation are complete; deployment verification is recorded below.
+
+## 11. Approved Production deployment, 2026-10-13
+
+The user explicitly requested the timeout deployment after approving the blank-template UI deployment. The DB and Edge changes were applied to project `bpgvqmtsjgegnrdzmpep` at approximately 16:21 KST and verified at 16:23 KST.
+
+- Before applying, all three function body hashes/configuration/security attributes matched the captured baseline; the existing original-files v5 index and carrier module matched company main. There were no recent open Sellpia uploaded/parsing intents or active upload RPC calls at the preflight check.
+- Current function definitions, owners, ACLs, configuration and Edge v5 source were saved locally in `outputs/deploy-20261013/before.json`. This backup is an operational recovery artifact, not a migration or public-site asset.
+- The reviewed SQL file was applied via Supabase `apply_migration` inside an explicit transaction with a 5s deployment lock timeout. The tool recorded migration name `sellpia_inventory_count_fixed_key_copy`, remote ledger version `20261013072114`. The CLI-created/tested local artifact remains `20261013045421_sellpia_inventory_count_fixed_key_copy.sql`; these identifiers refer to this same reviewed SQL, not two independent fixes. Do not repair the historical ledger or run a blanket db push to reconcile this repository's non-replay baseline.
+- `operations-hub-original-files` v6 is ACTIVE. Its deployed index and carrier module exactly match the reviewed sources after newline normalization; the existing custom operator-session authentication and `verify_jwt=false` configuration were preserved. Bundle SHA-256: `93fad1c4e032f7e8e693b7e9b660ee89ecdce24b8eb2a25dd017c29d35ca0573`.
+- Post-deploy body hashes are finalizer `93d010cd561c58d3b4e91d5e3bb8a8de`, complete_v1 `397b8b18e326a58a49944a10e977c071`, carrier reader `b327042ae96c5894b6633307ec5a6511`. The complete_v2 wrapper remains `162a19917c5311e4306c3c8b516acaaf`. All four owners, ACLs, security modes, volatility and function configuration match pre-deploy values; the complete wrapper retains 90s/5s budgets.
+- Production read-only EXPLAIN of the revised copy shows one MATERIALIZED uploaded-key source and a hashed SubPlan exclusion while still estimating one base row. EXPLAIN ANALYZE and the INSERT were not executed on Production.
+- Failed snapshot `a5557de2-4eca-46fe-afdc-af4b5f5b24de` remains failed with 76 stored rows and 0 valid rows. Latest ready snapshot remains `a9878cb5-1a35-4537-9741-a2b840ebd6ad`, with 23,816 stored/valid rows. No snapshot, inventory, price, mapping or Storage data was edited or reuploaded during deployment.
+- Security advisor categories/counts match the pre-deploy baseline. No new grant, table, policy or authentication access was introduced.
+- A fresh independent review reran the selected copy/carrier/abort regressions: 11/11 passed. The performance numbers in section 7 remain isolated measurements; a fresh operational synchronization has not been executed by this deployment.
+
+Source PR: <https://github.com/w-works-official/Operation_Hub/pull/2>. Rollback still requires the guarded SQL file in a transaction and restoration of the backed-up Edge v5 source with its existing authentication policy; source rollback alone cannot undo deployed DB code or valid later inventory data.
