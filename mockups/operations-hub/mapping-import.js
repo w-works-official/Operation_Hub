@@ -82,6 +82,17 @@
     await Promise.all(Array.from({length:Math.min(8,targets.length)},worker));
     return images;
   }
+  async function buildBlankTemplate() {
+    if(!global.ExcelJS?.Workbook)throw new Error('XLSX 양식 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.');
+    const book=new global.ExcelJS.Workbook();
+    book.creator='System V3';book.created=new Date();
+    const sheet=book.addWorksheet('매칭값',{views:[{state:'frozen',ySplit:1}]});
+    sheet.columns=headers.map((title,index)=>({header:title,key:String(index),width:index===0?18:22,style:{numFmt:'@'}}));
+    const firstRow=sheet.getRow(1);firstRow.height=24;firstRow.font={bold:true};firstRow.alignment={vertical:'middle'};
+    firstRow.eachCell(cell=>{cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8EFF7'}};cell.border={bottom:{style:'thin',color:{argb:'FF9DAFC5'}}};});
+    sheet.autoFilter={from:'A1',to:'G1'};
+    return book.xlsx.writeBuffer();
+  }
   async function buildThumbnailTemplate(products=[],{onProgress}={}) {
     if(!global.ExcelJS?.Workbook)throw new Error('썸네일 XLSX 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.');
     const images=await loadThumbnailImages(products,onProgress);
@@ -138,7 +149,7 @@
     sheet.autoFilter={from:'A1',to:`K${Math.max(1,items.length+1)}`};
     return book.xlsx.writeBuffer();
   }
-  global.SystemV3MappingImport={parse,headers,templateHeaders,sellerTemplateHeaders,buildThumbnailTemplate,buildSellerUnmatchedTemplate};
+  global.SystemV3MappingImport={parse,headers,templateHeaders,sellerTemplateHeaders,buildBlankTemplate,buildThumbnailTemplate,buildSellerUnmatchedTemplate};
   if(!global.document)return;
   const byId=id=>document.getElementById('mapping-import-'+id);
   if(!byId('modal'))return;
@@ -159,6 +170,20 @@
     const url=URL.createObjectURL(new Blob([content],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
   };
   const csv=rows=>'\uFEFF'+rows.map(row=>row.map(value=>'"'+text(typeof value==='string'&&/^[=+@-]/.test(value)?"'"+value:value).replaceAll('"','""')+'"').join(',')).join('\r\n');
+  byId('blank-template').onclick=async()=>{
+    const button=byId('blank-template'),original=button.textContent;
+    button.disabled=true;
+    try{
+      button.textContent='빈 양식 생성 중…';
+      const bytes=await buildBlankTemplate();
+      download(bytes,'매칭값_일괄등록_빈양식.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      render('헤더만 있는 빈 XLSX 양식을 받았습니다. A열 셀피아 SKU와 변경할 판매처의 상품·옵션코드를 입력한 뒤 업로드하세요.');
+    }catch(error){
+      render(`빈 양식을 만들지 못했습니다: ${error?.message||error}`);
+    }finally{
+      button.disabled=false;button.textContent=original;
+    }
+  };
   byId('template').onclick=async()=>{
     const button=byId('template'),original=button.textContent;
     if(!global.SystemV3Data?.loadAllFilteredSkus||!global.SystemV3Data?.loadProductThumbnailsBySkus){
