@@ -24,6 +24,26 @@
     const parsed = Number(String(value).replace(/,/g, '').trim());
     return Number.isFinite(parsed) ? parsed : fallback;
   }
+  function strictNumber(value, {fileName, rowNo, label, integer = false, fallback = null, required = false}) {
+    const blank = value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
+    if (blank) {
+      if (!required) return fallback;
+      throw new Error(`${fileName}: ${rowNo}행 ${label} 값이 비어 있습니다.`);
+    }
+    // Do not let Number(''), booleans, NaN, infinity, or malformed grouping
+    // become a valid zero in unattended imports. Signed available stock is valid.
+    const text = typeof value === 'string' ? value.trim() : '';
+    const validText = /^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/.test(text);
+    if (typeof value !== 'number' && (typeof value !== 'string' || !validText)) {
+      throw new Error(`${fileName}: ${rowNo}행 ${label} 값이 올바른 숫자가 아닙니다.`);
+    }
+    const parsed = typeof value === 'number' ? value : Number(text.replace(/,/g, ''));
+    const fractionalIntegerText = integer && typeof value === 'string' && /\.[0-9]*[1-9]/.test(text);
+    if (!Number.isFinite(parsed) || Math.abs(parsed) > Number.MAX_SAFE_INTEGER || (integer && (!Number.isSafeInteger(parsed) || fractionalIntegerText))) {
+      throw new Error(`${fileName}: ${rowNo}행 ${label} 값이 안전한 ${integer ? '정수' : '숫자'} 범위를 벗어났습니다.`);
+    }
+    return parsed;
+  }
   function columnName(index) {
     let value = Number(index) + 1;
     let result = '';
@@ -56,7 +76,10 @@
     const Decoder = global.TextDecoder || (typeof TextDecoder === 'function' ? TextDecoder : null);
     if (!Decoder) throw new Error('브라우저 TextDecoder를 사용할 수 없습니다.');
     const hasBom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
-    const decodeUtf8 = () => new Decoder('utf-8', {fatal:true}).decode(bytes);
+    // The official browser exporter can add a second leading UTF-8 BOM.
+    // Strip encoding markers from the decoding view before CSV quote parsing;
+    // the collected file bytes and their SHA-256 identity remain unchanged.
+    const decodeUtf8 = () => new Decoder('utf-8', {fatal:true}).decode(bytes).replace(/^\uFEFF+/, '');
     try {
       return {text:decodeUtf8(), encoding:hasBom ? 'utf-8-bom' : 'utf-8', inputType:'string'};
     } catch (error) {
@@ -146,29 +169,37 @@
     return rowsFromWorksheet(workbook, XLSX, fileName);
   }
 
-  function normalizeRows(matrix, columns, fileName) {
+  function normalizeRows(matrix, columns, fileName, options = {}) {
     const rows = [];
     for (const source of matrix.slice(1)) {
-      const sourceRowNo = number(cell(source, columns, 'rowNo'));
+      const rawRowNo = cell(source, columns, 'rowNo');
+      const sourceRowNo = number(rawRowNo);
       const sku = clean(cell(source, columns, 'sku'));
-      if (!sourceRowNo && !sku) continue;
+      if (!sourceRowNo && !sku && (!options.strictNumeric || source.every(value => value == null || clean(value) === ''))) continue;
+      if (options.strictNumeric) strictNumber(rawRowNo, {fileName, rowNo:sourceRowNo || '?', label:'행번호', integer:true, required:true});
       if (!Number.isInteger(sourceRowNo) || sourceRowNo < 1) throw new Error(`${fileName}: 행번호가 1 이상의 정수가 아닌 행이 있습니다.`);
       if (!sku) throw new Error(`${fileName}: ${sourceRowNo}행 상품코드가 비어 있습니다.`);
       if (!/^\d+-\d+$/.test(sku)) throw new Error(`${fileName}: ${sourceRowNo}행 SKU '${sku}' 형식이 올바르지 않습니다.`);
       const soldOut = clean(cell(source, columns, 'soldOut'));
       const discontinued = clean(cell(source, columns, 'discontinued'));
-      const available = number(cell(source, columns, 'integratedAvailableStock'), number(cell(source, columns, 'availableStock'), 0));
-      const salePrice = number(cell(source, columns, 'salePrice'), 0);
+      const numeric = (key, label, fallback = null, integer = false, required = false) => options.strictNumeric
+        ? strictNumber(cell(source, columns, key), {fileName, rowNo:sourceRowNo, label, fallback, integer, required})
+        : number(cell(source, columns, key), fallback);
+      const available = numeric('integratedAvailableStock', '통합가용재고', numeric('availableStock', '가용재고', 0, true, true), true);
+      const salePrice = numeric('salePrice', '판매가', 0, false, true);
+      const purchasePrice = numeric('purchasePrice', '매입가');
+      const orderUnit = numeric('orderUnit', '발주단위');
+      const minimumOrderUnit = numeric('minimumOrderUnit', '최소발주수량');
       rows.push({
         sellpia_sku_code:sku,
         sellpia_product_code:sku.replace(/-\d+$/, ''),
         sellpia_product_name:clean(cell(source, columns, 'productName')) || null,
         sellpia_option_name:clean(cell(source, columns, 'optionName')) || null,
         own_sku:clean(cell(source, columns, 'ownSku')) || null,
-        stock:number(cell(source, columns, 'stock'), 0),
+        stock:numeric('stock', '재고', 0, true, true),
         available_stock:available,
         integrated_available_stock:available,
-        safety_stock:number(cell(source, columns, 'safetyStock'), 0),
+        safety_stock:numeric('safetyStock', '안전재고', 0, true),
         source_row_no:sourceRowNo,
         supplier_code:clean(cell(source, columns, 'supplierCode')) || null,
         supplier_name:clean(cell(source, columns, 'supplierName')) || null,
@@ -178,14 +209,14 @@
         supplier_phone:clean(cell(source, columns, 'supplierPhone')) || null,
         purchase_product_name:clean(cell(source, columns, 'purchaseProductName')) || null,
         purchase_option_name:clean(cell(source, columns, 'purchaseOptionName')) || null,
-        purchase_price:number(cell(source, columns, 'purchasePrice')),
-        order_unit:number(cell(source, columns, 'orderUnit')),
-        minimum_order_unit:number(cell(source, columns, 'minimumOrderUnit')),
+        purchase_price:purchasePrice,
+        order_unit:orderUnit,
+        minimum_order_unit:minimumOrderUnit,
         raw_payload:{
           base_price:salePrice, sell_price:salePrice,
-          purchase_price:number(cell(source, columns, 'purchasePrice')),
-          order_unit:number(cell(source, columns, 'orderUnit')),
-          minimum_order_unit:number(cell(source, columns, 'minimumOrderUnit')),
+          purchase_price:purchasePrice,
+          order_unit:orderUnit,
+          minimum_order_unit:minimumOrderUnit,
           commission:clean(cell(source, columns, 'commission')),
           purchase_vat:clean(cell(source, columns, 'purchaseVat')),
           sale_status:discontinued ? '단종' : soldOut ? '품절' : '정상',
@@ -220,14 +251,14 @@
           encoding = decoded.parserEncoding || decoded.encoding;
         }
         if (!headerMap.valid) throw new Error(`${fileName}: ${headerMap.errors.join(' ')}`);
-        return {valid:true, rows:normalizeRows(matrix, headerMap.columns, fileName), headerMap:headerMap.columns, columnCount:(matrix[0] || []).length, encoding, errors:[]};
+        return {valid:true, rows:normalizeRows(matrix, headerMap.columns, fileName, options), headerMap:headerMap.columns, columnCount:(matrix[0] || []).length, encoding, errors:[]};
       }
       if (!XLSX) throw new Error(`${fileName}: XLSX/XLS 원본은 XLSX 파일 해석 모듈이 필요합니다.`);
       const workbook = XLSX.read(buffer, {type:'array', cellDates:false});
       matrix = rowsFromWorksheet(workbook, XLSX, fileName);
       const headerMap = buildSellpiaColumnMap(matrix[0]);
       if (!headerMap.valid) throw new Error(`${fileName}: ${headerMap.errors.join(' ')}`);
-      return {valid:true, rows:normalizeRows(matrix, headerMap.columns, fileName), headerMap:headerMap.columns, columnCount:(matrix[0] || []).length, encoding, errors:[]};
+      return {valid:true, rows:normalizeRows(matrix, headerMap.columns, fileName, options), headerMap:headerMap.columns, columnCount:(matrix[0] || []).length, encoding, errors:[]};
     } catch (error) {
       return {valid:false, rows:[], headerMap:null, encoding:null, errors:[String(error?.message || error)]};
     }

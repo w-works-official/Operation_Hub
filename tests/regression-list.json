@@ -64,5 +64,11 @@
   "operationsHubAblyMappingScaleDatabase.test.mjs",
   "operationsHubIntegratedMappingExport.test.mjs",
   "operationsHubAblyMappingPrefetchFixtureDatabase.test.mjs",
-  "operationsHubWorksheetDimension.test.mjs"
+  "operationsHubWorksheetDimension.test.mjs",
+  "operationsHubSellpiaSyncContract.test.mjs",
+  "operationsHubSellpiaSyncClient.test.mjs",
+  "operationsHubSellpiaSyncQueue.test.mjs",
+  "operationsHubSellpiaSyncRunner.test.mjs",
+  "operationsHubSellpiaSyncIntegrationReview.test.mjs",
+  "operationsHubSellpiaSyncPackaging.test.mjs"
 ]

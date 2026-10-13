@@ -1,0 +1,8 @@
+*.local.json
+*.journal.json
+.runtime/
+profile/
+downloads/
+artifacts/
+*.log
+*.tmp

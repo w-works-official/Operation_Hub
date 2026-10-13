@@ -1,0 +1,10 @@
+.sellpia-sync-panel{margin:18px 0;padding:18px;border:1px solid #d8e4ef;border-radius:12px;background:#f7fafc}
+.sellpia-sync-panel h3{margin:0 0 8px;font-size:16px}
+.sellpia-sync-panel p{margin:8px 0;line-height:1.6;color:#46566b}
+.sellpia-sync-panel label{display:block;margin:10px 0}
+.sellpia-sync-panel select{margin-left:10px;padding:7px;border:1px solid #ccd6e1;border-radius:6px;background:#fff}
+.sellpia-sync-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.sellpia-sync-panel dl{display:grid;grid-template-columns:minmax(130px,1fr) minmax(100px,2fr);gap:7px 12px;margin:12px 0;font-size:13px}
+.sellpia-sync-panel dt{color:#516174}.sellpia-sync-panel dd{margin:0;overflow-wrap:anywhere}
+.sellpia-sync-panel .sellpia-sync-error{color:#a32929}
+.sellpia-sync-mode-note{font-size:12px}

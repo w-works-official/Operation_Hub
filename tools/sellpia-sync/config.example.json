@@ -1,0 +1,20 @@
+{
+  "sourceUrl": "https://curiouswiz.sellpia.com/product_list_total.html",
+  "verifiedReady": false,
+  "browserChannel": "msedge",
+  "timeoutMs": 60000,
+  "pollIntervalMs": 5000,
+  "heartbeatIntervalMs": 30000,
+  "workerId": "company-pc",
+  "ui": {
+    "strategy": "grid_csv",
+    "format": "csv4",
+    "rowsPerFile": 10000,
+    "authenticatedSelector": "#search_bt",
+    "rowCountSelector": "#pager .slick-pager-status",
+    "rowCountPattern": "^전체\\s+([\\d,]+)\\s*개$",
+    "loadingSelector": ".loading-indicator2",
+    "loadingBackdropSelector": ".loading-fade2",
+    "settleMs": 1000
+  }
+}

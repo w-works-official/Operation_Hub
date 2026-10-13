@@ -12892,6 +12892,21 @@ const sellpiaPreflightState = {
 const inventoryCountPreviewPanel = document.getElementById('inventory-count-preview');
 const inventoryCountState = {requestId:0,status:'idle',signature:'',result:null,error:'',detail:''};
 
+const sellpiaSyncController = window.SystemV3SellpiaSyncWorkspace?.mount({
+  data:liveData,
+  getPolicy:mode=>({mode,fields:{inventory:document.getElementById('upload-field-inventory').checked,price:document.getElementById('upload-field-price').checked,basePrice:document.getElementById('upload-field-price').checked,purchasePrice:document.getElementById('upload-field-purchase').checked,basic:document.getElementById('upload-field-basic').checked,status:document.getElementById('upload-field-status').checked}}),
+  afterApply:async(result,fields)=>{
+    let warning='';
+    if(fields.price||fields.purchasePrice){
+      try{warning=materializationWarning(await materializeHubPrices(result.affectedSkus||[],{sources:['smartstore','makeshop','ably'],reason:'sellpia-source-sync'}));}
+      catch(error){warning='원본 반영은 완료됐지만 가격 계산을 다시 확인해야 합니다.';}
+    }
+    matrixSourceReloadNeeded=true;
+    await refreshLiveData({resetPage:true});
+    return {warning};
+  }
+});
+
 function isPatchableUploadSource(source = sourceSelect.value) {
   return ['sellpia','smartstore','makeshop','ably'].includes(source);
 }
