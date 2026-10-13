@@ -28,7 +28,7 @@ export async function createNativeSqlRunner(){
      const error=Error('QA_NATIVE_SQL_FAILED');error.safeReason=reason;error.wallMs=performance.now()-started;resolve({ok:false,error});
     }else resolve({ok:true,stdout:stdout.trim(),wallMs:performance.now()-started});
    });
-   child.stdin.end(statement+'\n');
+   child.stdin.on('error',()=>{});child.stdin.end(statement+'\n');
   });
   if(!outcome.ok)throw outcome.error;
   return outcome;
@@ -38,7 +38,7 @@ export async function createNativeSqlRunner(){
   if(!lines.length)throw Error('QA_NATIVE_JSON_MISSING');
   try{return {data:JSON.parse(lines.at(-1)),wallMs:result.wallMs};}catch{throw Error('QA_NATIVE_JSON_INVALID');}
  };
- const identity=(await json("select jsonb_build_object('database',current_database(),'address',inet_server_addr()::text,'port',inet_server_port(),'version',current_setting('server_version'))")).data;
- if(identity.database!=='operation_hub_sync_qa'||identity.address!=='127.0.0.1'||identity.port!==55474)throw Error('QA_NATIVE_DATABASE_SCOPE');
+ const identity=(await json("select jsonb_build_object('database',current_database(),'address',host(inet_server_addr()),'port',inet_server_port(),'version',current_setting('server_version'))")).data;
+ if(identity.database!=='operation_hub_sync_qa'||identity.address!=='127.0.0.1'||identity.port!==55474){const error=Error('QA_NATIVE_DATABASE_SCOPE');error.identity=identity;throw error;}
  return {call,json,identity,passwordFileRead:true};
 }

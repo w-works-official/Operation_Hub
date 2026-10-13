@@ -58,7 +58,16 @@ export async function waitForWorkerAuthentication(context, config, transport, si
     const page=context.pages()[0]||await context.newPage();
     await page.goto(config.sourceUrl,{waitUntil:'domcontentloaded',timeout:config.timeoutMs});
     log('manual_login_required',{state:'needs_login'});
-    await authenticate(context,config,signal);
+    while(!signal?.aborted) {
+      try {await authenticate(context,config,signal);break;}
+      catch(error) {
+        if(error?.code!=='manual_login_timeout')throw error;
+        // A resident worker stays available for later human reauthentication.
+        // It does not repeatedly navigate or attempt a login on its own.
+        log('authentication_waiting',{state:'needs_login'});
+      }
+    }
+    if(signal?.aborted)throw Object.assign(new Error('worker_stopped'),{state:'blocked'});
   } finally { clearInterval(timer); }
   await transport.hello(config.workerId,'connected',signal);
 }

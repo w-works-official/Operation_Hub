@@ -24,7 +24,7 @@ async function preview(x,extra={}){
   const {manifest}=await x.q.dispatch('upload-init',{...scope,collectionManifest:{source:'sellpia',collectionMode:'official_download',mode:'full',includeAll:true,filters:[],expectedRowCount:3,files}},worker);
   await x.q.dispatch('upload-finalize',{...scope,verifiedArtifacts:manifest.map(f=>({...f,verified:true}))},worker);
   await x.q.dispatch('receipt',{jobId:job.jobId,receipt:{valid:true,rowCount:3,sourceFingerprint:'b'.repeat(64),baselineSnapshotId:base,summary:{mode:extra.applicationMode||'full',rowCount:3,reviewRequired:false,comparison:{baselineRowCount:3,newRowCount:3,addedCount:0,removedCount:0,unknownCount:0,fieldCounts:{inventory:1}}}}},actor);
-  return {job,files:files.map(f=>({name:f.name,size:f.size,sha256:f.sha256,mime_type:'text/csv'}))};
+  return {job,scope,files:files.map(f=>({name:f.name,size:f.size,sha256:f.sha256,mime_type:'text/csv'}))};
 }
 async function begin(x,p){
   const token='scoped-test-token';await x.db.exec('update operations_private.sellpia_sync_config set apply_enabled=true');
@@ -79,6 +79,8 @@ test('completion atomically marks DB ready; response loss and Matrix failure rec
   await assert.rejects(x.runtime('apply-progress',{jobId:p.job.jobId,snapshotId:r.snapshot_id,state:'complete'}),/Matrix is not ready/);
   await x.sql('update operations_private.test_matrix_state set snapshot_id=$1',[r.snapshot_id]);
   const recovery=(await x.runtime('status',{jobId:p.job.jobId})).job;assert.equal(recovery.state,'complete');assert.equal(recovery.importIntentId,r.intent_id);
+  const replay=await x.q.dispatch('upload-finalize',p.scope,worker);assert.equal(replay.job.state,'collected');assert.equal(replay.deduplicated,true);assert.equal('importIntentId' in replay.job,false);
+  assert.equal((await x.runtime('status',{jobId:p.job.jobId})).job.state,'complete','collector replay must not rewind import state');
   assert.equal((await x.runtime('history')).jobs.length,1);
   assert.equal((await x.sql('select count(*)::integer n from public.sellpia_stock_snapshots')).at(0).n,2);
 });

@@ -101,6 +101,20 @@ export function publicJob(job) {
   const {jobId,requestId,mode,applicationMode,selectedFields,baselineSnapshotId,state,createdAt,updatedAt,summary,collectionManifest,receipt,applySnapshotId,importIntentId,importStatus,matrixStatus,phase}=job;
   return {jobId,requestId,mode,applicationMode:applicationMode||mode,selectedFields,baselineSnapshotId,state,createdAt,updatedAt,summary,collectionManifest:collectionManifest||null,receipt:receipt||null,applySnapshotId:applySnapshotId||null,importIntentId:importIntentId||null,importStatus:importStatus||null,matrixStatus:matrixStatus||null,phase:phase||null,applyProduction:false};
 }
+export function canReplayCollection(job,workerId,leaseHash){
+  return Boolean(job&&['collected','previewed','applying','db_ready','matrix_failed','complete','failed'].includes(job.state)
+    &&job.completedWorkerId===workerId&&job.completedLeaseHash===leaseHash
+    &&Array.isArray(job.manifest)&&job.manifest.length===3&&Array.isArray(job.verifiedArtifacts)
+    &&job.verifiedArtifacts.length===3&&job.verifiedArtifacts.every(f=>f.verified===true)
+    &&same(job.verifiedArtifacts.map(({verified,...f})=>f),job.manifest));
+}
+export function collectionAcknowledgement(job){
+  // A collector can acknowledge its immutable completed source even if the
+  // browser has progressed to import/Matrix states. Never expose apply scope.
+  const {jobId,requestId,createdAt,collectionManifest}=job;
+  return {jobId,requestId,createdAt,mode:'full',state:'collected',applyProduction:false,
+    collectionManifest,summary:{phase:'verified',completedFiles:3,totalFiles:3,rowCount:collectionManifest.expectedRowCount}};
+}
 export function assertLease(job, workerId, hash, now) {
   if (!job || job.state!=='collecting' || job.workerId!==workerId || job.leaseHash!==hash || !integer(job.leaseExpiresAt,1) || job.leaseExpiresAt<=now) fail('LEASE_LOST','작업 권한이 만료되었거나 취소되었습니다.');
 }
@@ -158,7 +172,7 @@ export class QueueProtocol {
     return this.store.transact(({jobs,now})=>{
       const job=jobs.find(j=>j.jobId===jobId);if(!job)fail('NOT_FOUND','작업을 찾을 수 없습니다.');
       if(actor.kind==='browser'&&job.operatorUsername&&job.operatorUsername!==actor.username)fail('UNAUTHORIZED','다른 운영자의 작업입니다.');
-      if(action==='upload-finalize'&&['collected','previewed'].includes(job.state)&&job.completedWorkerId===actor.workerId&&job.completedLeaseHash===leaseHash)return {job:publicJob(job),deduplicated:true};
+      if(action==='upload-finalize'&&canReplayCollection(job,actor.workerId,leaseHash))return {job:collectionAcknowledgement(job),deduplicated:true};
       if(actor.kind==='worker')assertLease(job,actor.workerId,leaseHash,now);
       const touch=()=>{job.updatedAt=new Date(now).toISOString();};
       if(action==='status')return {job:publicJob(job)};
@@ -191,7 +205,7 @@ export class QueueProtocol {
       }
       if(action==='upload-finalize') {
         if(!job.manifest.length||!Array.isArray(body.verifiedArtifacts)||!same(body.verifiedArtifacts.map(({verified,...f})=>f),job.manifest)||body.verifiedArtifacts.some(f=>f.verified!==true))fail('INVALID_ARTIFACT','실제 바이트 검증을 완료한 원본만 제출할 수 있습니다.');
-        job.verifiedArtifacts=body.verifiedArtifacts;job.state='collected';job.completedLeaseHash=job.leaseHash;job.completedWorkerId=job.workerId;job.leaseHash=null;job.leaseExpiresAt=null;job.summary={phase:'verified',completedFiles:job.manifest.length,totalFiles:job.manifest.length,rowCount:job.collectionManifest.expectedRowCount};touch();return {job:publicJob(job)};
+        job.verifiedArtifacts=body.verifiedArtifacts;job.state='collected';job.completedLeaseHash=job.leaseHash;job.completedWorkerId=job.workerId;job.leaseHash=null;job.leaseExpiresAt=null;job.summary={phase:'verified',completedFiles:job.manifest.length,totalFiles:job.manifest.length,rowCount:job.collectionManifest.expectedRowCount};touch();return {job:collectionAcknowledgement(job)};
       }
       fail('INVALID_REQUEST','지원하지 않는 요청입니다.');
     },{jobId,leaseGuard:actor.kind==='worker'?{jobId,workerId:actor.workerId,leaseHash}:null});

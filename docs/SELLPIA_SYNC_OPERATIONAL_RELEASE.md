@@ -17,6 +17,12 @@
    rows RPC, completion RPC를 실행한다.
 9. ready snapshot과 같은 snapshot의 Matrix 재구성을 확인해야 전체 완료이다.
 
+초기 통합에서는 인증된 Hub 탭이 파서·비교·기존 업로드를 실행하므로 완료까지
+탭을 유지한다. 회사 PC는 탭과 별개로 수집 작업을 계속 수행한다. DB 반영 이후
+탭이나 응답이 끊긴 경우 기존 intent/snapshot으로 Matrix 복구를 수행하고 원본을
+재업로드하지 않는다. Hub 탭 없이 서버가 전체 후속 처리를 끝내는 구조는 이
+변경의 실행 경로가 아니다. 미리보기와 반영의 권한 경계를 유지한다.
+
 수집 범위는 항상 전체 3개 파일이다. `applicationMode: patch`는 수동 업로드와
 동일한 선택 필드 갱신이며, `full`은 기존 전체 교체 계약이다. 전체 수집을 했다는
 이유로 수동 가격, 운영 master, 태그, 매핑, 규칙을 초기화하지 않는다.
@@ -50,9 +56,13 @@ snapshot 날짜보다 이전이다. 최근 신규 등록이라고 확정할 수 
 모든 단계는 사용자의 운영 적용 승인 후 진행한다.
 
 1. 진행 중 수동 업로드와 작업을 확인하고 현재 함수 정의·설정의 복구 자료를 확보한다.
-2. timeout 변경 `20261013045421_sellpia_inventory_count_fixed_key_copy.sql`을 적용한다.
+2. timeout 변경이 적용됐는지 정의와 ledger를 확인한다. 2026-10-13 재확인한 회사
+   Production에는 원격 version `20261013072114`로 이미 적용됐다. 저장소 파일
+   `20261013045421_sellpia_inventory_count_fixed_key_copy.sql`과 같은 변경이며
+   다시 적용하거나 ledger를 임의로 맞추거나 blanket `db push`하지 않는다.
 3. 큐/반영 경계 `20261013071210_sellpia_sync_operational_queue.sql`을 적용한다.
    timeout 최적화 본문을 private delegate로 보존한 뒤 기존 v1/v2 시그니처를 감싼다.
+   `docs/sellpia-sync-schema-proposal.sql`은 이전 검토 초안이며 별도로 적용하지 않는다.
 4. `operations-hub-original-files`와 `operations-hub-sellpia-sync`를 함께 배포한다.
    새 원본 함수는 새 migration의 상태 검사에 의존하므로 SQL보다 먼저 배포하지 않는다.
 5. `seller-originals` private, staging restrictive RLS, 기존 원본 접근 경계를 확인한다.
@@ -93,7 +103,8 @@ Git 밖 전용 프로필, 원본 작업 폴더, 설정 파일, worker 환경 파
 - staging 정리는 실패/취소 3시간, 미리보기/완료 7일 후 서버에서 제한된 경로만 수행한다.
   영구 `sellpia/<snapshot>` 원본이나 ready snapshot을 삭제하지 않는다.
 - UI/Edge를 먼저 비활성화하고 PC worker를 중지한다. 진행 중 intent를 확인하고
-  sync rollback을 먼저 검토한다. timeout rollback은 그 뒤 별도 필요 여부를 판단한다.
+  sync rollback을 먼저 검토한다. 기존 승인된 timeout 최적화는 유지한다.
+  timeout rollback은 이 기능의 롤백에 포함하지 않고 별도 필요 여부와 승인을 판단한다.
 - Git/Pages 롤백은 이미 갱신된 원본 DB를 되돌리지 않는다. 데이터 복구는 보존된
   snapshot과 별도 승인 절차로 처리한다.
 

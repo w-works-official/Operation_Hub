@@ -307,7 +307,8 @@ test('actual browser single-trigger grid export preserves double-BOM bytes and a
     document.querySelector('#columns').onchange=()=>{document.querySelector('.grid-download-selected-columns').replaceChildren(...${JSON.stringify(headers)}.map(header=>{const li=document.createElement('li');li.textContent=header;return li;}));};
     document.querySelector('#make-download').onclick=()=>{if(document.querySelector('#format').value!=='csv4'||document.querySelector('#columns').value!=='all'||[...document.querySelectorAll('[data-title]')].some(x=>x.checked))throw Error('wrong export');
       const files=${JSON.stringify(files)};[2,0,1].forEach((fileIndex,index)=>setTimeout(()=>{const file=files[fileIndex],bytes=Uint8Array.from(atob(file.base64),x=>x.charCodeAt(0));const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([bytes]));link.download=file.name;document.body.append(link);link.click();link.remove();},index*50));};</script>`}));
-  const result = await collectOfficial({...config,timeoutMs:10000},{jobId:'browser-fixture',openBrowser:async()=>context});
+  const progress=[];
+  const result = await collectOfficial({...config,timeoutMs:10000},{jobId:'browser-fixture',openBrowser:async()=>context,onProgress:async event=>progress.push(event)});
   assert.equal(result.expectedRowCount,expectedRowCount);assert.equal(result.collectionManifest.files.length,3);
   assert.deepEqual(result.files.map(file=>file.rowCount),[10000,10000,3]);
   assert.deepEqual(result.files.map(file=>file.name),[1,2,3].map(ordinal=>`part-${ordinal}-${originalName}`));
@@ -315,5 +316,6 @@ test('actual browser single-trigger grid export preserves double-BOM bytes and a
   const journal=await readJournal(result.directory);
   assert.deepEqual(journal.files.map(file=>file.originalName),[originalName,originalName,originalName]);
   assert.deepEqual(journal.collectionManifest.files.map(file=>file.name),result.files.map(file=>file.name));
+  assert.deepEqual(progress.filter(event=>event.phase==='downloading').map(event=>event.completedFiles),[0,1,2,3]);
   for(const [index,file] of result.files.entries()) assert.equal(file.sha256,digest(Buffer.from(files[index].base64,'base64')));
 });

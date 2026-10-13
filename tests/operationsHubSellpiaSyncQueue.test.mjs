@@ -61,6 +61,26 @@ test('server-owned staging paths do not use a supplied folder or source filename
 test('manifest is immutable across retry and mismatched init rolls back',async()=>{const x=setup(),{c,p}=await staged(x);await x.queue.dispatch('upload-init',{...c,collectionManifest:p.manifest},worker);await assert.rejects(x.queue.dispatch('upload-init',{...c,collectionManifest:{...p.manifest,expectedRowCount:4}},worker));assert.equal(x.store.jobs[0].collectionManifest.expectedRowCount,3);});
 test('actual byte verification checks size and digest sequentially',async()=>{const x=setup(),{p,init}=await staged(x);let active=0,maximum=0;const out=await verifyArtifactBytes(init.manifest,async f=>{active++;maximum=Math.max(maximum,active);await Promise.resolve();active--;return p.bytes[f.ordinal-1].buffer;});assert.equal(maximum,1);assert.ok(out.every(f=>f.verified));await assert.rejects(verifyArtifactBytes(init.manifest,async()=>new TextEncoder().encode('wrong').buffer));});
 test('verified finalize is idempotent and cannot apply an operational snapshot',async()=>{const x=setup(),{c,p,init}=await staged(x);const verifiedArtifacts=await verifyArtifactBytes(init.manifest,async f=>p.bytes[f.ordinal-1].buffer);const a=await x.queue.dispatch('upload-finalize',{...c,verifiedArtifacts},worker);x.advance(LEASE_MS+1);const b=await x.queue.dispatch('upload-finalize',c,worker);assert.equal(a.job.state,'collected');assert.equal(b.deduplicated,true);assert.equal(b.job.applyProduction,false);});
+test('collection acknowledgement replays after browser application advances without exposing import scope',async()=>{
+  for(const state of ['applying','db_ready','matrix_failed','complete','failed']){
+    const x=setup(),{c,p,init}=await staged(x),verifiedArtifacts=await verifyArtifactBytes(init.manifest,async f=>p.bytes[f.ordinal-1].buffer);
+    await x.queue.dispatch('upload-finalize',{...c,verifiedArtifacts},worker);
+    Object.assign(x.store.jobs[0],{state,importIntentId:id(90),applySnapshotId:id(91),applicationMode:'patch',selectedFields:{inventory:true}});x.advance(LEASE_MS+1);
+    const r=await x.queue.dispatch('upload-finalize',c,worker);assert.equal(r.deduplicated,true);assert.equal(r.job.state,'collected');assert.equal(x.store.jobs[0].state,state);assert.equal(r.job.applyProduction,false);
+    for(const key of ['importIntentId','applySnapshotId','selectedFields','applicationMode','baselineSnapshotId','leaseHash','completedLeaseHash','applyToken'])assert.equal(key in r.job,false);
+  }
+});
+test('cancelled or unverified jobs never accept collector acknowledgement replay',async()=>{
+  const x=setup(),{c,p,init}=await staged(x),verifiedArtifacts=await verifyArtifactBytes(init.manifest,async f=>p.bytes[f.ordinal-1].buffer);
+  await x.queue.dispatch('upload-finalize',{...c,verifiedArtifacts},worker);x.store.jobs[0].state='cancelled';await assert.rejects(x.queue.dispatch('upload-finalize',c,worker),e=>e.code==='LEASE_LOST');
+  x.store.jobs[0].state='failed';x.store.jobs[0].verifiedArtifacts=[];await assert.rejects(x.queue.dispatch('upload-finalize',c,worker),e=>e.code==='LEASE_LOST');
+});
+test('HTTP collection retry after import commits uses immutable proof without Storage or active lease',async()=>{
+  const x=setup(),{c,p,init}=await staged(x),verifiedArtifacts=await verifyArtifactBytes(init.manifest,async f=>p.bytes[f.ordinal-1].buffer);
+  await x.queue.dispatch('upload-finalize',{...c,verifiedArtifacts},worker);x.store.jobs[0].state='complete';
+  let reads=0;const h=http(x,{storage:{assertPrivate:async()=>{reads++;throw Error('must not read');}}});
+  const r=await h(request('upload-finalize',c,workerHeaders));assert.equal(r.status,200);const body=await r.json();assert.equal(body.job.state,'collected');assert.equal(body.deduplicated,true);assert.equal(reads,0);
+});
 test('unverified declaration cannot become collected',async()=>{const x=setup(),{c,init}=await staged(x);await assert.rejects(x.queue.dispatch('upload-finalize',{...c,verifiedArtifacts:init.manifest},worker));assert.equal(x.store.jobs[0].state,'collecting');});
 test('public status never exposes a lease hash, token or worker authority',async()=>{const x=setup();await claimed(x);const j=publicJob(x.store.jobs[0]);assert.equal('leaseHash' in j,false);assert.equal('leaseToken' in j,false);assert.equal('completedLeaseHash' in j,false);assert.equal('workerId' in j,false);});
 test('receipt requires a collected job and exact parsed row count',async()=>{const x=setup(),{c,p,init}=await staged(x);await assert.rejects(x.queue.dispatch('receipt',{jobId:c.jobId,receipt:{valid:true,rowCount:3}},browser));const verifiedArtifacts=await verifyArtifactBytes(init.manifest,async f=>p.bytes[f.ordinal-1].buffer);await x.queue.dispatch('upload-finalize',{...c,verifiedArtifacts},worker);await assert.rejects(x.queue.dispatch('receipt',{jobId:c.jobId,receipt:{valid:true,rowCount:2}},browser));assert.equal((await x.queue.dispatch('receipt',{jobId:c.jobId,receipt:{valid:true,rowCount:3}},browser)).job.state,'previewed');});

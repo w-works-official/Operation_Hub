@@ -73,22 +73,40 @@ node --env-file="C:\OperationHubLocal\worker.env.local" tools/sellpia-sync/runne
 
 `worker --once`는 한 번의 claim/처리만 수행합니다. 모든 요청은 외부로 나가는 HTTPS이고 회사 PC의 inbound 서버·브라우저 remote-debugging port를 열지 않습니다. claim 후 30초마다 heartbeat를 보내며 lease를 잃으면 수집·전송을 중단합니다. 서버는 raw artifact의 크기·hash 검증을 마친 뒤 `collected`로 전환합니다. **collected는 운영 반영 완료가 아닙니다.**
 
-`worker --login`은 worker 시작 때만 인증을 확인하고 필요하면 수동 로그인을 기다리며, 이후 작업들은 같은 context를 재사용합니다. 개별 job에서 사용자 로그인창을 자동으로 열거나 로그인 정보를 입력하지 않습니다. 같은 context의 연속 수집 두 번은 실제 CLI에서 확인했고, 장시간 후 인증 만료와 회사 PC 재시작에 어떻게 대응할지는 추가 검증이 필요합니다. 만료되면 `needs_login`으로 종료하며 세션 재생성이나 인증 우회를 시도하지 않습니다. 아직 재접속 안정성이 확인되지 않았으므로 시작 작업을 등록하는 것만으로 무인 운영 준비가 끝난다고 볼 수 없습니다.
+`worker --login`은 회사 PC의 화면이 있는 전용 context를 유지합니다. 시작 시와 인증 만료 시에는 `needs_login` 상태를 서버에 알리고 운영자의 직접 로그인을 기다립니다. 작업 중 만료된 기존 job은 `needs_login`으로 종료하고 자동으로 재실행하지 않습니다. 재로그인이 확인되면 같은 context로 다음 수집 요청을 기다립니다. 사용자의 로그인 정보를 입력하거나 인증 도전을 자동으로 해결하지 않습니다. 같은 context의 연속 수집 두 번은 실제 CLI에서 확인했고, 장시간 유지·PC 재시작 안정성은 별도 검증이 필요합니다.
 
 signed Storage PUT은 같은 API origin의 `/storage/v1/object/upload/sign/` 주소로만 수행하고 worker secret·Authorization·apikey를 전달하지 않습니다. 원본 저장은 overwrite 없이 이루어지며 signed URL은 journal이나 로그에 저장하지 않습니다.
 
 ## 실패와 재시작
 
 - 프로필·작업 경로는 Git 밖에 보관합니다. stdout는 작업 ID·오류 코드·상태·집계 숫자만 기록합니다. page console, HTML, screenshot, trace, HAR, 오류 원문은 기본 기록하지 않습니다.
-- 작업 중복은 프로세스 lock과 서버 lease로 차단합니다. 비정상 종료 후 `runner.lock`이 남으면 **해당 PC의 기존 runner가 종료되었음을 운영자가 확인한 뒤** lock만 제거합니다. runner는 잠금을 자동 탈취하지 않습니다.
+- 작업 중복은 프로세스 lock과 서버 lease로 차단합니다. runner는 기록된 PID가 실제로 종료된 경우만 stale lock을 확인하고 재확보합니다. PID가 살아 있거나 소유를 확인하지 못하면 새 worker를 시작하지 않습니다. 프로필·원본·기록을 삭제하는 복구 기능은 없습니다.
 - 다운로드 일부 실패, 행수 불일치, 파일 digest 불일치에서는 완료 manifest를 만들지 않습니다. 브라우저의 `ERR_BLOCKED_BY_CLIENT`나 보안 정책을 해제하지 않습니다.
 - 준비 단계는 `PREPARE_*` 코드만 기록하고 실패도 `prepare_<단계>_failed`로 구분합니다. HTML·인증정보·오류 원문을 표시하지 않습니다. 검색키는 전체 선택 시 숨겨지므로 선택 전에 비우며, 이미 빈 숨김 필드는 값이 빈 상태임을 확인하고 불필요한 fill을 건너뜁니다. 숨겨진 비어 있지 않은 검색키를 강제로 수정하지 않습니다.
 - 같은 job의 수집 완료 journal은 byte·schema를 다시 검증한 뒤 재사용합니다. 적용 결과가 불명확한 경우 새 운영 업로드를 자동 반복하지 않습니다.
-- 로그인 필요 상태에서는 runner를 종료하고 회사 PC 운영자가 `collect --login` 또는 `worker --login`으로 재로그인합니다. 인증과 수집은 같은 context에서 이어지며, 별도 `login` 완료 후 재접속이 유지되는지는 미확인입니다.
+- 상주 worker의 로그인 필요 상태에서는 열린 전용 브라우저에서 운영자가 직접 재로그인합니다. 단독 수집은 `collect --login`을 사용합니다. 별도 `login` 완료 후 재접속이 유지되는지는 미확인입니다.
+
+## Windows 시작·중지·상태 확인
+
+`worker-control.ps1`은 현재 checkout의 전용 worker만 관리합니다. 설정과 환경 파일은 Git 밖의 운영자 전용 경로를 사용합니다. 환경 파일은 Node의 `--env-file`에 경로만 전달하고 내용은 읽거나 출력하지 않습니다.
+
+```powershell
+.\tools\sellpia-sync\worker-control.ps1 Start -ConfigPath "C:\OperationHubLocal\sellpia.local.json" -WorkerEnvironmentFile "C:\OperationHubLocal\worker.env.local"
+.\tools\sellpia-sync\worker-control.ps1 Status -ConfigPath "C:\OperationHubLocal\sellpia.local.json"
+.\tools\sellpia-sync\worker-control.ps1 Stop -ConfigPath "C:\OperationHubLocal\sellpia.local.json"
+```
+
+Start는 `worker --login`을 숨겨진 Node 콘솔에서 시작하고 셀피아 브라우저는 화면에 표시합니다. worker는 회사 PC에서 outbound 요청만 전송합니다. `workDirectory/worker-control.json`에는 PID·프로세스 생성 시각·실행 파일 경로·Windows 운영자 신원·lock 소유자를 보존하며, `worker-logs`에는 마스킹된 실행 로그를 보관합니다. 환경 파일 내용이나 인증 값은 관리 기록에 넣지 않습니다. 관리 파일과 로그 접근은 현재 Windows 운영자와 SYSTEM으로 제한합니다. config·환경·프로필·원본·로그를 Git이나 공유 문서에 넣지 않습니다.
+
+Status의 `process_running`은 관리된 프로세스가 있다는 뜻입니다. 셀피아 인증이나 API 연결 성공을 뜻하지 않습니다. Hub의 최신 heartbeat·연결 상태를 함께 확인합니다. PID만 같은 다른 프로세스는 관리 대상으로 인정하지 않고, 같은 Windows 운영자·생성 시각·Node 경로·runner와 config 및 환경 파일 인수가 모두 일치해야 합니다.
+
+Stop은 현재 lock의 PID·소유자와 맞는 `stop-request.json`을 보내 정상 종료를 요청합니다. runner가 context를 닫고 lock을 해제할 때까지 기본 30초 기다립니다. 그 이후에도 종료되지 않으면 `graceful_stop_pending`을 표시하며 자동으로 강제 종료하지 않습니다. 운영자가 검토 후 `Stop -ForceStop`을 명시한 경우에만 같은 프로세스의 신원을 다시 확인하고 강제 종료합니다. 강제 종료 뒤의 기존 파일·job은 완료로 처리하지 않고 서버 lease와 다음 검증에 맡깁니다. helper는 인증 프로필이나 수집 원본을 삭제하지 않습니다.
+
+이 관리 스크립트는 실제 회사 PC에서 Start·Stop을 실행하여 검증하지 않았습니다. 합성 프로세스 신원 판정과 PowerShell 구문만 검사했으며, 실제 설치 전에 해당 PC에서 정상 종료와 로그인 복구를 검증해야 합니다.
 
 ## Windows 시작 작업
 
-실제 수집 계약·전용 로그인·worker 서버를 검증한 뒤에만 아래 설치 스크립트를 명시적으로 실행합니다. 스크립트는 현재 Windows 사용자 로그인 시 `worker --login`을 실행할 작업을 등록하고 **즉시 실행하지 않습니다.** 화면이 있는 전용 브라우저에서 인증을 확인하며, 필요하면 운영자가 직접 로그인합니다. 기존 작업을 덮어쓰지 않고 Windows 비밀번호를 저장하지 않습니다.
+실제 수집 계약·전용 로그인·worker 서버를 검증한 뒤에만 아래 설치 스크립트를 명시적으로 실행합니다. `-Install`을 지정한 운영자가 선택한 config·환경 파일로, 현재 Windows 사용자 로그인 시 관리 스크립트의 Start를 실행할 작업을 등록합니다. **등록 후 즉시 실행하지 않습니다.** `worker --login`의 화면이 있는 전용 브라우저에서 인증을 확인하며 필요하면 운영자가 직접 로그인합니다. 기존 작업을 덮어쓰지 않고 Windows 비밀번호를 저장하지 않으며, 실행 정책을 변경하거나 우회하지 않습니다. `localQA:true` 설정은 시작 작업으로 등록하지 않습니다.
 
 ```powershell
 .\tools\sellpia-sync\install-startup.ps1 -Install -ConfigPath "C:\OperationHubLocal\sellpia.local.json" -WorkerEnvironmentFile "C:\OperationHubLocal\worker.env.local"
@@ -102,6 +120,6 @@ signed Storage PUT은 같은 API origin의 `/storage/v1/object/upload/sign/` 주
 node --test tests/operationsHubSellpiaSyncRunner.test.mjs
 ```
 
-테스트는 합성 CSV·BIFF8 XLS와 네트워크가 intercept된 단일 버튼·다중 다운로드 브라우저 fixture만 사용합니다. 실제 회사 원본, 셀피아 계정, production queue/Storage/DB에 접근하지 않습니다. 22개 테스트는 double-BOM quoted CSV, 동일한 공식 다운로드 이름 세 개, 역순 download 이벤트, 원본 해시 보존, lease와 인증 분리 등을 검증합니다. 실제 셀피아 성공 증거는 위 회사 PC CLI 수집 결과와 구분하여 기록했습니다.
+테스트는 합성 CSV·BIFF8 XLS와 네트워크가 intercept된 단일 버튼·다중 다운로드 브라우저 fixture를 사용합니다. 실제 회사 원본, 셀피아 계정, production queue/Storage/DB에 접근하지 않습니다. double-BOM quoted CSV, 동일한 공식 다운로드 이름 세 개, 역순 download 이벤트, 원본 해시 보존, lease와 인증 분리 등을 검증합니다. Windows 관리 테스트는 관리 스크립트의 함수를 PowerShell AST로 추출하고 가짜 CIM 프로세스만 사용합니다. 실제 Start·Stop·스케줄 등록은 실행하지 않습니다. 실제 셀피아 성공 증거는 위 회사 PC CLI 수집 결과와 구분하여 기록했습니다.
 
 공식 문서: [Playwright persistent profile](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context), [downloads](https://playwright.dev/docs/downloads), [인증 상태 보호](https://playwright.dev/docs/auth), [Supabase Queues](https://supabase.com/docs/guides/queues), [signed upload 구현](https://github.com/supabase/storage-js/blob/master/src/packages/StorageFileApi.ts).

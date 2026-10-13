@@ -1,4 +1,4 @@
-import {VERSION,BROWSER_ACTIONS,WORKER_ACTIONS,DOWNLOAD_TTL_SECONDS,allowedOrigin,secureWorkerRequest,sessionHeader,workerTokenMatches,uuid,sha256,assertLease,verifyArtifactBytes,plain,fail} from './protocol.mjs';
+import {VERSION,BROWSER_ACTIONS,WORKER_ACTIONS,DOWNLOAD_TTL_SECONDS,allowedOrigin,secureWorkerRequest,sessionHeader,workerTokenMatches,uuid,sha256,assertLease,verifyArtifactBytes,plain,fail,canReplayCollection} from './protocol.mjs';
 
 const STATUS={UNAUTHORIZED:401,ORIGIN_DENIED:403,NOT_FOUND:404,INVALID_REQUEST:400,AUTOMATION_FULL_ONLY:400,INVALID_MANIFEST:400,INVALID_ARTIFACT:409,CONFLICT:409,LEASE_LOST:409,DISABLED:503,APPLY_DISABLED:409,REVIEW_REQUIRED:409,QUEUE_UNAVAILABLE:503,STORAGE_UNAVAILABLE:503};
 async function boundedJson(req){
@@ -47,7 +47,7 @@ export function createHandler({queue,store,guardSession,storage,workerToken,work
       if(action==='upload-finalize'){
         const jobId=uuid(body.jobId), snapshot=await store.read({jobId}), job=snapshot.jobs.find(j=>j.jobId===jobId);
         const hash=await sha256(body.leaseToken||'');
-        if(job&&['collected','previewed'].includes(job.state)&&job.completedWorkerId===actor.workerId&&job.completedLeaseHash===hash){result=await queue.dispatch(action,body,actor);}
+        if(canReplayCollection(job,actor.workerId,hash)){result=await queue.dispatch(action,body,actor);}
         else{
           assertLease(job,actor.workerId,hash,Number(snapshot.now));
           if(!job.manifest?.length)fail('INVALID_ARTIFACT','먼저 원본 manifest를 선언해주세요.');

@@ -43,6 +43,10 @@ function Get-OwnedProcess($Metadata) {
     $candidate = Get-CimInstance -ClassName Win32_Process -Filter ('ProcessId = {0}' -f $managedProcessId) -ErrorAction SilentlyContinue
     if (-not $candidate -or -not $candidate.ExecutablePath -or -not $candidate.CreationDate -or -not $candidate.CommandLine) { return $null }
     if (-not ([string]$candidate.ExecutablePath).Equals([string]$Metadata.nodePath,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFileName([string]$candidate.ExecutablePath) -ne 'node.exe') { return $null }
+    $currentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    if ($Metadata.operatorSid -ne $currentSid) { return $null }
+    $processOwner = Invoke-CimMethod -InputObject $candidate -MethodName GetOwnerSid -ErrorAction SilentlyContinue
+    if (-not $processOwner -or $processOwner.ReturnValue -ne 0 -or $processOwner.Sid -ne $currentSid) { return $null }
     if ($candidate.CreationDate.ToUniversalTime().ToString('O') -ne $Metadata.createdAt) { return $null }
     if (-not ([string]$candidate.CommandLine).EndsWith((Get-ExpectedArguments $Metadata),[StringComparison]::Ordinal)) { return $null }
     return $candidate
@@ -58,6 +62,7 @@ $repositoryDirectory = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $repositoryPrefix = $repositoryDirectory + '\'
 if ($resolvedConfig.StartsWith($repositoryPrefix,[StringComparison]::OrdinalIgnoreCase)) { throw 'The local configuration must be outside the repository.' }
 $configuration = Get-Content -LiteralPath $resolvedConfig -Raw | ConvertFrom-Json
+if ($configuration.workDirectory -and -not [IO.Path]::IsPathRooted([string]$configuration.workDirectory)) { throw 'The work directory must be absolute.' }
 $workerDirectory = if ($configuration.workDirectory) { [IO.Path]::GetFullPath([string]$configuration.workDirectory) } else { Join-Path $env:LOCALAPPDATA 'OperationHubSellpiaSync\runs' }
 if (-not [IO.Path]::IsPathRooted($workerDirectory) -or $workerDirectory.Equals($repositoryDirectory,[StringComparison]::OrdinalIgnoreCase) -or $workerDirectory.StartsWith($repositoryPrefix,[StringComparison]::OrdinalIgnoreCase)) { throw 'The work directory must be an absolute private path outside the repository.' }
 $metadataPath = Join-Path $workerDirectory 'worker-control.json'
@@ -75,13 +80,18 @@ if ($Action -eq 'Stop') {
     $lock = if (Test-Path -LiteralPath $lockPath -PathType Leaf) { Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json } else { $null }
     if (-not $lock -or $lock.pid -ne $metadata.processId -or $lock.owner -ne $metadata.owner) { throw 'The active worker ownership lock does not match. No stop was sent.' }
     $request = @{pid=$metadata.processId;owner=$metadata.owner;requestedAt=[DateTime]::UtcNow.ToString('O')} | ConvertTo-Json -Compress
+    if ((Test-Path -LiteralPath $stopRequestPath) -and -not (Test-Path -LiteralPath $stopRequestPath -PathType Leaf)) { throw 'The stop request path is not a file. No stop was sent.' }
     if (Test-Path -LiteralPath $stopRequestPath -PathType Leaf) {
         $existing = Get-Content -LiteralPath $stopRequestPath -Raw | ConvertFrom-Json
         if ($existing.pid -ne $metadata.processId -or $existing.owner -ne $metadata.owner) { throw 'A different stop request exists. It was not overwritten.' }
     } else {
-        $stream = [IO.File]::Open($stopRequestPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+        $temporaryStopPath = Join-Path $workerDirectory ('stop-request-{0}.tmp' -f [Guid]::NewGuid().ToString())
+        $stream = [IO.File]::Open($temporaryStopPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
         try { $bytes=[Text.UTF8Encoding]::new($false).GetBytes($request);$stream.Write($bytes,0,$bytes.Length) } finally { $stream.Dispose() }
-        Set-PrivateAcl $stopRequestPath
+        Set-PrivateAcl $temporaryStopPath
+        # Publish after the ACL is ready, so the runner cannot consume the file
+        # between its creation and permission setup. Do not overwrite a peer.
+        Move-Item -LiteralPath $temporaryStopPath -Destination $stopRequestPath
     }
     $deadline = [DateTime]::UtcNow.AddSeconds($StopTimeoutSeconds)
     do {
@@ -98,8 +108,13 @@ if ($Action -eq 'Stop') {
 }
 
 if ($ownedProcess) { Write-ControlStatus 'already_running' $metadata; return }
-if (Test-Path -LiteralPath $lockPath) { throw 'A runner lock exists. Review the existing runner before starting another process.' }
-if (Test-Path -LiteralPath $stopRequestPath) { throw 'An earlier stop request exists. Review it before starting a new worker.' }
+if (Test-Path -LiteralPath $lockPath) {
+    $existingLock = Get-Content -LiteralPath $lockPath -Raw | ConvertFrom-Json
+    $lockProcessId = 0
+    if (-not [int]::TryParse([string]$existingLock.pid,[ref]$lockProcessId) -or $lockProcessId -le 0 -or (Get-Process -Id $lockProcessId -ErrorAction SilentlyContinue)) { throw 'A live or unverifiable runner lock exists. No new worker was started.' }
+    # A proven dead PID can be reclaimed only by the runner's own lock guard.
+    # This script does not delete or take ownership of the existing lock.
+}
 $resolvedNode = Resolve-ReviewedFile $NodePath
 $resolvedEnvironment = Resolve-ReviewedFile $WorkerEnvironmentFile
 if ([IO.Path]::GetFileName($resolvedNode) -ne 'node.exe') { throw 'The reviewed Node.js executable is required.' }
@@ -111,8 +126,13 @@ $logDirectory = Join-Path $workerDirectory 'worker-logs'
 [void][IO.Directory]::CreateDirectory($logDirectory)
 Set-PrivateAcl $logDirectory
 $instance = [Guid]::NewGuid().ToString()
+if (Test-Path -LiteralPath $stopRequestPath) {
+    $earlierStop = Get-Content -LiteralPath $stopRequestPath -Raw | ConvertFrom-Json
+    if (-not $metadata -or $metadata.version -ne 1 -or $metadata.runnerPath -ne $resolvedRunner -or $metadata.configPath -ne $resolvedConfig -or $earlierStop.pid -ne $metadata.processId -or $earlierStop.owner -ne $metadata.owner -or (Get-Process -Id $metadata.processId -ErrorAction SilentlyContinue)) { throw 'An unverified earlier stop request exists. It was not overwritten.' }
+    Move-Item -LiteralPath $stopRequestPath -Destination (Join-Path $logDirectory ('worker-stop-{0}.json' -f $instance))
+}
 if ($metadata) { Move-Item -LiteralPath $metadataPath -Destination (Join-Path $logDirectory ('worker-control-{0}.json' -f $instance)) }
-$launchMetadata = @{version=1;runnerPath=$resolvedRunner;configPath=$resolvedConfig;environmentFile=$resolvedEnvironment;nodePath=$resolvedNode}
+$launchMetadata = @{version=1;runnerPath=$resolvedRunner;configPath=$resolvedConfig;environmentFile=$resolvedEnvironment;nodePath=$resolvedNode;operatorSid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value}
 $launchArguments = Get-ExpectedArguments $launchMetadata
 $started = Start-Process -FilePath $resolvedNode -ArgumentList $launchArguments -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDirectory ($instance+'-stdout.log')) -RedirectStandardError (Join-Path $logDirectory ($instance+'-stderr.log')) -PassThru
 $ownershipDeadline = [DateTime]::UtcNow.AddSeconds(10)
@@ -124,7 +144,7 @@ do {
 } while ((-not $lock -or $lock.pid -ne $started.Id) -and [DateTime]::UtcNow -lt $ownershipDeadline)
 if (-not $lock -or $lock.pid -ne $started.Id -or -not $lock.owner) { throw 'Worker ownership was not confirmed. No other process was stopped.' }
 $actualProcess = Get-CimInstance -ClassName Win32_Process -Filter ('ProcessId = {0}' -f $started.Id)
-$launchMetadata.processId=$started.Id;$launchMetadata.createdAt=$actualProcess.CreationDate.ToUniversalTime().ToString('O');$launchMetadata.owner=$lock.owner
+$launchMetadata.nodePath=$actualProcess.ExecutablePath;$launchMetadata.processId=$started.Id;$launchMetadata.createdAt=$actualProcess.CreationDate.ToUniversalTime().ToString('O');$launchMetadata.owner=$lock.owner
 if (-not (Get-OwnedProcess $launchMetadata)) { throw 'The new worker identity could not be verified.' }
 [IO.File]::WriteAllText($metadataPath,($launchMetadata | ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
 Set-PrivateAcl $metadataPath

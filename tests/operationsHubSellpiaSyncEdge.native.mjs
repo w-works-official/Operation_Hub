@@ -39,7 +39,7 @@ if(exists){
   if(process.env.SELLPIA_QA_REUSE_EMPTY_DB!=='true'||Number((await psql("select count(*) from pg_tables where schemaname not in ('pg_catalog','information_schema');")).trim())!==0)throw Error('Dedicated Edge QA database already exists; review it before reuse');
 }else await psql(`create database ${database};`,'postgres');
 let bootstrap=await backendFixtureSQL();
-bootstrap=bootstrap.replace('create role service_role bypassrls;','do $$ begin create role service_role bypassrls; exception when duplicate_object then null; end $$;');
+bootstrap=bootstrap.replace('create role service_role bypassrls;',()=> 'do $$ begin create role service_role bypassrls; exception when duplicate_object then null; end $$;');
 await psql(bootstrap);
 await psql(await backendMatrixFixtureSQL());
 await psql(`create or replace function operations_private.require_operations_hub_operator_session(token text) returns jsonb language plpgsql as $$ begin

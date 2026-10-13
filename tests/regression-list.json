@@ -76,5 +76,7 @@
   "operationsHubSellpiaSyncDataConfig.test.mjs",
   "operationsHubSellpiaSyncLifecycle.test.mjs",
   "operationsHubSellpiaAbortRace.mock.test.mjs",
-  "operationsHubSellpiaInventoryCountTimeout.db.test.mjs"
+  "operationsHubSellpiaInventoryCountTimeout.db.test.mjs",
+  "operationsHubSellpiaSyncWindows.test.mjs",
+  "operationsHubSellpiaSyncOperationalComparison.test.mjs"
 ]

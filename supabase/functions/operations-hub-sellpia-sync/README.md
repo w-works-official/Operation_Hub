@@ -4,12 +4,16 @@ This backend continues the existing collector. Production remains disabled until
 the separately approved deployment completes. Queue metadata and staged source
 files are private. The company-PC runner receives collector authority only.
 
-Apply SQL in order: timeout optimization
-`20261013045421_sellpia_inventory_count_fixed_key_copy.sql`, then
-`20261013071210_sellpia_sync_operational_queue.sql`. The latter preserves the
+The timeout optimization is already on company main and its Production ledger
+was verified as `20261013072114`. Do not reapply the repository's
+`20261013045421_sellpia_inventory_count_fixed_key_copy.sql`, repair the migration
+ledger, or run a broad `db push`. Only the new sync SQL
+`20261013071210_sellpia_sync_operational_queue.sql` is proposed for separately
+approved application after deployment review. It preserves the existing
 timeout-optimized import bodies as private delegates and adds guards to both
-existing `hub_sellpia_upload_complete_v1` and `_v2` signatures. Never apply the
-timeout rollback after the sync wrapper without first reviewing the definitions.
+existing `hub_sellpia_upload_complete_v1` and `_v2` signatures. Sync rollback
+restores these delegates and keeps the existing timeout optimization; it does
+not execute the timeout rollback.
 
 Edge functions: `operations-hub-sellpia-sync` and the updated
 `operations-hub-original-files`. Both must validate the custom operator session;
@@ -66,6 +70,11 @@ lease cannot finalize. A failed/cancelled staging file is cleaned only after thr
 hours (past upload capability expiration); previews and complete jobs retain
 staging seven days. Permanent `sellpia/<snapshot>` files are never removed by
 collector cleanup. Cleanup is server-only and bounded to 30 staging objects.
+After collection commits, the same completed worker/lease proof can acknowledge
+its source again even if the browser has advanced to import or Matrix states.
+The response is collector-only and does not rewind the job or expose import
+scope. Cancellation and jobs without immutable verified source proof cannot
+replay a completion acknowledgement.
 
 Rollback file restores original importer delegates and disables apply while
 retaining snapshots, original files and private audit history. Resolve an active
