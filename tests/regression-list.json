@@ -17,6 +17,7 @@
   "operationsHubInventoryDraftCancel.mock.test.mjs",
   "operationsHubInventoryCountStatic.mock.test.mjs",
   "operationsHubInventoryCountUpdate.functional.test.mjs",
+  "operationsHubInventoryCountFailure.functional.test.mjs",
   "operationsHubInventoryTab.browser.test.mjs",
   "operationsHubMultiLink.mock.test.mjs",
   "operationsHubNestedRelationFolders.mock.test.mjs",
@@ -74,7 +75,6 @@
   "operationsHubSellpiaSyncBackend.db.test.mjs",
   "operationsHubSellpiaSyncDataConfig.test.mjs",
   "operationsHubSellpiaSyncLifecycle.test.mjs",
-  "operationsHubInventoryCountFailure.functional.test.mjs",
   "operationsHubSellpiaAbortRace.mock.test.mjs",
   "operationsHubSellpiaInventoryCountTimeout.db.test.mjs"
 ]

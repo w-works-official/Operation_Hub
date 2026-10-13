@@ -95,14 +95,88 @@ try{
   await page.setContent('<html><head><style>'+css+'</style></head><body><button id="mapping-import-open">매칭값 일괄 업로드</button><button id="matrix-refresh-btn">새로고침</button>'+modal+'</body></html>');
   await page.evaluate(()=>{
     window.fixtureSaved=[];
-    window.XLSX={read:input=>({SheetNames:['first'],Sheets:{first:input}}),utils:{sheet_to_json:sheet=>sheet.split(/\r?\n/).map(line=>line.split(','))}};
+    window.fixturePreviewCalls=[];
+    window.fixtureTemplateQueries=[];
+    const unexpectedTemplateQuery=name=>async()=>{window.fixtureTemplateQueries.push(name);throw new Error('Blank templates must not query existing data');};
     window.SystemV3Data={
-      previewMappingImport:async rows=>rows.map(row=>({...row,before:{productCode:row.sku==='replace'?'old':'',optionCode:''},status:row.sku==='bad'?'error':row.sku==='replace'?'replace':'ready',reason:row.sku==='bad'?'원본 옵션코드 없음':'',productName:'테스트 상품'})),
+      loadAllFilteredSkus:unexpectedTemplateQuery('loadAllFilteredSkus'),
+      loadProductThumbnailsBySkus:unexpectedTemplateQuery('loadProductThumbnailsBySkus'),
+      loadAllSellerUnmatchedSkus:unexpectedTemplateQuery('loadAllSellerUnmatchedSkus'),
+      previewMappingImport:async rows=>{window.fixturePreviewCalls.push(rows);return rows.map(row=>({...row,before:{productCode:row.sku==='replace'?'old':'',optionCode:''},status:row.sku==='bad'?'error':row.sku==='replace'?'replace':'ready',reason:row.sku==='bad'?'원본 옵션코드 없음':'',productName:'테스트 상품'}));},
       linkSellerItem:async row=>{window.fixtureSaved.push(row);await new Promise(resolve=>setTimeout(resolve,100));return {product_code:row.productCode,option_code:row.optionCode};}
     };
   });
+  await page.addScriptTag({content:fs.readFileSync(new URL('../mockups/operations-hub/vendor/exceljs.min.js',import.meta.url),'utf8')});
+  await page.addScriptTag({content:fs.readFileSync(new URL('./vendor/xlsx-0.18.5.full.min.js',import.meta.url),'utf8')});
   await page.addScriptTag({content:source});
   await page.getByRole('button',{name:'매칭값 일괄 업로드',exact:true}).click();
+  assert.equal(await page.getByRole('button',{name:'셀피아 SKU 미매칭 양식',exact:true}).count(),1);
+  assert.equal(await page.getByRole('button',{name:'판매처 SKU 미매칭 양식',exact:true}).count(),1);
+  const helpText=await page.locator('#mapping-import-help').innerText();
+  assert.match(helpText,/A열에 셀피아 SKU/);
+  assert.match(helpText,/텍스트 형식/);
+  assert.match(helpText,/기존 상품코드를 그대로 쓰고 새 옵션코드/);
+  assert.match(helpText,/상품·옵션 두 칸을 모두 비우세요/);
+  assert.match(helpText,/상품코드만 입력하고 옵션코드를 비우면 옵션 없는 상품/);
+  assert.match(helpText,/최신 판매처 원본에 존재하는 상품·옵션 조합/);
+  assert.match(helpText,/적용 버튼을 눌러 저장/);
+  await fs.promises.mkdir(new URL('../outputs/ui-qa/',import.meta.url),{recursive:true});
+  await page.screenshot({path:new URL('../outputs/ui-qa/20261013-mapping-import-blank-template.png',import.meta.url).pathname.replace(/^\/([A-Za-z]:)/,'$1')});
+  await page.setViewportSize({width:375,height:900});
+  for(const name of ['빈 양식 다운로드','셀피아 SKU 미매칭 양식','판매처 SKU 미매칭 양식']){
+    const bounds=await page.getByRole('button',{name,exact:true}).boundingBox();
+    assert.ok(bounds&&bounds.x>=0&&bounds.x+bounds.width<=375,'template buttons remain within a narrow viewport');
+  }
+  await page.screenshot({path:new URL('../outputs/ui-qa/20261013-mapping-import-blank-template-mobile.png',import.meta.url).pathname.replace(/^\/([A-Za-z]:)/,'$1')});
+  await page.setViewportSize({width:1200,height:900});
+  const downloadEvent=page.waitForEvent('download');
+  await page.getByRole('button',{name:'빈 양식 다운로드',exact:true}).click();
+  const downloaded=await downloadEvent;
+  assert.equal(downloaded.suggestedFilename(),'매칭값_일괄등록_빈양식.xlsx');
+  const chunks=[];
+  for await(const chunk of await downloaded.createReadStream())chunks.push(chunk);
+  const blankBytes=Buffer.concat(chunks);
+  await fs.promises.writeFile(new URL('../outputs/ui-qa/매칭값_일괄등록_빈양식.xlsx',import.meta.url),blankBytes);
+  const blankBook=await page.evaluate(async bytes=>{
+    const input=new Uint8Array(bytes);
+    const book=new ExcelJS.Workbook();await book.xlsx.load(input);
+    const sheet=book.worksheets[0];
+    const parsedBook=XLSX.read(input,{type:'array',raw:true});
+    const rows=XLSX.utils.sheet_to_json(parsedBook.Sheets[parsedBook.SheetNames[0]],{header:1,defval:'',raw:true});
+    return {sheetCount:book.worksheets.length,rowCount:sheet.rowCount,columnCount:sheet.columnCount,
+      headers:sheet.getRow(1).values.slice(1),formats:Array.from({length:7},(_,i)=>sheet.getColumn(i+1).numFmt),
+      parsed:SystemV3MappingImport.parse(rows),queries:window.fixtureTemplateQueries};
+  },Array.from(blankBytes));
+  assert.equal(blankBook.sheetCount,1);
+  assert.equal(blankBook.rowCount,1,'blank XLSX contains headers only, without examples or unmatched rows');
+  assert.equal(blankBook.columnCount,7);
+  assert.deepEqual(blankBook.headers,Array.from(headers),'blank template starts with Sellpia SKU in column A');
+  assert.deepEqual(blankBook.formats,Array(7).fill('@'),'all code columns retain text format after reopening');
+  assert.deepEqual(blankBook.parsed,{entries:[],errors:[]});
+  assert.deepEqual(blankBook.queries,[],'blank download is independent of unmatched data and thumbnail queries');
+  await page.locator('#mapping-import-file').setInputFiles({name:'blank.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:blankBytes});
+  await page.waitForFunction(()=>!document.getElementById('mapping-import-file').disabled);
+  assert.equal(await page.locator('#mapping-import-apply').isDisabled(),true);
+  assert.equal(await page.evaluate(()=>window.fixturePreviewCalls.length),0,'header-only upload performs no preview data query');
+  const modifiedBytes=await page.evaluate(async bytes=>{
+    const book=new ExcelJS.Workbook();await book.xlsx.load(new Uint8Array(bytes));
+    book.worksheets[0].addRow(['replace','0010807677752','0060372395148','','','','']);
+    return Array.from(new Uint8Array(await book.xlsx.writeBuffer()));
+  },Array.from(blankBytes));
+  await page.locator('#mapping-import-file').setInputFiles({name:'updated-mapping.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(modifiedBytes)});
+  await page.waitForFunction(()=>!document.getElementById('mapping-import-apply').disabled);
+  assert.match(await page.locator('#mapping-import-status').innerText(),/기존 연결 변경 1건/);
+  assert.equal(await page.evaluate(()=>window.fixtureSaved.length),0,'upload only previews changes until apply');
+  assert.deepEqual(await page.evaluate(()=>window.fixturePreviewCalls[0].map(({sku,source,productCode,optionCode})=>({sku,source,productCode,optionCode}))),[
+    {sku:'replace',source:'smartstore',productCode:'0010807677752',optionCode:'0060372395148'}
+  ],'edited template keeps leading zeros and skips the two blank sellers');
+  await page.locator('#mapping-import-apply').click();
+  await page.waitForFunction(()=>document.getElementById('mapping-import-status').textContent.includes('저장 완료 1건'));
+  assert.deepEqual(await page.evaluate(()=>window.fixtureSaved.map(({sku,source,productCode,optionCode})=>({sku,source,productCode,optionCode}))),[
+    {sku:'replace',source:'smartstore',productCode:'0010807677752',optionCode:'0060372395148'}
+  ]);
+  assert.equal(await page.evaluate(()=>window.fixturePreviewCalls.length),2,'apply rechecks the current mapping before saving');
+  await page.evaluate(()=>{window.fixtureSaved=[];window.fixturePreviewCalls=[];});
   const csv=[Array.from(headers).join(','),'good,p,o,,,,','replace,p2,o2,,,,','bad,p3,o3,,,,'].join('\n');
   await page.locator('#mapping-import-file').setInputFiles({name:'mapping.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});
   await page.waitForFunction(()=>!document.getElementById('mapping-import-apply').disabled);
@@ -120,5 +194,5 @@ try{
   await page.locator('#mapping-import-cancel').click();
   await page.waitForFunction(()=>document.getElementById('mapping-import-status').textContent.includes('중단되었습니다'));
   assert.equal(await page.evaluate(()=>window.fixtureSaved.length),3,'cancel prevents next save');
-  console.log('Mapping import: parsing safety, blank preservation, exact codes, duplicate conflicts, browser preview/apply/error/stop passed');
+  console.log('Mapping import: header-only XLSX download/reopen/reimport without data queries, parsing safety, blank preservation, exact codes, duplicate conflicts, browser preview/apply/error/stop passed');
 }finally{await browser.close();}
