@@ -95,6 +95,8 @@ const selectedSourceRefreshApply = document.getElementById('selected-source-refr
 const selectedSourceRefreshRetry = document.getElementById('selected-source-refresh-retry');
 const matrixContextProductCopy = document.getElementById('matrix-context-product-copy');
 const matrixContextProductCopyDetail = document.getElementById('matrix-context-product-copy-detail');
+const matrixContextLinkChange = document.getElementById('matrix-context-link-change');
+const matrixContextLinkChangeDetail = document.getElementById('matrix-context-link-change-detail');
 const matrixContextOptionAdd = document.getElementById('matrix-context-option-add');
 const matrixContextOptionAddDetail = document.getElementById('matrix-context-option-add-detail');
 const matrixContextPriceBasis = document.getElementById('matrix-context-price-basis');
@@ -126,6 +128,7 @@ let matrixContextTargets = [];
 let matrixContextProductCopyTargets = [];
 let matrixContextProductCopySkipped = 0;
 let matrixContextOptionAddTarget = null;
+let matrixContextLinkChangeTarget = null;
 let matrixContextPriceBasisTarget = null;
 let matrixSourceRefreshInFlight = false;
 const SELECTED_SOURCE_REFRESH_CHUNK_SIZE = 40;
@@ -2917,12 +2920,14 @@ const listingLinkModal = document.getElementById('listing-link-modal');
 const listingLinkComponents = document.getElementById('listing-link-components');
 const listingLinkAddForm = document.getElementById('listing-link-add-form');
 const listingLinkState = {source:'', sku:'', productCode:'', optionCode:'', anchor:null, row:null, matrixProduct:null, requestId:0};
+let currentSkuRematchRequestId = 0;
 
 function listingLinkIdentity(row) {
   return `${row?.source_channel || ''}|${row?.product_code || ''}|${row?.option_code || ''}`;
 }
 
 function closeListingLinkManager() {
+  currentSkuRematchRequestId += 1;
   listingLinkState.requestId += 1;
   listingLinkModal.hidden = true;
   listingLinkAddForm.hidden = true;
@@ -3026,6 +3031,7 @@ async function loadListingLinkManager({allowMatrixFallback = false} = {}) {
 }
 
 function openListingLinkManager({source, sku, anchor, productCode = '', optionCode = ''}) {
+  currentSkuRematchRequestId += 1;
   const product = matrixRowsBySku.get(sku) || {};
   listingLinkState.source = source;
   listingLinkState.sku = sku;
@@ -3041,6 +3047,10 @@ function openListingLinkManager({source, sku, anchor, productCode = '', optionCo
 
 document.getElementById('listing-link-close').addEventListener('click', closeListingLinkManager);
 document.getElementById('listing-link-done').addEventListener('click', closeListingLinkManager);
+document.getElementById('listing-link-change')?.addEventListener('click', event => {
+  event.stopPropagation();
+  void openCurrentSkuRematch({source:listingLinkState.source, sku:listingLinkState.sku, anchor:listingLinkState.anchor, trigger:event.currentTarget});
+});
 document.getElementById('listing-link-add-toggle').addEventListener('click', event => {
   if (!listingLinkState.productCode) {
     event.stopPropagation();
@@ -3124,12 +3134,16 @@ function positionFloatingPanel(panel, anchor, width = 500) {
 }
 
 function closeMappingSearch() {
+  currentSkuRematchRequestId += 1;
   mappingPopover.hidden = true;
   mappingState.requestId += 1;
   clearTimeout(mappingState.timer);
 }
 
-function openMappingSearch({source, sku, anchor, initialQuery = '', fixedProductCode = ''}) {
+function openMappingSearch({source, sku, anchor, initialQuery = '', fixedProductCode = '', replaceCurrent = false}) {
+  currentSkuRematchRequestId += 1;
+  mappingState.requestId += 1;
+  clearTimeout(mappingState.timer);
   const exactProductCode = String(fixedProductCode || '').trim();
   mappingState.source = source;
   mappingState.sku = sku;
@@ -3147,12 +3161,14 @@ function openMappingSearch({source, sku, anchor, initialQuery = '', fixedProduct
   mappingSearchInput.value = exactProductCode || (initialQuery === '-' ? '' : initialQuery);
   document.getElementById('mapping-search-help').textContent = exactProductCode
     ? `같은 상품코드 ${exactProductCode}에서 아직 다른 SKU에 연결되지 않은 옵션코드와 옵션명만 표시합니다.`
-    : '코드 또는 상품명으로 검색합니다. 상품명 / 옵션명 형식은 두 조건의 교집합입니다.';
+    : replaceCurrent
+      ? '최신 원본에서 새 상품·옵션을 선택하면 이 SKU의 수동 연결을 변경합니다. 기존 연결을 먼저 끊을 필요는 없습니다. 다중·조합 및 에이블리 검증 연결은 별도 관리합니다.'
+      : '코드 또는 상품명으로 검색합니다. 상품명 / 옵션명 형식은 두 조건의 교집합입니다.';
   mappingSearchResults.innerHTML = exactProductCode
     ? '<div class="mapping-empty loading"><b>남은 옵션 확인 중</b><span>이미 연결된 옵션은 제외합니다.</span></div>'
     : '<div class="mapping-empty">검색어를 입력해주세요.</div>';
   mappingPopover.hidden = false;
-  positionFloatingPanel(mappingPopover, anchor);
+  positionFloatingPanel(mappingPopover, anchor, 600);
   if (exactProductCode) {
     void runMappingSearch();
   } else {
@@ -3270,38 +3286,42 @@ mappingSearchResults.addEventListener('click', async event => {
     return;
   }
   const button = event.target.closest('[data-map-product]');
-  if (!button) return;
+  if (!button || button.disabled) return;
+  const {source, sku, mode, requestId} = mappingState;
+  const productCode = button.dataset.mapProduct;
+  const optionCode = button.dataset.mapOption;
   const linkedSkus = JSON.parse(button.dataset.linkedSkus || '[]');
-  const otherLinks = linkedSkus.filter(sku => sku !== mappingState.sku);
-  if (otherLinks.length && !window.confirm(`이 판매처 옵션은 ${otherLinks.join(', ')}에 연결되어 있습니다. ${mappingState.sku}에도 연결할까요?`)) return;
+  const otherLinks = linkedSkus.filter(linkedSku => linkedSku !== sku);
+  if (otherLinks.length && !window.confirm(`이 판매처 옵션은 ${otherLinks.join(', ')}에 연결되어 있습니다. ${sku}에도 연결할까요?`)) return;
   button.disabled = true;
   button.classList.add('saving');
   try {
     let linked;
-    if (mappingState.mode === 'remaining-options') {
+    if (mode === 'remaining-options') {
       linked = await liveData.linkProductDraftOption({
-        sku:mappingState.sku,
-        source:mappingState.source,
-        optionCode:button.dataset.mapOption
+        sku,
+        source,
+        optionCode
       });
     } else {
       linked = await liveData.linkSellerItem({
-        sku:mappingState.sku,
-        source:mappingState.source,
-        productCode:button.dataset.mapProduct,
-        optionCode:button.dataset.mapOption
+        sku,
+        source,
+        productCode,
+        optionCode
       });
     }
-    const sourceLabel = CHANNEL_LABELS[mappingState.source] || mappingState.source;
-    const sku = mappingState.sku;
+    const sourceLabel = CHANNEL_LABELS[source] || source;
     applyLocalSellerLink(linked || {
-      source_channel:mappingState.source,
+      source_channel:source,
       sellpia_sku_code:sku,
-      product_code:button.dataset.mapProduct,
-      option_code:button.dataset.mapOption
+      product_code:productCode,
+      option_code:optionCode
     });
-    closeMappingSearch();
-    closeProductDrawer();
+    if (requestId === mappingState.requestId && source === mappingState.source && sku === mappingState.sku) {
+      closeMappingSearch();
+      closeProductDrawer();
+    }
     renderLiveMatrixRows(matrixState.rows);
     showToast(`${sku} · ${sourceLabel} 연결을 저장했습니다.`);
     void refreshMatrixSkus([sku]).catch(error => {
@@ -7822,13 +7842,60 @@ function matrixSellerIdentityContext(anchorCell) {
   return {cell, source, sku, product, detail:''};
 }
 
+async function openCurrentSkuRematch({source, sku, anchor, trigger = anchor}) {
+  if (!['smartstore', 'makeshop', 'ably'].includes(source) || !sku) return;
+  const requestId = ++currentSkuRematchRequestId;
+  const wasDisabled = Boolean(trigger?.disabled);
+  if (trigger) trigger.disabled = true;
+  try {
+    // Compact/hidden Matrix cells are display projections, not proof of no link.
+    // Resolve the current SKU and every listing before choosing a write path.
+    const [products, bySku] = await Promise.all([
+      liveData.loadProductsBySkus([sku]),
+      liveData.loadMatrixSellerListingsBySkus([sku])
+    ]);
+    if (requestId !== currentSkuRematchRequestId) return;
+    const product = products.find(row => String(row.sellpia_sku_code || '').trim() === sku);
+    if (!product) throw new Error('현재 SKU의 연결 정보를 확인하지 못했습니다. 다시 조회해주세요.');
+    const listings = bySku.get(sku)?.[source] || [];
+    const manual = product.__manualLinks?.[source];
+    const productCode = String(manual?.product_code || product[`${source}_product_code`] || '').trim();
+    const optionCode = String(manual ? manual.option_code || '' : product[`${source}_option_code`] || '').trim();
+    const graph = productCode ? await liveData.loadListingConnection({source, productCode, optionCode}) : null;
+    if (requestId !== currentSkuRematchRequestId) return;
+    const identities = new Set(listings.map(row => JSON.stringify([row.product_code, row.option_code || ''])));
+    const verifiedAbly = source === 'ably' && listings.some(row => row.mapping_source === 'verified_solution_code');
+    closeListingLinkManager();
+    closeMatrixContextMenu();
+    if (verifiedAbly) {
+      showPage('inventory');
+      const management = document.getElementById('ably-mapping-management');
+      const details = management?.closest('details');
+      if (details) details.open = true;
+      management?.scrollIntoView({block:'nearest'});
+      showToast('에이블리 검증 연결은 솔루션사 코드 관리에서 해당 매핑을 변경해주세요.');
+      return;
+    }
+    if (identities.size > 1 || graph?.is_explicit || listings.some(row => String(row.mapping_source || '').startsWith('explicit'))) {
+      openMultiLinkWorkspace(source, sku);
+      showToast('여러 판매 대상 또는 저장된 조합은 다중·조합 관리에서 변경해주세요.');
+      return;
+    }
+    openMappingSearch({source, sku, anchor, initialQuery:productCode, replaceCurrent:true});
+  } catch (error) {
+    if (requestId === currentSkuRematchRequestId) showToast(`연결 변경 준비 실패: ${error?.message || error}`);
+  } finally {
+    if (trigger) trigger.disabled = wasDisabled;
+  }
+}
+
 function matrixProductCopyContext(anchorCell) {
   const context = matrixSellerIdentityContext(anchorCell);
   if (!context.product) return {enabled:false, detail:context.detail};
   const {cell, source, sku, product} = context;
   const currentProductCode = String(product[`${source}_product_code`] || '').trim();
   if (product.__sellerProductLinkDrafts?.[source]) return {enabled:false, detail:`${currentProductCode} · 복제 완료`};
-  if (currentProductCode) return {enabled:false, detail:'이미 실제 연결이 있는 행'};
+  if (currentProductCode || product.__manualLinks?.[source]) return {enabled:false, detail:'이미 실제 연결이 있는 행 · 이 SKU의 연결 변경 사용'};
   const productGroup = sellpiaProductGroupKey(product);
   const candidateCodes = [...new Set([...matrixRowsBySku.values()]
     .filter(candidate => sellpiaProductGroupKey(candidate) === productGroup)
@@ -7941,22 +8008,30 @@ function matrixPriceBasisContext(anchorCell) {
 }
 
 function closeMatrixContextMenu() {
+  currentSkuRematchRequestId += 1;
   if (!matrixContextMenu) return;
   matrixContextMenu.hidden = true;
   matrixContextTargets = [];
   matrixContextProductCopyTargets = [];
   matrixContextProductCopySkipped = 0;
   matrixContextOptionAddTarget = null;
+  matrixContextLinkChangeTarget = null;
   matrixContextPriceBasisTarget = null;
 }
 
 function openMatrixContextMenu(clientX, clientY, anchorCell) {
+  currentSkuRematchRequestId += 1;
   if (!matrixContextMenu || !matrixContextSourceRefresh || !matrixContextSourceRefreshCount || !matrixContextProductCopy || !matrixContextProductCopyDetail || !matrixContextOptionAdd || !matrixContextOptionAddDetail || !matrixContextPriceBasis || !matrixContextPriceBasisLabel || !matrixContextPriceBasisDetail || !matrixContextDisconnect || !matrixContextDisconnectCount) return;
   matrixContextTargets = selectedMatrixDisconnectTargets();
   const productCopyContext = selectedMatrixProductCopyContexts(anchorCell);
   matrixContextProductCopyTargets = productCopyContext.targets;
   matrixContextProductCopySkipped = productCopyContext.skipped;
   matrixContextOptionAddTarget = matrixOptionAddContext(anchorCell);
+  matrixContextLinkChangeTarget = matrixSellerIdentityContext(anchorCell);
+  if (matrixContextLinkChange) matrixContextLinkChange.disabled = !matrixContextLinkChangeTarget.product;
+  if (matrixContextLinkChangeDetail) matrixContextLinkChangeDetail.textContent = matrixContextLinkChangeTarget.product
+    ? `${matrixContextLinkChangeTarget.sku} · ${CHANNEL_LABELS[matrixContextLinkChangeTarget.source]} · 최신 원본에서 선택`
+    : matrixContextLinkChangeTarget.detail;
   matrixContextPriceBasisTarget = matrixPriceBasisContext(anchorCell);
   const labels = [...new Set(matrixContextTargets.map(target => CHANNEL_LABELS[target.source] || target.source))];
   matrixContextDisconnect.disabled = matrixContextTargets.length === 0;
@@ -8146,7 +8221,7 @@ matrixContextProductCopy?.addEventListener('click', async event => {
     showToast(`상품코드 복제 ${formatNumber(successes.length)}건 완료 · ${formatNumber(failures.length)}건 실패${skipped ? ` · ${formatNumber(skipped)}개 제외` : ''}`);
   } else {
     console.error('seller product code draft saves failed', failures);
-    showToast(`상품코드 복제 실패: ${failures[0]?.error?.message || failures[0]?.error || 'DB 오류'}`);
+    showToast(`상품코드 복제 실패: ${failures[0]?.error?.message || failures[0]?.error || 'DB 오류'} · 기존 연결 변경은 ‘이 SKU의 연결 변경’을 사용해주세요.`);
   }
 });
 
@@ -8161,6 +8236,13 @@ matrixContextOptionAdd?.addEventListener('click', event => {
     anchor:target.anchor,
     fixedProductCode:target.productCode
   });
+});
+
+matrixContextLinkChange?.addEventListener('click', event => {
+  event.stopPropagation();
+  const target = matrixContextLinkChangeTarget;
+  if (!target?.product) return;
+  void openCurrentSkuRematch({source:target.source, sku:target.sku, anchor:target.cell, trigger:event.currentTarget});
 });
 
 matrixContextDisconnect?.addEventListener('click', event => {
@@ -12837,6 +12919,7 @@ sidebarToggle.addEventListener('click', () => {
 setSidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true', {persist:false});
 
 function showPage(pageId) {
+  currentSkuRematchRequestId += 1;
   if(pageId==='channels')pageId='dashboard';
   document.querySelectorAll('.page').forEach(page => page.classList.remove('active-page'));
   document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.page === pageId));

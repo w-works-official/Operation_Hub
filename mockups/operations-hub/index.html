@@ -800,7 +800,7 @@
             <div><button id="listing-link-add-cancel" class="btn" type="button">취소</button><button id="listing-link-add-save" class="btn primary" type="submit">SKU 연결 저장</button></div>
           </form>
         </div>
-        <div class="modal-foot"><span id="listing-link-foot-note">연결 해제 이력은 DB에 보존됩니다.</span><button id="listing-link-done" class="btn primary" type="button">닫기</button></div>
+        <div class="modal-foot"><span id="listing-link-foot-note">연결 해제 이력은 DB에 보존됩니다.</span><button id="listing-link-change" class="btn" type="button">이 SKU의 연결 변경</button><button id="listing-link-done" class="btn primary" type="button">닫기</button></div>
       </section>
     </div>
     <section id="mapping-popover" class="mapping-popover" hidden aria-label="판매처 원본 검색">
@@ -998,6 +998,10 @@
         <b>원본값으로 갱신</b>
         <em id="matrix-context-source-refresh-count">갱신할 셀 없음</em>
       </button>
+      <button id="matrix-context-link-change" class="option-link" type="button" role="menuitem">
+        <b>이 SKU의 연결 변경</b>
+        <em id="matrix-context-link-change-detail">최신 원본에서 상품·옵션 선택</em>
+      </button>
       <button id="matrix-context-product-copy" class="product-copy" type="button" role="menuitem">
         <b>같은 상품코드 복제</b>
         <em id="matrix-context-product-copy-detail">복제할 행을 선택해주세요</em>
@@ -1066,7 +1070,7 @@
     <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./app.js?v=20261008-inventory-partial-v1"></script>
+    <script src="./app.js?v=20261013-manual-rematch-v1"></script>
     <script src="./mapping-import.js?v=20261013-blank-template-v1"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
