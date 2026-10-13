@@ -54,6 +54,8 @@
     }
     if (supplied === undefined) errors.push('부분 갱신의 선택 필드 정책을 명시해주세요.');
     const fields = Object.fromEntries(Object.keys(FULL_FIELDS).map(key => [key, supplied?.[key] === true]));
+    // price is the legacy alias of the same Sellpia sale/base-price source.
+    fields.price=fields.basePrice=fields.price||fields.basePrice;
     if (!Object.values(fields).some(Boolean)) errors.push('부분 갱신 필드를 하나 이상 선택해주세요.');
     return fields;
   }
@@ -149,11 +151,10 @@
   const COMPARISON_FIELDS = Object.freeze({
     inventory:[['stock',true],['available_stock',true],['integrated_available_stock',true],['safety_stock',true]],
     price:[['raw_payload.base_price',true,'raw_payload.sell_price'],['raw_payload.sell_price',true,'raw_payload.base_price']],
-    purchasePrice:[['purchase_price',true,'raw_payload.purchase_price'],['raw_payload.purchase_price',true,'purchase_price']],
+    purchasePrice:[['purchase_price',true,'raw_payload.purchase_price'],['raw_payload.purchase_price',true,'purchase_price'],['raw_payload.commission'],['raw_payload.purchase_vat']],
     basic:[['sellpia_product_code'],['sellpia_product_name'],['sellpia_option_name'],['own_sku'],
       ['supplier_code'],['supplier_name'],['supplier_group'],['supplier_address'],['supplier_market_name'],['supplier_phone'],
-      ['purchase_product_name'],['purchase_option_name'],['order_unit',true,'raw_payload.order_unit'],['minimum_order_unit',true,'raw_payload.minimum_order_unit'],
-      ['raw_payload.commission'],['raw_payload.purchase_vat']],
+      ['purchase_product_name'],['purchase_option_name'],['order_unit',true,'raw_payload.order_unit'],['minimum_order_unit',true,'raw_payload.minimum_order_unit']],
     status:[['raw_payload.sale_status']]
   });
   function pathValue(row, path) {

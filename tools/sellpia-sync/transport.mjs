@@ -2,10 +2,11 @@ import fs from 'node:fs/promises';
 import {SyncError, fail, safeId, safeName, digest, validateJob, validateManifest} from './contracts.mjs';
 
 const API_PATH = '/functions/v1/operations-hub-sellpia-sync';
-export function validateApiUrl(value) {
+export function validateApiUrl(value, {localQA = false} = {}) {
   let url;
   try { url = new URL(value); } catch { fail('worker_api_url_required'); }
-  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== API_PATH || url.search || url.hash) fail('invalid_worker_api_url');
+  const loopbackQA = localQA === true && url.protocol === 'http:' && ['127.0.0.1','localhost','[::1]'].includes(url.hostname) && !!url.port;
+  if ((!loopbackQA && url.protocol !== 'https:') || url.username || url.password || url.pathname !== API_PATH || url.search || url.hash) fail('invalid_worker_api_url');
   return url;
 }
 export function leaseBinding(claim, workerId) {
@@ -21,8 +22,8 @@ export function leaseTime(value) {
   return timestamp;
 }
 export class WorkerTransport {
-  constructor({apiUrl,workerToken,fetchImpl = fetch,timeoutMs = 30000}) {
-    this.apiUrl = validateApiUrl(apiUrl);
+  constructor({apiUrl,workerToken,fetchImpl = fetch,timeoutMs = 30000,localQA = false}) {
+    this.apiUrl = validateApiUrl(apiUrl,{localQA});
     if (typeof workerToken !== 'string' || !workerToken.trim() || /[\r\n]/.test(workerToken)) fail('worker_token_required');
     this.workerToken = workerToken;
     this.fetchImpl = fetchImpl;
@@ -52,6 +53,11 @@ export class WorkerTransport {
     leaseBinding(result, workerId);
     return result;
   }
+  hello(workerId, status = 'connected', signal) {
+    safeId(workerId);
+    if (!['connected','needs_login','starting','busy'].includes(status)) fail('invalid_worker_health');
+    return this.request('hello',{workerId,status,version:'1.0.0'},signal);
+  }
   async heartbeat(binding, signal) {
     const result = await this.request('heartbeat', binding, signal);
     if (leaseTime(result?.leaseExpiresAt) <= Date.now()) fail('invalid_worker_lease');
@@ -69,7 +75,7 @@ export class WorkerTransport {
     }
     return this.request('report', {...binding,state,summary:clean}, signal);
   }
-  async uploadCollection(binding, collection, signal) {
+  async uploadCollection(binding, collection, signal, {onFinalize = ()=>{}} = {}) {
     const collectionManifest = validateManifest(collection.collectionManifest);
     const result = await this.request('upload-init', {...binding,collectionManifest}, signal);
     if (!Array.isArray(result?.manifest) || result.manifest.length !== 3) fail('invalid_staging_manifest');
@@ -81,7 +87,15 @@ export class WorkerTransport {
       if (bytes.length !== expected.size || digest(bytes) !== expected.sha256) fail('local_artifact_digest_mismatch');
       await this.uploadSigned(signed, bytes, signal);
     }
-    return this.request('upload-finalize', binding, signal);
+    await onFinalize();
+    // An acknowledged import is idempotent on this exact job/lease binding.
+    // Retry only the acknowledgement; do not create another upload or job.
+    for (let attempt = 0; ; attempt++) {
+      try { return await this.request('upload-finalize', binding, signal); }
+      catch (error) {
+        if (attempt >= 2 || signal?.aborted || !['worker_transport_unavailable','invalid_worker_response'].includes(error?.code)) throw error;
+      }
+    }
   }
   async uploadSigned(signed, bytes, signal) {
     let url;

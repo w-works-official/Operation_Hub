@@ -1,12 +1,12 @@
 // Pure queue protocol. No source rows, credentials, network or production apply.
-export const VERSION = '2026.10.13-preview-only-v1';
+export const VERSION = '2026.10.13-operational-v2';
 export const LEASE_MS = 120_000;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 60 * 1024 * 1024;
 export const DOWNLOAD_TTL_SECONDS = 300;
 export const FIELD_NAMES = Object.freeze(['inventory','price','basePrice','purchasePrice','basic','status']);
-export const BROWSER_ACTIONS = new Set(['enqueue','status','artifacts','cancel','cancel-request','receipt']);
-export const WORKER_ACTIONS = new Set(['claim','heartbeat','report','upload-init','upload-finalize']);
+export const BROWSER_ACTIONS = new Set(['enqueue','status','artifacts','cancel','cancel-request','receipt','availability','history','apply-init','apply-progress']);
+export const WORKER_ACTIONS = new Set(['claim','heartbeat','report','upload-init','upload-finalize','hello']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DIGEST = /^[0-9a-f]{64}$/;
 export function fail(code, message) { throw Object.assign(new Error(message), {code}); }
@@ -29,12 +29,15 @@ export function normalizeEnqueue(body) {
   const requestId = uuid(body.requestId);
   const mode = body.mode === undefined ? 'full' : body.mode;
   if (!['full','patch'].includes(mode)) fail('INVALID_REQUEST','전체 또는 명시적인 부분 갱신 모드가 필요합니다.');
+  const applicationMode = body.applicationMode === undefined ? mode : body.applicationMode;
+  if(!['full','patch'].includes(applicationMode))fail('INVALID_REQUEST','반영 모드가 올바르지 않습니다.');
   const selected = body.selectedFields;
   if (selected !== undefined && (!plain(selected) || Object.keys(selected).some(k=>!FIELD_NAMES.includes(k)) || Object.values(selected).some(v=>typeof v!=='boolean'))) fail('INVALID_REQUEST','갱신 필드 형식이 올바르지 않습니다.');
-  const selectedFields = Object.fromEntries(FIELD_NAMES.map(k=>[k, mode==='full' ? true : selected?.[k]===true]));
-  if (mode==='full' && selected && FIELD_NAMES.some(k=>selected[k]!==true)) fail('INVALID_REQUEST','전체 원본은 모든 필드를 포함해야 합니다.');
-  if (mode==='patch' && !FIELD_NAMES.some(k=>selectedFields[k])) fail('INVALID_REQUEST','부분 갱신 필드를 명시해주세요.');
-  return {requestId, mode, selectedFields, baselineSnapshotId:body.baselineSnapshotId==null?null:uuid(body.baselineSnapshotId), applyProduction:false};
+  const selectedFields = Object.fromEntries(FIELD_NAMES.map(k=>[k, applicationMode==='full' ? true : selected?.[k]===true]));
+  if(applicationMode==='patch')selectedFields.price=selectedFields.basePrice=selectedFields.price||selectedFields.basePrice;
+  if (applicationMode==='full' && selected && FIELD_NAMES.some(k=>selected[k]!==true)) fail('INVALID_REQUEST','전체 원본은 모든 필드를 포함해야 합니다.');
+  if (applicationMode==='patch' && !FIELD_NAMES.some(k=>selectedFields[k])) fail('INVALID_REQUEST','부분 갱신 필드를 명시해주세요.');
+  return {requestId, mode, applicationMode, selectedFields, baselineSnapshotId:body.baselineSnapshotId==null?null:uuid(body.baselineSnapshotId), applyProduction:false};
 }
 function integer(value, min=0) { return Number.isSafeInteger(value) && value >= min; }
 export function normalizeManifest(manifest, mode) {
@@ -50,7 +53,12 @@ export function normalizeManifest(manifest, mode) {
     return {ordinal:f.ordinal,name:f.name,size:f.size,sha256:f.sha256};
   });
   if (normalized.reduce((n,f)=>n+f.size,0)>MAX_TOTAL_BYTES) fail('INVALID_MANIFEST','전체 원본은 60 MiB 이하만 허용합니다.');
-  return {source:'sellpia',collectionMode:'official_download',mode,includeAll:manifest.includeAll,filters:[...manifest.filters],expectedRowCount:manifest.expectedRowCount,files:normalized};
+  const timeFields={};
+  for(const field of ['collectedAt','sourceGeneratedAt'])if(manifest[field]!==undefined&&manifest[field]!==null){
+    if(typeof manifest[field]!=='string'||! /^\d{4}-\d{2}-\d{2}T/.test(manifest[field])||!Number.isFinite(Date.parse(manifest[field])))fail('INVALID_MANIFEST','원본 시각이 올바르지 않습니다.');
+    timeFields[field]=new Date(manifest[field]).toISOString();
+  }
+  return {source:'sellpia',collectionMode:'official_download',mode,includeAll:manifest.includeAll,filters:[...manifest.filters],expectedRowCount:manifest.expectedRowCount,files:normalized,...timeFields};
 }
 export function cleanSummary(value={}) {
   if (!plain(value)) fail('INVALID_REQUEST','진행 집계 형식이 올바르지 않습니다.');
@@ -63,6 +71,7 @@ export function cleanSummary(value={}) {
   }
   return out;
 }
+function same(a,b){return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));}
 function canonical(value){return Array.isArray(value)?value.map(canonical):plain(value)?Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])])):value;}
 export function normalizeReceipt(value,job){
   const keys=['valid','rowCount','applyProduction','state','sourceFingerprint','baselineSnapshotId','summary'];
@@ -75,7 +84,7 @@ export function normalizeReceipt(value,job){
     if(!plain(s)||Object.keys(s).some(k=>!allowed.includes(k)))fail('INVALID_REQUEST','원문 없이 검증 집계만 기록할 수 있습니다.');
     for(const k of ['fileCount','rowCount','expectedRowCount','baselineRowCount'])if(s[k]!==undefined&&s[k]!==null&&(!integer(s[k])||s[k]>10_000_000))fail('INVALID_REQUEST','미리보기 건수를 확인해주세요.');
     if(s.deltaRowCount!==undefined&&s.deltaRowCount!==null&&(!Number.isSafeInteger(s.deltaRowCount)||Math.abs(s.deltaRowCount)>10_000_000))fail('INVALID_REQUEST','미리보기 차이 건수를 확인해주세요.');
-    if(s.source!==undefined&&s.source!=='sellpia'||s.mode!==undefined&&s.mode!==job.mode||s.rowCount!==undefined&&s.rowCount!==out.rowCount||s.expectedRowCount!==undefined&&s.expectedRowCount!==out.rowCount||s.fileCount!==undefined&&s.fileCount!==job.manifest.length||s.productionApply!==undefined&&s.productionApply!==false||s.strictNumeric!==undefined&&s.strictNumeric!==true||s.fieldPolicy!==undefined&&s.fieldPolicy!==(job.mode==='full'?'sellpia-full-source-v1':'sellpia-selected-fields-v1')||s.reviewRequired!==undefined&&typeof s.reviewRequired!=='boolean'||s.reviewReasons!==undefined&&(!Array.isArray(s.reviewReasons)||s.reviewReasons.length>1||s.reviewReasons.some(x=>x!=='source_row_count_drop')))fail('INVALID_REQUEST','미리보기 정책 집계를 확인해주세요.');
+    if(s.source!==undefined&&s.source!=='sellpia'||s.mode!==undefined&&s.mode!==(job.applicationMode||job.mode)||s.rowCount!==undefined&&s.rowCount!==out.rowCount||s.expectedRowCount!==undefined&&s.expectedRowCount!==out.rowCount||s.fileCount!==undefined&&s.fileCount!==job.manifest.length||s.productionApply!==undefined&&s.productionApply!==false||s.strictNumeric!==undefined&&s.strictNumeric!==true||s.fieldPolicy!==undefined&&s.fieldPolicy!==((job.applicationMode||job.mode)==='full'?'sellpia-full-source-v1':'sellpia-selected-fields-v1')||s.reviewRequired!==undefined&&typeof s.reviewRequired!=='boolean'||s.reviewReasons!==undefined&&(!Array.isArray(s.reviewReasons)||s.reviewReasons.length>8||s.reviewReasons.some(x=>!['source_row_count_drop','source_sku_added','source_sku_removed','source_baseline_unknown','source_price_change','source_state_change'].includes(x))))fail('INVALID_REQUEST','미리보기 정책 집계를 확인해주세요.');
     if(s.comparison!==undefined){
       const c=s.comparison, countKeys=['newRowCount','baselineRowCount','changedCount','unchangedCount','addedCount','removedCount','preservedCount','unknownCount','knownChangedCount','knownUnchangedCount'];
       if(!plain(c)||Object.keys(c).some(k=>!countKeys.includes(k)&&k!=='fieldCounts'))fail('INVALID_REQUEST','필드 비교 건수만 기록할 수 있습니다.');
@@ -89,8 +98,8 @@ export function normalizeReceipt(value,job){
 }
 export function publicJob(job) {
   if (!job) return null;
-  const {jobId,requestId,mode,selectedFields,baselineSnapshotId,state,createdAt,updatedAt,summary,collectionManifest,receipt}=job;
-  return {jobId,requestId,mode,selectedFields,baselineSnapshotId,state,createdAt,updatedAt,summary,collectionManifest:collectionManifest||null,receipt:receipt||null,applyProduction:false};
+  const {jobId,requestId,mode,applicationMode,selectedFields,baselineSnapshotId,state,createdAt,updatedAt,summary,collectionManifest,receipt,applySnapshotId,importIntentId,importStatus,matrixStatus,phase}=job;
+  return {jobId,requestId,mode,applicationMode:applicationMode||mode,selectedFields,baselineSnapshotId,state,createdAt,updatedAt,summary,collectionManifest:collectionManifest||null,receipt:receipt||null,applySnapshotId:applySnapshotId||null,importIntentId:importIntentId||null,importStatus:importStatus||null,matrixStatus:matrixStatus||null,phase:phase||null,applyProduction:false};
 }
 export function assertLease(job, workerId, hash, now) {
   if (!job || job.state!=='collecting' || job.workerId!==workerId || job.leaseHash!==hash || !integer(job.leaseExpiresAt,1) || job.leaseExpiresAt<=now) fail('LEASE_LOST','작업 권한이 만료되었거나 취소되었습니다.');
@@ -119,7 +128,9 @@ export class QueueProtocol {
       return this.store.transact(({jobs,now})=>{
         const prior=jobs.find(j=>j.requestId===input.requestId);
         if (prior) {
+          if(prior.operatorUsername&&prior.operatorUsername!==actor.username)fail('UNAUTHORIZED','다른 운영자의 작업입니다.');
           if(prior.payloadHash!==payloadHash) fail('CONFLICT','같은 요청 ID의 내용이 변경되었습니다.');
+          if(action==='cancel-request'&&['applying','db_ready','matrix_failed','complete'].includes(prior.state))fail('CONFLICT','DB 반영이 시작된 작업은 수집 취소할 수 없습니다.');
           if(action==='cancel-request'&&prior.state!=='cancelled')Object.assign(prior,{state:'cancelled',leaseHash:null,leaseExpiresAt:null,updatedAt:new Date(now).toISOString()});
           return {job:publicJob(prior),deduplicated:true};
         }
@@ -128,7 +139,7 @@ export class QueueProtocol {
         // Whichever commits first, late/retried enqueue cannot create work after
         // cancellation has been confirmed, including when its reply was lost.
         const cancelled=action==='cancel-request';
-        const job={...input,jobId:newId,payloadHash,state:cancelled?'cancelled':'queued',createdAt:new Date(now).toISOString(),updatedAt:new Date(now).toISOString(),summary:cancelled?{errorCode:'CANCELLED_BY_REQUEST'}:{phase:'waiting'},leaseHash:null,leaseExpiresAt:null,workerId:null,manifest:[],verifiedArtifacts:[]};
+        const job={...input,jobId:newId,payloadHash,operatorUsername:actor.username||null,state:cancelled?'cancelled':'queued',createdAt:new Date(now).toISOString(),updatedAt:new Date(now).toISOString(),summary:cancelled?{errorCode:'CANCELLED_BY_REQUEST'}:{phase:'waiting'},leaseHash:null,leaseExpiresAt:null,workerId:null,manifest:[],verifiedArtifacts:[]};
         jobs.push(job);return {job:publicJob(job),deduplicated:false};
       },{requestId:input.requestId});
     }
@@ -146,6 +157,7 @@ export class QueueProtocol {
     const jobId=uuid(body.jobId), leaseHash=actor.kind==='worker'?await sha256(body.leaseToken||''):null;
     return this.store.transact(({jobs,now})=>{
       const job=jobs.find(j=>j.jobId===jobId);if(!job)fail('NOT_FOUND','작업을 찾을 수 없습니다.');
+      if(actor.kind==='browser'&&job.operatorUsername&&job.operatorUsername!==actor.username)fail('UNAUTHORIZED','다른 운영자의 작업입니다.');
       if(action==='upload-finalize'&&['collected','previewed'].includes(job.state)&&job.completedWorkerId===actor.workerId&&job.completedLeaseHash===leaseHash)return {job:publicJob(job),deduplicated:true};
       if(actor.kind==='worker')assertLease(job,actor.workerId,leaseHash,now);
       const touch=()=>{job.updatedAt=new Date(now).toISOString();};
@@ -155,6 +167,7 @@ export class QueueProtocol {
         return {job:publicJob(job),manifest:job.verifiedArtifacts};
       }
       if(action==='cancel') {
+        if(['applying','db_ready','matrix_failed','complete'].includes(job.state))fail('CONFLICT','DB 반영이 시작된 작업은 수집 취소할 수 없습니다.');
         if(job.state==='cancelled')return {job:publicJob(job)};
         if(['failed','needs_login'].includes(job.state))fail('CONFLICT','종료된 작업은 취소할 수 없습니다.');
         job.state='cancelled';job.leaseHash=null;job.leaseExpiresAt=null;touch();return {job:publicJob(job)};
@@ -162,7 +175,7 @@ export class QueueProtocol {
       if(action==='receipt') {
         if(!['collected','previewed'].includes(job.state))fail('CONFLICT','원본 검증 후 미리보기를 기록할 수 있습니다.');
         const receipt=normalizeReceipt(body.receipt,job);
-        if(job.receipt&&JSON.stringify(job.receipt)!==JSON.stringify(receipt))fail('CONFLICT','완료된 미리보기 집계는 변경할 수 없습니다.');
+        if(job.receipt&&!same(job.receipt,receipt))fail('CONFLICT','완료된 미리보기 집계는 변경할 수 없습니다.');
         job.receipt=receipt;job.state='previewed';touch();return {job:publicJob(job)};
       }
       if(action==='heartbeat') {job.leaseExpiresAt=now+LEASE_MS;touch();return {job:publicJob(job),leaseExpiresAt:job.leaseExpiresAt};}
@@ -173,11 +186,11 @@ export class QueueProtocol {
       }
       if(action==='upload-init') {
         const manifest=normalizeManifest(body.collectionManifest,job.mode);
-        if(job.collectionManifest&&JSON.stringify(job.collectionManifest)!==JSON.stringify(manifest))fail('CONFLICT','선언한 원본 manifest는 변경할 수 없습니다.');
+        if(job.collectionManifest&&!same(job.collectionManifest,manifest))fail('CONFLICT','선언한 원본 manifest는 변경할 수 없습니다.');
         job.collectionManifest=manifest;job.manifest=serverPaths(jobId,manifest.files);touch();return {job:publicJob(job),manifest:job.manifest,leaseExpiresAt:job.leaseExpiresAt};
       }
       if(action==='upload-finalize') {
-        if(!job.manifest.length||!Array.isArray(body.verifiedArtifacts)||JSON.stringify(body.verifiedArtifacts.map(({verified,...f})=>f))!==JSON.stringify(job.manifest)||body.verifiedArtifacts.some(f=>f.verified!==true))fail('INVALID_ARTIFACT','실제 바이트 검증을 완료한 원본만 제출할 수 있습니다.');
+        if(!job.manifest.length||!Array.isArray(body.verifiedArtifacts)||!same(body.verifiedArtifacts.map(({verified,...f})=>f),job.manifest)||body.verifiedArtifacts.some(f=>f.verified!==true))fail('INVALID_ARTIFACT','실제 바이트 검증을 완료한 원본만 제출할 수 있습니다.');
         job.verifiedArtifacts=body.verifiedArtifacts;job.state='collected';job.completedLeaseHash=job.leaseHash;job.completedWorkerId=job.workerId;job.leaseHash=null;job.leaseExpiresAt=null;job.summary={phase:'verified',completedFiles:job.manifest.length,totalFiles:job.manifest.length,rowCount:job.collectionManifest.expectedRowCount};touch();return {job:publicJob(job)};
       }
       fail('INVALID_REQUEST','지원하지 않는 요청입니다.');

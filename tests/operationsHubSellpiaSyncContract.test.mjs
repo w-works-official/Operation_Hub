@@ -331,3 +331,14 @@ test('comparison preserves null versus zero, numeric representations and source-
   assert.deepEqual(changed.rows[0].changedFields,['price']);
   assert.equal(changed.summary.fieldCounts.price,1);
 });
+test('purchase selection compares commission and VAT exactly as the existing SQL policy, independently of basic info',async()=>{
+  const before=await comparisonSample(),after=structuredClone(before);after.raw_payload.commission='7.5';after.raw_payload.purchase_vat='VAT-CHANGED';
+  const purchase=contract.compareRows([after],[before],{mode:'patch',fields:{purchasePrice:true,basic:false}});assert.equal(purchase.valid,true);assert.equal(purchase.changedCount,1);assert.deepEqual(purchase.rows[0].changedFields,['purchasePrice']);assert.deepEqual(purchase.rows[0].changes.purchasePrice.map(change=>change.field),['raw_payload.commission','raw_payload.purchase_vat']);
+  const basic=contract.compareRows([after],[before],{mode:'patch',fields:{basic:true,purchasePrice:false}});assert.equal(basic.valid,true);assert.equal(basic.unchangedCount,1);
+});
+test('legacy price and basePrice choices normalize to the same source-price group',async()=>{
+  const before=await comparisonSample(),after=structuredClone(before);after.raw_payload.base_price=4321;after.raw_payload.sell_price=4321;
+  for(const fields of [{price:true,basePrice:false},{price:false,basePrice:true}]){
+    const result=contract.compareRows([after],[before],{mode:'patch',fields});assert.equal(result.valid,true);assert.equal(result.fields.price,true);assert.equal(result.fields.basePrice,true);assert.equal(result.changedCount,1);assert.deepEqual(result.rows[0].changedFields,['price']);
+  }
+});

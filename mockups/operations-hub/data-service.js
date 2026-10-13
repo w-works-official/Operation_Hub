@@ -1,8 +1,27 @@
 (function initSystemV3Data(global) {
   'use strict';
 
-  const SUPABASE_URL = 'https://bpgvqmtsjgegnrdzmpep.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable__NVp6Ra227_e1TQqQE40oA_O2PVwv5C';
+  function resolveDataConfiguration() {
+    const production={supabaseUrl:'https://bpgvqmtsjgegnrdzmpep.supabase.co',publishableKey:'sb_publishable__NVp6Ra227_e1TQqQE40oA_O2PVwv5C'};
+    const supplied=global.SystemV3DataConfig;
+    if(supplied===undefined)return production;
+    const loopback=new Set(['localhost','127.0.0.1','[::1]']);
+    let page,url;
+    try{page=new URL(global.location?.href);url=new URL(supplied?.supabaseUrl);}catch(error){throw new Error('로컬 검증 연결 설정을 확인해주세요.');}
+    if(supplied?.mode!=='local-qa'||!loopback.has(page.hostname)||!loopback.has(url.hostname)
+        ||!['http:','https:'].includes(page.protocol)||!['http:','https:'].includes(url.protocol)
+        ||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw new Error('로컬 검증 연결은 localhost 화면과 localhost 서버에서만 사용할 수 있습니다.');
+    const key=supplied.publishableKey;
+    let publicKey=typeof key==='string'&&key.startsWith('sb_publishable_');
+    if(typeof key==='string'&&key.split('.').length===3){
+      try{publicKey=JSON.parse(global.atob(key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role==='anon';}catch(error){publicKey=false;}
+    }
+    if(!publicKey)throw new Error('로컬 검증에는 공개 anon 또는 publishable key만 사용할 수 있습니다.');
+    return {supabaseUrl:url.origin,publishableKey:key};
+  }
+  const dataConfiguration=resolveDataConfiguration();
+  const SUPABASE_URL = dataConfiguration.supabaseUrl;
+  const SUPABASE_KEY = dataConfiguration.publishableKey;
   const PAGE_SIZE = 50;
   const MATRIX_PAGE_SIZES = new Set([50, 100, 200]);
   const MATRIX_VIEW = 'operations_hub_matrix_managed_live';
@@ -194,8 +213,10 @@
 
   function setOperationsHubSessionToken(sessionToken) {
     operationsHubSessionToken = cleanText(sessionToken);
+    if(typeof global.dispatchEvent==='function'&&typeof global.CustomEvent==='function')global.dispatchEvent(new global.CustomEvent('operations-hub-session-changed',{detail:{authenticated:Boolean(operationsHubSessionToken)}}));
     return Boolean(operationsHubSessionToken);
   }
+  function hasOperationsHubSession(){return Boolean(operationsHubSessionToken);}
 
   async function loginOperationsHub({username, password} = {}) {
     const safeUsername = cleanText(username);
@@ -4114,6 +4135,8 @@
   }
 
   async function uploadSellpiaSnapshot(files, fields = {}, onProgress) {
+    fields={...fields,price:Boolean(fields.price||fields.basePrice),basePrice:Boolean(fields.price||fields.basePrice)};
+    if(fields.synchronizationJob===true&&(!cleanText(fields.syncJobId)||!cleanText(fields.syncApplyToken)))throw new Error('동기화 서버의 작업별 반영 승인이 필요합니다.');
     const selectedFiles = Array.from(files || []);
     const parsed = await parseSellpiaUploadFiles(selectedFiles, {mode:fields.mode}, onProgress);
     const {normalizedRows, preflight} = parsed;
@@ -4133,6 +4156,7 @@
       const intent=await originalBoundaryRequest('upload-init',{
         request_id:requestId,upload_mode:uploadMode,files:sourceFilesMetadata,
         source_row_count:normalizedRows.length,
+        ...(fields.synchronizationJob===true?{sync_job_id:fields.syncJobId,sync_apply_token:fields.syncApplyToken}:{}),
         selected_fields:{inventory:Boolean(fields.inventory),price:Boolean(fields.price),basePrice:Boolean(fields.basePrice),purchasePrice:Boolean(fields.purchasePrice),basic:Boolean(fields.basic),status:Boolean(fields.status)}
       });
       intentId=intent.intent_id;snapshotId=intent.snapshot_id;
@@ -4162,7 +4186,7 @@
       }
 
       let affectedSkus=normalizedRows.map(row=>row.sellpia_sku_code);
-      if(uploadMode==='patch'&&(fields.price||fields.purchasePrice)){
+      if(uploadMode==='patch'&&(fields.price||fields.basePrice||fields.purchasePrice)){
         const {data:priceAffected,error:affectedError}=await db.rpc('operations_hub_sellpia_patch_price_affected_skus',{p_patch_snapshot_id:snapshotId,p_selected_fields:{price:Boolean(fields.price),basePrice:Boolean(fields.basePrice),purchasePrice:Boolean(fields.purchasePrice)}});
         if(affectedError)throw readableDatabaseError(affectedError);
         affectedSkus=Array.isArray(priceAffected)?priceAffected:[];
@@ -5015,6 +5039,7 @@
     checkOperationsHubSession,
     logoutOperationsHub,
     setOperationsHubSessionToken,
+    hasOperationsHubSession,
     getOriginalBoundaryDiagnostics:()=>originalBoundaryDiagnostics.map(entry=>({...entry})),
     loadProducts,
     loadMatrixGridDataset,

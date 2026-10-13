@@ -68,6 +68,29 @@ test('company and loopback origins are exact; personal Pages and disguised hosts
 test('HTTP default disabled rejects before any session, queue or storage work',async()=>{const x=setup();let calls=0;const h=http(x,{enabled:false,guardSession:async()=>{calls++;return true;}});const r=await h(request('enqueue',{requestId:id(1)},operatorHeaders));assert.equal(r.status,503);assert.equal(calls,0);assert.equal(x.store.jobs.length,0);});
 test('HTTP operator origin, session and worker credential are separate guards',async()=>{const x=setup(),h=http(x,{guardSession:async()=>false});assert.equal((await h(request('enqueue',{requestId:id(1)},operatorHeaders))).status,401);assert.equal((await h(request('enqueue',{requestId:id(1)}, {...operatorHeaders,origin:'https://attacker.invalid'}))).status,403);assert.equal((await h(request('claim',{workerId:'qa-pc'},operatorHeaders))).status,401);assert.equal((await http(x)(request('claim',{workerId:'qa-pc'},workerHeaders))).status,200);});
 test('HTTP partial automation is a 400 policy error, not a queue availability error',async()=>{const x=setup(),r=await http(x)(request('enqueue',{requestId:id(1),mode:'patch',selectedFields:{inventory:true}},operatorHeaders));assert.equal(r.status,400);assert.equal((await r.json()).code,'AUTOMATION_FULL_ONLY');assert.equal(x.store.jobs.length,0);});
+test('full originals and selected-field application are independent contracts',async()=>{
+  const x=setup(),r=await enqueue(x.queue,1,{mode:'full',applicationMode:'patch',selectedFields:{inventory:true}});
+  assert.equal(r.job.mode,'full');assert.equal(r.job.applicationMode,'patch');assert.equal(r.job.selectedFields.price,false);assert.equal(r.job.applyProduction,false);
+});
+test('legacy price and basePrice flags freeze one effective sale-price policy',async()=>{
+  const x=setup();
+  const a=await enqueue(x.queue,1,{mode:'full',applicationMode:'patch',selectedFields:{price:true,basePrice:false}});
+  assert.equal(a.job.selectedFields.price,true);assert.equal(a.job.selectedFields.basePrice,true);assert.equal(a.job.selectedFields.purchasePrice,false);
+  const b=await enqueue(x.queue,1,{mode:'full',applicationMode:'patch',selectedFields:{price:false,basePrice:true}});
+  assert.equal(b.job.jobId,a.job.jobId);assert.equal(b.deduplicated,true);
+});
+test('operator identity protects another operator job while per-worker credentials remain separate',async()=>{
+  const x=setup(),r=await x.queue.dispatch('enqueue',{requestId:id(1)},{kind:'browser',username:'first'});
+  await assert.rejects(x.queue.dispatch('status',{jobId:r.job.jobId},{kind:'browser',username:'second'}),e=>e.code==='UNAUTHORIZED');
+  const events=[],h=http(x,{workerId:'',workerToken:'',workers:{first:'first-worker-secret-for-tests-only',second:'second-worker-secret-for-tests-only'},runtime:async(action,body,actor)=>{events.push({action,workerId:actor.workerId});return {recorded:true};}});
+  assert.equal((await h(request('hello',{workerId:'second',status:'connected'},{'x-sellpia-sync-worker-token':'first-worker-secret-for-tests-only'}))).status,401);
+  assert.equal((await h(request('hello',{workerId:'second',status:'connected'},{'x-sellpia-sync-worker-token':'second-worker-secret-for-tests-only'}))).status,200);
+  assert.deepEqual(events,[{action:'hello',workerId:'second'}]);
+});
+test('apply authorization has an independent default-off Edge gate before runtime RPC',async()=>{
+  const x=setup();let calls=0;const h=http(x,{runtime:async()=>{calls++;return {};}});
+  const r=await h(request('apply-init',{jobId:id(1),sourceFingerprint:'a'.repeat(64)},operatorHeaders));assert.equal(r.status,409);assert.equal((await r.json()).code,'APPLY_DISABLED');assert.equal(calls,0);
+});
 test('HTTP requestId cancellation requires an operating session and is idempotent after lost replies',async()=>{
   const x=setup(),body={requestId:id(1)};
   assert.equal((await http(x,{guardSession:async()=>false})(request('cancel-request',body,operatorHeaders))).status,401);assert.equal(x.store.jobs.length,0);

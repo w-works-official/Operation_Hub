@@ -257,7 +257,11 @@ test('two independent collections reuse one caller-owned browser context and pre
   const first=await collectOfficial(config,{...dependencies,jobId:'same-context-first'});
   const second=await collectOfficial(config,{...dependencies,jobId:'same-context-second'});
   assert.equal(first.state,'collected');assert.equal(second.state,'collected');assert.equal(opens,0);assert.equal(context.closed,0);
-  assert.notEqual(first.directory,second.directory);assert.deepEqual(first.collectionManifest,second.collectionManifest);
+  assert.notEqual(first.directory,second.directory);
+  const {collectedAt:firstTime,...firstSource}=first.collectionManifest;
+  const {collectedAt:secondTime,...secondSource}=second.collectionManifest;
+  assert.ok(Number.isFinite(Date.parse(firstTime)) && Number.isFinite(Date.parse(secondTime)));
+  assert.deepEqual(firstSource,secondSource);
 });
 test('single-trigger extra download is rejected and all downloads are cancelled without a completed manifest',async t=>{
   const {config,directory}=await fixture(t),page=new EventEmitter();let cancelled=0;

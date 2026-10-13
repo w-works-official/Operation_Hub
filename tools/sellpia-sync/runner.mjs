@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {validateConfig, acquireLock, safeLog, errorCode, requireReady} from './contracts.mjs';
+import {validateConfig, acquireLock, safeLog, errorCode, requireReady, inside} from './contracts.mjs';
 import {openContext, collectOfficial, waitForManualAuthentication} from './collector.mjs';
 import {WorkerTransport} from './transport.mjs';
 import {pollWorker,runClaimedJob} from './worker.mjs';
@@ -42,6 +42,43 @@ export async function waitForManualLoginClose(context, signal) {
   signal?.removeEventListener('abort',stop);
   for(const [page,onClose] of handlers)page.removeListener('close',onClose);
 }
+export async function waitForWorkerAuthentication(context, config, transport, signal,
+    {authenticate = waitForManualAuthentication, log = safeLog} = {}) {
+  let reporting = false;
+  const report = async()=>{
+    if (reporting || signal?.aborted) return;
+    reporting = true;
+    try { await transport.hello(config.workerId,'needs_login',signal); }
+    catch { /* The next normal queue request will enforce authentication. */ }
+    finally { reporting = false; }
+  };
+  await report();
+  const timer=setInterval(report,config.heartbeatIntervalMs);
+  try {
+    const page=context.pages()[0]||await context.newPage();
+    await page.goto(config.sourceUrl,{waitUntil:'domcontentloaded',timeout:config.timeoutMs});
+    log('manual_login_required',{state:'needs_login'});
+    await authenticate(context,config,signal);
+  } finally { clearInterval(timer); }
+  await transport.hello(config.workerId,'connected',signal);
+}
+export function watchStopRequests(workDirectory, owner, controller, {pid=process.pid,intervalMs=1000}={}) {
+  const requestPath=inside(workDirectory,'stop-request.json');let reading=false;
+  const check=async()=>{
+    if(reading||controller.signal.aborted)return;
+    reading=true;
+    try {
+      const request=JSON.parse(await fs.readFile(requestPath,'utf8'));
+      if(request.pid===pid&&request.owner===owner) {
+        await fs.unlink(requestPath);
+        controller.abort();
+      }
+    } catch { /* Missing, stale or unverified requests cannot stop this owner. */ }
+    finally {reading=false;}
+  };
+  const timer=setInterval(check,intervalMs);timer.unref();
+  return ()=>clearInterval(timer);
+}
 export async function main(args = process.argv.slice(2), {env = process.env, log = safeLog} = {}) {
   const options = parseArguments(args);
   const input = JSON.parse(await fs.readFile(path.resolve(options.configPath),'utf8'));
@@ -53,6 +90,7 @@ export async function main(args = process.argv.slice(2), {env = process.env, log
   if (options.command !== 'login') requireReady(config);
   const release = await acquireLock(config.workDirectory);
   const abort = new AbortController();
+  const stopWatcher=watchStopRequests(config.workDirectory,release.owner,abort);
   const stop = () => abort.abort();
   process.once('SIGINT',stop); process.once('SIGTERM',stop);
   try {
@@ -79,21 +117,21 @@ export async function main(args = process.argv.slice(2), {env = process.env, log
       // This command never creates a cloud job or invokes Hub snapshot upload.
     } else {
       const transport = new WorkerTransport({apiUrl:env.SELLPIA_SYNC_API_URL || input.apiUrl,
-        workerToken:env.SELLPIA_SYNC_WORKER_TOKEN,timeoutMs:config.timeoutMs});
-      const context=await openContext(config,{login:options.manualLogin});
+        workerToken:env.SELLPIA_SYNC_WORKER_TOKEN,timeoutMs:config.timeoutMs,localQA:input.localQA === true});
+      await transport.hello(config.workerId,'starting',abort.signal);
+      // Keep a headed context alive so a session expiry can be recovered by the
+      // operator without passing credentials to the worker or restarting a job.
+      const context=await openContext(config,{login:true});
       try{
-        if(options.manualLogin){
-          const page=context.pages()[0]||await context.newPage();
-          await page.goto(config.sourceUrl,{waitUntil:'domcontentloaded',timeout:config.timeoutMs});
-          log('manual_login_required',{state:'needs_login'});
-          await waitForManualAuthentication(context,config,abort.signal);
-        }
+        await waitForWorkerAuthentication(context,config,transport,abort.signal,{log});
         await pollWorker(config,transport,{signal:abort.signal,once:options.once,log,
+          onNeedsLogin:signal=>waitForWorkerAuthentication(context,config,transport,signal,{log}),
           runJob:(claim,configuration,connection,dependencies)=>runClaimedJob(claim,configuration,connection,{...dependencies,
             collect:(current,jobOptions)=>collectOfficial(current,{...jobOptions,browserContext:context})})});
       }finally{await context.close().catch(()=>{});}
     }
   } finally {
+    stopWatcher();
     process.removeListener('SIGINT',stop); process.removeListener('SIGTERM',stop);
     await release();
   }

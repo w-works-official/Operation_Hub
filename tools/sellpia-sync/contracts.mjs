@@ -41,6 +41,7 @@ export function defaultDirectories(env = process.env) {
 }
 export function validateConfig(input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) fail('invalid_config');
+  if (input.localQA !== undefined && typeof input.localQA !== 'boolean') fail('invalid_config');
   const defaults = defaultDirectories();
   const source = new URL(input.sourceUrl || SOURCE_URL);
   if (source.href !== SOURCE_URL) fail('unapproved_source_url');
@@ -92,6 +93,9 @@ export function validateManifest(manifest) {
     names.add(file.name);
   }
   if (manifest.files.reduce((total,file) => total + file.size,0) > MAX_TOTAL_BYTES) fail('invalid_collection_manifest');
+  for (const key of ['collectedAt','sourceGeneratedAt']) {
+    if (manifest[key] !== undefined && (typeof manifest[key] !== 'string' || !Number.isFinite(Date.parse(manifest[key])))) fail('invalid_collection_manifest');
+  }
   return manifest;
 }
 export function safeLog(event, details = {}, sink = console.log) {
@@ -104,19 +108,40 @@ export function safeLog(event, details = {}, sink = console.log) {
   }
   sink(JSON.stringify(output));
 }
-export async function acquireLock(workDirectory, owner = randomUUID()) {
+export async function acquireLock(workDirectory, owner = randomUUID(), {isAlive = pid=>{
+  try { process.kill(pid,0); return true; }
+  catch(error) { return error.code !== 'ESRCH'; }
+}} = {}) {
   await fs.mkdir(workDirectory, {recursive:true, mode:0o700});
   const lockPath = inside(workDirectory, 'runner.lock');
   let handle;
   try { handle = await fs.open(lockPath, 'wx', 0o600); }
-  catch (error) { if (error.code === 'EEXIST') fail('runner_already_active', 'blocked'); throw error; }
+  catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+    const recoveryPath=inside(workDirectory,'runner-recovery.lock');
+    let recovery;
+    try { recovery=await fs.open(recoveryPath,'wx',0o600); }
+    catch { fail('runner_already_active','blocked'); }
+    try {
+      let prior;
+      try { prior=JSON.parse(await fs.readFile(lockPath,'utf8')); }
+      catch { fail('runner_lock_unverified','blocked'); }
+      if (!Number.isSafeInteger(prior.pid) || prior.pid <= 0 || typeof prior.owner !== 'string' || isAlive(prior.pid)) fail('runner_already_active','blocked');
+      // Reclaim only a confirmed dead local owner, never a live/unknown PID.
+      await fs.unlink(lockPath);
+      try { handle=await fs.open(lockPath,'wx',0o600); }
+      catch { fail('runner_already_active','blocked'); }
+    } finally { await recovery.close(); await fs.unlink(recoveryPath); }
+  }
   await handle.writeFile(JSON.stringify({owner, pid:process.pid, createdAt:new Date().toISOString()}));
   await handle.close();
-  return async () => {
+  const release = async () => {
     const lock = JSON.parse(await fs.readFile(lockPath, 'utf8'));
     if (lock.owner !== owner) fail('lock_owner_changed');
     await fs.unlink(lockPath);
   };
+  release.owner=owner;
+  return release;
 }
 export async function writeJournal(directory, journal) {
   await fs.mkdir(directory, {recursive:true, mode:0o700});

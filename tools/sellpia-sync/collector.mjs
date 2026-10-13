@@ -154,7 +154,8 @@ export async function saveDownload(download, ordinal, directory, config, signal)
 export async function captureGridDownloads(page, directory, config, expectedRowCount, signal, onProgress = async()=>{}) {
   const count = Math.ceil(expectedRowCount/config.ui.rowsPerFile);
   if (count !== 3) fail('official_part_count_changed','blocked');
-  const saves = [],downloads=[];let resolveCount,rejectCount,extra = false,finished=false;
+  const saves = [],downloads=[];let resolveCount,rejectCount,extra = false,finished=false,completedFiles=0;
+  let progress = Promise.resolve();
   const counted = new Promise((resolve,reject)=>{resolveCount=resolve;rejectCount=reject;});
   counted.catch(()=>{});
   const abortCapture = ()=>rejectCount(new SyncError('lease_lost','blocked'));
@@ -162,7 +163,12 @@ export async function captureGridDownloads(page, directory, config, expectedRowC
     downloads.push(download);
     if (saves.length >= count) {extra=true;rejectCount(new SyncError('unexpected_official_download'));return;}
     const ordinal=saves.length+1;
-    const saved=saveDownload(download,ordinal,directory,config,signal);
+    const saved=saveDownload(download,ordinal,directory,config,signal).then(file=>{
+      const completed = ++completedFiles;
+      progress=progress.then(()=>onProgress({phase:'downloading',completedFiles:completed,totalFiles:count,expectedRowCount}));
+      progress.catch(rejectCount);
+      return file;
+    });
     saved.catch(rejectCount);saves.push(saved);
     if(saves.length===count)resolveCount();
   };
@@ -175,12 +181,12 @@ export async function captureGridDownloads(page, directory, config, expectedRowC
     await dialog.getByRole('button',{name:'그리드 다운로드',exact:true}).click();
     await counted;
     const files=await Promise.all(saves);
+    await progress;
     await sleep(config.ui.settleMs ?? 1000,undefined,{signal});
     checkAbort(signal);
     if(extra)fail('unexpected_official_download');
     const finalCount=parseOfficialCount(await page.locator(config.ui.rowCountSelector).innerText(),config.ui.rowCountPattern);
     if(finalCount!==expectedRowCount)fail('official_count_changed');
-    await onProgress({phase:'downloading',completedFiles:count,totalFiles:count,expectedRowCount});
     // Blob resolution can produce events out of order. Determine the order
     // from original row numbers, without rewriting or splitting any CSV bytes.
     const ordered=await orderOfficialParts(files,directory);
@@ -238,7 +244,7 @@ export async function collectOfficial(config, {jobId, signal, onProgress = async
     const parsed = await validateFiles(files, expectedRowCount);
     files = files.map((file,index) => ({...file,...parsed.files[index]}));
     const collectionManifest = validateManifest({source:'sellpia',collectionMode:'official_download',mode:'full',includeAll:true,
-      filters:[],expectedRowCount,files:files.map(({ordinal,name,size,sha256}) => ({ordinal,name,size,sha256}))});
+      filters:[],expectedRowCount,collectedAt:new Date().toISOString(),files:files.map(({ordinal,name,size,sha256}) => ({ordinal,name,size,sha256}))});
     checkAbort(signal);
     await writeJournal(directory, {jobId,state:'collected',files,expectedRowCount,collectionManifest});
     return {jobId,state:'collected',files,expectedRowCount,collectionManifest,directory,resumed:false};

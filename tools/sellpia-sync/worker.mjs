@@ -7,22 +7,24 @@ export async function runClaimedJob(claim, config, transport, {collect = collect
   const binding = leaseBinding(claim, config.workerId);
   const abort = new AbortController();
   const mergedSignal = signal ? AbortSignal.any([signal,abort.signal]) : abort.signal;
-  let leaseExpiresAt = leaseTime(claim.leaseExpiresAt), heartbeatRunning = false;
+  let leaseExpiresAt = leaseTime(claim.leaseExpiresAt), heartbeatRunning = false, heartbeatPending = Promise.resolve();
   const checkLease = () => {
     if (Date.now() >= leaseExpiresAt) abort.abort();
     if (mergedSignal.aborted) fail('lease_lost', 'blocked');
   };
-  const timer = setInterval(async () => {
+  const timer = setInterval(() => {
     if (heartbeatRunning || mergedSignal.aborted) return;
     if (Date.now() >= leaseExpiresAt) { abort.abort(); return; }
     heartbeatRunning = true;
-    try {
-      const result = await transport.heartbeat(binding, mergedSignal);
-      const nextExpiry = leaseTime(result.leaseExpiresAt);
-      if (!Number.isFinite(nextExpiry) || nextExpiry <= Date.now()) abort.abort();
-      else leaseExpiresAt = nextExpiry;
-    } catch { abort.abort(); }
-    finally { heartbeatRunning = false; }
+    heartbeatPending=(async()=>{
+      try {
+        const result = await transport.heartbeat(binding, mergedSignal);
+        const nextExpiry = leaseTime(result.leaseExpiresAt);
+        if (!Number.isFinite(nextExpiry) || nextExpiry <= Date.now()) abort.abort();
+        else leaseExpiresAt = nextExpiry;
+      } catch { abort.abort(); }
+      finally { heartbeatRunning = false; }
+    })();
   },config.heartbeatIntervalMs);
   try {
     requireReady(config);
@@ -35,7 +37,11 @@ export async function runClaimedJob(claim, config, transport, {collect = collect
     }});
     checkLease();
     await transport.report(binding,'collecting',{phase:'uploading',completedFiles:3,totalFiles:3,expectedRowCount:collection.expectedRowCount},mergedSignal);
-    const completed = await transport.uploadCollection(binding, collection, mergedSignal);
+    const completed = await transport.uploadCollection(binding, collection, mergedSignal,{onFinalize:async()=>{
+      clearInterval(timer);
+      await heartbeatPending;
+      checkLease();
+    }});
     // Finalization consumes the server lease. A concurrent final heartbeat can
     // see LEASE_LOST after this successful acknowledgement; the verified server
     // result is authoritative and must not be turned into a false failure.
@@ -54,18 +60,31 @@ export async function runClaimedJob(claim, config, transport, {collect = collect
     throw new SyncError(code,error?.state || 'failed');
   } finally { clearInterval(timer); }
 }
-export async function pollWorker(config, transport, {signal, once = false, runJob = runClaimedJob, log = safeLog} = {}) {
+export async function pollWorker(config, transport, {signal, once = false, runJob = runClaimedJob, log = safeLog, onNeedsLogin} = {}) {
   requireReady(config);
   let backoff = config.pollIntervalMs;
   while (!signal?.aborted) {
     try {
+      await transport.hello?.(config.workerId,'connected',signal);
       const claim = await transport.claim(config.workerId, signal);
-      if (claim) await runJob(claim,config,transport,{signal,log});
+      if (claim) {
+        await transport.hello?.(config.workerId,'busy',signal);
+        await runJob(claim,config,transport,{signal,log});
+        await transport.hello?.(config.workerId,'connected',signal);
+      }
       if (once) return;
       backoff = config.pollIntervalMs;
     } catch (error) {
       log('worker_stopped', {code:errorCode(error),state:error?.state || 'failed'});
-      if (error?.state === 'blocked' || error?.state === 'needs_login' || once) throw error;
+      if (error?.state === 'needs_login') {
+        await transport.hello?.(config.workerId,'needs_login',signal);
+        if (!onNeedsLogin || once) throw error;
+        await onNeedsLogin(signal);
+        await transport.hello?.(config.workerId,'connected',signal);
+        backoff = config.pollIntervalMs;
+        continue;
+      }
+      if (error?.state === 'blocked' || once) throw error;
       backoff = Math.min(backoff * 2, 60000);
     }
     await sleep(backoff,undefined,{signal}).catch(() => {});

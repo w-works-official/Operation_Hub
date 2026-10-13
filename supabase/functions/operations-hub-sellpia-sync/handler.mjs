@@ -1,6 +1,6 @@
 import {VERSION,BROWSER_ACTIONS,WORKER_ACTIONS,DOWNLOAD_TTL_SECONDS,allowedOrigin,secureWorkerRequest,sessionHeader,workerTokenMatches,uuid,sha256,assertLease,verifyArtifactBytes,plain,fail} from './protocol.mjs';
 
-const STATUS={UNAUTHORIZED:401,ORIGIN_DENIED:403,NOT_FOUND:404,INVALID_REQUEST:400,AUTOMATION_FULL_ONLY:400,INVALID_MANIFEST:400,INVALID_ARTIFACT:409,CONFLICT:409,LEASE_LOST:409,DISABLED:503,QUEUE_UNAVAILABLE:503,STORAGE_UNAVAILABLE:503};
+const STATUS={UNAUTHORIZED:401,ORIGIN_DENIED:403,NOT_FOUND:404,INVALID_REQUEST:400,AUTOMATION_FULL_ONLY:400,INVALID_MANIFEST:400,INVALID_ARTIFACT:409,CONFLICT:409,LEASE_LOST:409,DISABLED:503,APPLY_DISABLED:409,REVIEW_REQUIRED:409,QUEUE_UNAVAILABLE:503,STORAGE_UNAVAILABLE:503};
 async function boundedJson(req){
   const reader=req.body?.getReader();if(!reader)fail('INVALID_REQUEST','JSON 요청이 필요합니다.');
   const chunks=[];let length=0;
@@ -9,7 +9,7 @@ async function boundedJson(req){
   const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
   try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));}catch{fail('INVALID_REQUEST','JSON 요청이 필요합니다.');}
 }
-export function createHandler({queue,store,guardSession,storage,workerToken,workerId,enabled=false}){
+export function createHandler({queue,store,guardSession,storage,workerToken,workerId,workers,runtime,enabled=false,applyEnabled=false}){
   return async function(req){
     const origin=req.headers.get('origin')||'';
     const cors=allowedOrigin(origin)?{'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'apikey, content-type, x-operations-hub-session','Access-Control-Allow-Methods':'POST, OPTIONS','Vary':'Origin'}:{};
@@ -26,20 +26,30 @@ export function createHandler({queue,store,guardSession,storage,workerToken,work
       if(BROWSER_ACTIONS.has(action)){
         if(!allowedOrigin(origin))fail('ORIGIN_DENIED','허용된 운영 화면이 필요합니다.');
         const token=sessionHeader(req.headers.get('x-operations-hub-session'));
-        if(!await guardSession(token))fail('UNAUTHORIZED','운영 세션이 만료되었거나 회수되었습니다.');
-        actor={kind:'browser'};
+        const identity=await guardSession(token);
+        if(!identity)fail('UNAUTHORIZED','운영 세션이 만료되었거나 회수되었습니다.');
+        actor={kind:'browser',...(plain(identity)?identity:{}),sessionToken:token};
       }else if(WORKER_ACTIONS.has(action)){
-        if(!secureWorkerRequest(req.url,origin)||!await workerTokenMatches(req.headers.get('x-sellpia-sync-worker-token'),workerToken)||!workerId||body.workerId!==workerId)fail('UNAUTHORIZED','승인된 회사 PC runner 인증이 필요합니다.');
-        actor={kind:'worker',workerId};
+        const expected=workers?.[body.workerId]||(body.workerId===workerId?workerToken:null);
+        if(!secureWorkerRequest(req.url,origin)||!await workerTokenMatches(req.headers.get('x-sellpia-sync-worker-token'),expected)||typeof body.workerId!=='string'||! /^[A-Za-z0-9_-]{1,80}$/.test(body.workerId))fail('UNAUTHORIZED','승인된 회사 PC runner 인증이 필요합니다.');
+        actor={kind:'worker',workerId:body.workerId};
       }else fail('INVALID_REQUEST','지원하지 않는 요청입니다.');
       if(Object.keys(body).some(k=>['path','storagePath','snapshot_id','serviceRoleKey','verifiedArtifacts'].includes(k)))fail('INVALID_REQUEST','서버 소유 필드는 요청으로 지정할 수 없습니다.');
       let result;
+      if(['hello','availability','history','apply-init','apply-progress'].includes(action)){
+        if(!runtime)fail('QUEUE_UNAVAILABLE','운영 동기화 설정을 확인해주세요.');
+        if(action==='apply-init'&&!applyEnabled)fail('APPLY_DISABLED','DB 자동 반영이 비활성 상태입니다.');
+        result=await runtime(action,body,actor,{enabled,applyEnabled});
+        return respond(200,{ok:true,version:VERSION,...result});
+      }
+      if(action==='status'&&runtime)result=await runtime(action,body,actor,{enabled,applyEnabled});
+      else
       if(action==='upload-finalize'){
         const jobId=uuid(body.jobId), snapshot=await store.read({jobId}), job=snapshot.jobs.find(j=>j.jobId===jobId);
         const hash=await sha256(body.leaseToken||'');
-        if(job&&['collected','previewed'].includes(job.state)&&job.completedWorkerId===workerId&&job.completedLeaseHash===hash){result=await queue.dispatch(action,body,actor);}
+        if(job&&['collected','previewed'].includes(job.state)&&job.completedWorkerId===actor.workerId&&job.completedLeaseHash===hash){result=await queue.dispatch(action,body,actor);}
         else{
-          assertLease(job,workerId,hash,Number(snapshot.now));
+          assertLease(job,actor.workerId,hash,Number(snapshot.now));
           if(!job.manifest?.length)fail('INVALID_ARTIFACT','먼저 원본 manifest를 선언해주세요.');
           await storage.assertPrivate();
           await storage.assertObjects(jobId,job.manifest);
@@ -68,6 +78,7 @@ export function createHandler({queue,store,guardSession,storage,workerToken,work
           result={job:result.job,manifest:result.job.collectionManifest,artifacts,expiresIn:DOWNLOAD_TTL_SECONDS};
         }
       }
+      if(actor.kind==='worker'&&runtime&&action!=='hello')await runtime('hello',{workerId:actor.workerId,status:action==='report'&&body.state==='needs_login'?'needs_login':action==='upload-finalize'?'connected':'busy'},actor,{enabled,applyEnabled});
       return respond(200,{ok:true,version:VERSION,...result});
     }catch(error){
       const code=Object.hasOwn(STATUS,error?.code)?error.code:'QUEUE_UNAVAILABLE';

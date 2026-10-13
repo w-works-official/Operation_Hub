@@ -25,9 +25,9 @@ function loadService(fetch,db={}){
   context.SystemV3Data.setOperationsHubSessionToken('a'.repeat(64));return context.SystemV3Data;
 }
 async function mockClient(options={}){
-  const f=await fixture(),calls=[],job={jobId:id(10),requestId:id(11),mode:'full',selectedFields:{...contract.FULL_FIELDS},baselineSnapshotId:baseline,state:'queued',applyProduction:false};let latest=baseline,poll=0,attempt=0;
+  const f=await fixture(),calls=[];let job={jobId:id(10),requestId:id(11),mode:'full',applicationMode:'patch',selectedFields:{inventory:true,price:true,basePrice:true,purchasePrice:true,basic:false,status:false},baselineSnapshotId:baseline,state:'queued',applyProduction:false},latest=baseline,poll=0,attempt=0;
   const data={loadLatestSellpiaOriginalStatus:async()=>({stateSnapshotId:latest,boundary:'signed-read-v1'}),
-    sellpiaSyncRequest:async(action,body)=>{calls.push({action,body});if(action==='enqueue'){if(options.lostEnqueue&&attempt++===0)throw Object.assign(new Error('response lost'),{name:'AbortError'});return {job};}if(action==='status')return {job:{...job,jobId:options.wrongStatusJob?other:job.jobId,state:'collected'}};return {ok:true};},
+    sellpiaSyncRequest:async(action,body)=>{calls.push({action,body});if(action==='availability')return {enabled:true,applyEnabled:false,runner:{online:true,status:'connected'}};if(action==='history')return {jobs:[]};if(action==='enqueue'){if(options.lostEnqueue&&attempt++===0)throw Object.assign(new Error('response lost'),{name:'AbortError'});job={...job,...body};return {job};}if(action==='status')return {job:{...job,jobId:options.wrongStatusJob?other:job.jobId,state:'collected'}};return {ok:true};},
     loadSellpiaSyncArtifacts:async()=>({files:f.files,manifest:f.manifest}),loadSellpiaSyncBaselineRows:async()=>({snapshotId:baseline,rows:f.parsed.rows}),
     uploadSellpiaSnapshot:async()=>{throw Error('PRODUCTION CALL FORBIDDEN');}};
   const c={...contract,compareRows:(...args)=>{const r=contract.compareRows(...args);if(options.driftAfterComparison)latest=other;return r;}};
