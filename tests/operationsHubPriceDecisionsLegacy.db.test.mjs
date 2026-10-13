@@ -155,6 +155,11 @@ async function runPriceDecisionApplyIntegration() {
   const integrationDb = new PGlite();
   try {
     await integrationDb.exec(setup[1]);
+    // The reused contract fixture timestamps its initial snapshot with now().
+    // Anchor this scenario before its Oct 8-10 source refreshes so latest-source
+    // ordering is deterministic even when the suite runs after those dates.
+    await integrationDb.exec(`update public.sellpia_stock_snapshots
+      set completed_at='2026-10-07 01:00:00+00',created_at='2026-10-07 01:00:00+00'`);
     await integrationDb.exec(`
       alter table public.operations_hub_change_queue drop column seller_option_code_normalized;
       alter table public.operations_hub_change_queue drop column change_id;
@@ -256,6 +261,7 @@ async function runPriceDecisionApplyIntegration() {
 
     // Case 1: explicitly apply a manual final-price decision through the new RPC.
     const firstRead = await readGroup('smartstore','SKU-1');
+    assert.equal(firstRead.sellpia_snapshot_id,'00000000-0000-4000-8000-000000000011');
     assert.equal(firstRead.targets[0].price.base,20000);
     const firstBody = {
       source:'smartstore',decision_source:'matrix_manual',reason:'initial manual final price',
@@ -279,6 +285,7 @@ async function runPriceDecisionApplyIntegration() {
         ('00000000-0000-4000-8000-000000000014','SKU-2',20000,'{"sell_price":"20000"}');
     `);
     const sameSourceRead = await readGroup('smartstore','SKU-1');
+    assert.equal(sameSourceRead.sellpia_snapshot_id,'00000000-0000-4000-8000-000000000014');
     assert.deepEqual(sameSourceRead.targets[0].current_state.price,{base:20000,discounted:20000,option:-1100,final:18900,terms:[]});
     assert.equal(await eventCount('P-1'),firstEvents,'new same-price Sellpia source data does not emit a price decision event');
 
@@ -333,6 +340,7 @@ async function runPriceDecisionApplyIntegration() {
         ('00000000-0000-4000-8000-000000000015','SKU-2',22000,'{"sell_price":"22000"}');
     `);
     const sellpiaRead = await readGroup('smartstore','SKU-1');
+    assert.equal(sellpiaRead.sellpia_snapshot_id,'00000000-0000-4000-8000-000000000015');
     assert.deepEqual((await currentRows('smartstore','SKU-1')).find(row=>row.seller_option_code==='O-1').price,ruleTuple(21500,-1600));
     assert.equal(await eventCount('P-1'),4,'a changed Sellpia source snapshot does not apply itself');
     const observedAt = sellpiaRead.source_observed_at;
