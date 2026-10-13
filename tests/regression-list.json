@@ -66,6 +66,17 @@
   "operationsHubIntegratedMappingExport.test.mjs",
   "operationsHubAblyMappingPrefetchFixtureDatabase.test.mjs",
   "operationsHubWorksheetDimension.test.mjs",
+  "operationsHubSellpiaSyncContract.test.mjs",
+  "operationsHubSellpiaSyncClient.test.mjs",
+  "operationsHubSellpiaSyncQueue.test.mjs",
+  "operationsHubSellpiaSyncRunner.test.mjs",
+  "operationsHubSellpiaSyncIntegrationReview.test.mjs",
+  "operationsHubSellpiaSyncPackaging.test.mjs",
+  "operationsHubSellpiaSyncBackend.db.test.mjs",
+  "operationsHubSellpiaSyncDataConfig.test.mjs",
+  "operationsHubSellpiaSyncLifecycle.test.mjs",
   "operationsHubSellpiaAbortRace.mock.test.mjs",
-  "operationsHubSellpiaInventoryCountTimeout.db.test.mjs"
+  "operationsHubSellpiaInventoryCountTimeout.db.test.mjs",
+  "operationsHubSellpiaSyncWindows.test.mjs",
+  "operationsHubSellpiaSyncOperationalComparison.test.mjs"
 ]

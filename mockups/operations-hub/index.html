@@ -155,6 +155,22 @@
                 <div class="select-wrap"><select id="source-select"><option value="sellpia">셀피아 전체 원본 갱신</option><option value="inventory_count">재고조사 결과 반영</option><option value="smartstore">스마트스토어 상품 원본</option><option value="makeshop">메이크샵 상품 원본</option><option value="ably">에이블리 상품 원본</option></select></div>
                 <div id="source-info" class="source-info"><span class="channel-logo sellpia">S</span><div><b>셀피아 기준 원본</b><p>분할된 파일 3개 · XLSX 또는 CSV</p></div><em>필수</em></div>
 
+                <section id="sellpia-sync-panel" class="sellpia-sync-panel" aria-labelledby="sellpia-sync-heading">
+                  <h3 id="sellpia-sync-heading">셀피아 원본 동기화</h3>
+                  <p>회사 PC의 실행기가 최신 상품·SKU 전체 원본을 수집하고 기존 원본과 비교합니다. 파일을 직접 내려받거나 선택할 필요가 없습니다.</p>
+                  <div id="sellpia-sync-availability" class="sellpia-sync-availability" role="status">연결 상태 확인 전</div>
+                  <label for="sellpia-sync-mode">반영 방식<select id="sellpia-sync-mode"><option value="patch">부분 갱신</option><option value="full">전체 교체</option></select></label>
+                  <p id="sellpia-sync-policy-note" class="sellpia-sync-mode-note">원본은 전체를 수집하고, 부분 갱신은 선택 항목만 반영합니다. 파일에 없는 기존 SKU는 유지합니다.</p>
+                  <fieldset id="sellpia-sync-fields" class="sellpia-sync-fields"><legend>반영할 항목</legend>
+                    <label><input type="checkbox" data-sellpia-sync-field="inventory" checked> 재고</label><label><input type="checkbox" data-sellpia-sync-field="price" checked> 판매가 (기준가격)</label><label><input type="checkbox" data-sellpia-sync-field="purchasePrice" checked> 매입가·수수료·부가세</label><label><input type="checkbox" data-sellpia-sync-field="basic"> 상품 기본정보</label><label><input type="checkbox" data-sellpia-sync-field="status"> 상품 상태</label>
+                  </fieldset>
+                  <label for="sellpia-sync-execution">실행 방식<select id="sellpia-sync-execution"><option value="preview">수집 후 미리보기</option><option value="auto" disabled>승인 후 검증·자동 반영</option></select></label>
+                  <div class="sellpia-sync-actions"><button id="sellpia-sync-start" class="btn primary" type="button">셀피아 원본 동기화</button><button id="sellpia-sync-cancel" class="btn" type="button" disabled>수집 취소</button><button id="sellpia-sync-apply" class="btn" type="button" disabled>검토 후 반영</button><button id="sellpia-sync-recover" class="btn" type="button" disabled>기존 반영 결과 확인</button><button id="sellpia-sync-refresh" class="btn" type="button">연결·이력 새로고침</button></div>
+                  <p id="sellpia-sync-capability-note">미리보기가 기본입니다. 서버가 허용하고 이번 실행을 승인한 경우에만 DB에 반영합니다.</p>
+                  <div id="sellpia-sync-result" role="status" aria-live="polite"></div>
+                  <details class="sellpia-sync-history"><summary>최근 동기화 이력</summary><div id="sellpia-sync-history">확인된 이력이 없습니다.</div></details>
+                </section>
+
                 <div id="seller-upload-mode" class="seller-upload-mode">
                   <p><b>원본 반영 방식</b><small>일부 행만 수정했다면 부분 갱신, 상품 목록 자체가 바뀌었다면 전체 교체를 사용하세요.</small></p>
                   <label><input type="radio" name="seller-upload-mode" value="patch" checked><span><b>부분 갱신 <em>권장</em></b><small>파일에 있는 상품·옵션만 바꾸고 나머지는 유지</small></span></label>
@@ -1050,7 +1066,11 @@
     <script src="./relation-import-parser.js?v=20260910-rule-destination-v111"></script>
     <script src="./bundle-import-parser.js?v=20260910-rule-destination-v111"></script>
     <script src="./seller-bundle-import-parser.js?v=20260910-rule-destination-v111"></script>
-    <script src="./sellpia-source-parser.js?v=20260910-rule-destination-v111"></script>
+    <script src="./sellpia-source-parser.js?v=20261013-sellpia-sync-strict-v1"></script>
+    <link rel="stylesheet" href="./sellpia-sync-workspace.css?v=20261013-preview-v1">
+    <script src="./sellpia-sync-contract.js?v=20261013-preview-v1"></script>
+    <script src="./sellpia-sync-client.js?v=20261013-preview-v1"></script>
+    <script src="./sellpia-sync-workspace.js?v=20261013-preview-v1"></script>
     <script src="./sellpia-inventory-count.js?v=20261008-inventory-partial-v1"></script>
     <script src="./sellpia-carrier-export.js?v=20260920-sellpia-carrier-v1"></script>
     <link rel="stylesheet" href="./matrix-shadow.css?v=20260917-matrix-compact-v1">
@@ -1061,12 +1081,12 @@
     <script src="./matrix-shadow.js?v=20260919-full-scope-v12"></script>
     <script src="./baseline-canary.js?v=20260917-shadow-preview-v1"></script>
     <script src="./matrix-multilisting.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./data-service.js?v=20261008-inventory-partial-v1"></script>
+  <script src="./data-service.js?v=20261013-sellpia-sync-preview-v1"></script>
     <script src="./channels-page.js?v=20260910-rule-destination-v111"></script>
     <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./app.js?v=20261008-inventory-partial-v1"></script>
+  <script src="./app.js?v=20261013-sellpia-sync-preview-v1"></script>
     <script src="./mapping-import.js?v=20261013-blank-template-v1"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>

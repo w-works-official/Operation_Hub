@@ -1,0 +1,16 @@
+.sellpia-sync-panel{margin:18px 0;padding:18px;border:1px solid #d8e4ef;border-radius:12px;background:#f7fafc}
+.sellpia-sync-panel h3{margin:0 0 8px;font-size:16px}
+.sellpia-sync-panel p{margin:8px 0;line-height:1.6;color:#46566b}
+.sellpia-sync-panel label{display:block;margin:10px 0}
+.sellpia-sync-panel select{margin-left:10px;padding:7px;border:1px solid #ccd6e1;border-radius:6px;background:#fff}
+.sellpia-sync-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.sellpia-sync-panel dl{display:grid;grid-template-columns:minmax(130px,1fr) minmax(100px,2fr);gap:7px 12px;margin:12px 0;font-size:13px}
+.sellpia-sync-panel dt{color:#516174}.sellpia-sync-panel dd{margin:0;overflow-wrap:anywhere}
+.sellpia-sync-panel .sellpia-sync-error{color:#a32929}
+.sellpia-sync-mode-note{font-size:12px}
+.sellpia-sync-fields{display:flex;gap:8px 16px;flex-wrap:wrap;border:1px solid #d8e4ef;border-radius:8px;padding:10px 12px;margin:12px 0}
+.sellpia-sync-fields legend{font-size:13px;color:#516174}.sellpia-sync-fields label{margin:0}
+.sellpia-sync-availability{padding:10px 12px;background:#fff;border-radius:8px;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
+.sellpia-sync-history{margin-top:14px;font-size:13px}.sellpia-sync-history summary{cursor:pointer;font-weight:600}
+.sellpia-sync-history table{width:100%;border-collapse:collapse;margin-top:8px}.sellpia-sync-history th,.sellpia-sync-history td{text-align:left;padding:7px;border-bottom:1px solid #d8e4ef;overflow-wrap:anywhere}
+@media(max-width:700px){.sellpia-sync-panel dl{grid-template-columns:1fr}.sellpia-sync-history{overflow-x:auto}.sellpia-sync-fields{gap:10px}}

@@ -1,8 +1,27 @@
 (function initSystemV3Data(global) {
   'use strict';
 
-  const SUPABASE_URL = 'https://bpgvqmtsjgegnrdzmpep.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable__NVp6Ra227_e1TQqQE40oA_O2PVwv5C';
+  function resolveDataConfiguration() {
+    const production={supabaseUrl:'https://bpgvqmtsjgegnrdzmpep.supabase.co',publishableKey:'sb_publishable__NVp6Ra227_e1TQqQE40oA_O2PVwv5C'};
+    const supplied=global.SystemV3DataConfig;
+    if(supplied===undefined)return production;
+    const loopback=new Set(['localhost','127.0.0.1','[::1]']);
+    let page,url;
+    try{page=new URL(global.location?.href);url=new URL(supplied?.supabaseUrl);}catch(error){throw new Error('로컬 검증 연결 설정을 확인해주세요.');}
+    if(supplied?.mode!=='local-qa'||!loopback.has(page.hostname)||!loopback.has(url.hostname)
+        ||!['http:','https:'].includes(page.protocol)||!['http:','https:'].includes(url.protocol)
+        ||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw new Error('로컬 검증 연결은 localhost 화면과 localhost 서버에서만 사용할 수 있습니다.');
+    const key=supplied.publishableKey;
+    let publicKey=typeof key==='string'&&key.startsWith('sb_publishable_');
+    if(typeof key==='string'&&key.split('.').length===3){
+      try{publicKey=JSON.parse(global.atob(key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).role==='anon';}catch(error){publicKey=false;}
+    }
+    if(!publicKey)throw new Error('로컬 검증에는 공개 anon 또는 publishable key만 사용할 수 있습니다.');
+    return {supabaseUrl:url.origin,publishableKey:key};
+  }
+  const dataConfiguration=resolveDataConfiguration();
+  const SUPABASE_URL = dataConfiguration.supabaseUrl;
+  const SUPABASE_KEY = dataConfiguration.publishableKey;
   const PAGE_SIZE = 50;
   const MATRIX_PAGE_SIZES = new Set([50, 100, 200]);
   const MATRIX_VIEW = 'operations_hub_matrix_managed_live';
@@ -105,6 +124,71 @@
     return [...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('');
   }
 
+  async function sellpiaSyncRequest(action, payload = {}, options = {}) {
+    const token=requireOperationsHubSessionToken();
+    const controller=new AbortController(),timer=global.setTimeout(()=>controller.abort(),30000);
+    const abort=()=>controller.abort();if(options.signal?.aborted)controller.abort();else options.signal?.addEventListener('abort',abort,{once:true});
+    let response;
+    let result;
+    try{response=await global.fetch(`${SUPABASE_URL}/functions/v1/operations-hub-sellpia-sync`,{
+      method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'x-operations-hub-session':token},
+      body:JSON.stringify({action,...payload}),signal:controller.signal
+    });try{result=await response.json();}catch(error){throw new Error('셀피아 동기화 실행 경계가 아직 준비되지 않았습니다.');}
+    }finally{global.clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
+    if(!response.ok||!result?.ok){
+      if(response.status===401){setOperationsHubSessionToken('');throw operationsHubAuthError('운영 세션이 만료되었습니다.','permission_denied');}
+      throw Object.assign(new Error(response.status===404?'셀피아 동기화 서버가 아직 배포되지 않았습니다.':result?.message||result?.error||'셀피아 동기화 요청을 처리하지 못했습니다.'),{code:result?.code||'SELLPIA_SYNC_REQUEST_FAILED',httpStatus:response.status});
+    }
+    return result.data||result;
+  }
+
+  async function loadSellpiaSyncArtifacts(jobId, options = {}) {
+    const result=await sellpiaSyncRequest('artifacts',{jobId},options);
+    if(result.job?.jobId!==jobId)throw new Error('수집 원본이 요청한 작업과 다릅니다.');
+    const declared=result.files||result.artifacts||[];
+    const manifest=result.manifest||result.job?.collectionManifest;
+    if(!Array.isArray(declared)||declared.length<1||declared.length>3||!manifest)throw new Error('수집 원본 manifest가 완전하지 않습니다.');
+    const files=[];let total=0;
+    for(const entry of [...declared].sort((a,b)=>a.ordinal-b.ordinal)){
+      const url=new URL(entry.signedUrl||entry.signed_url||entry.url);
+      if(url.origin!==SUPABASE_URL||!url.pathname.startsWith('/storage/v1/object/sign/'))throw new Error('수집 원본의 보안 다운로드 주소를 확인할 수 없습니다.');
+      if(!Number.isSafeInteger(entry.size)||entry.size<1||entry.size>25*1024*1024||total+entry.size>60*1024*1024)throw new Error('수집 원본의 크기 제한을 초과했습니다.');
+      const controller=new AbortController(),timer=global.setTimeout(()=>controller.abort(),60000),abort=()=>controller.abort();
+      if(options.signal?.aborted)controller.abort();else options.signal?.addEventListener('abort',abort,{once:true});
+      let blob;
+      try{const response=await global.fetch(url.href,{credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});
+      if(!response.ok)throw new Error('수집 원본 다운로드가 실패했습니다.');
+      blob=await response.blob();}finally{global.clearTimeout(timer);options.signal?.removeEventListener('abort',abort);}
+      if(blob.size!==entry.size)throw new Error('수집 원본의 실제 크기가 manifest와 다릅니다.');
+      total+=blob.size;files.push(new File([blob],entry.name,{type:entry.mimeType||entry.type||blob.type||'application/octet-stream'}));
+    }
+    return {files,manifest};
+  }
+
+  async function loadSellpiaSyncBaselineRows() {
+    requireOperationsHubSessionToken();
+    const before=await loadLatestSellpiaOriginalStatus();
+    if(before.boundary!=='signed-read-v1')throw new Error('보안 원본 조회가 필요합니다.');
+    const snapshotId=before.stateSnapshotId||before.snapshotId;
+    if(!snapshotId)return {snapshotId:null,rows:[]};
+    const {data:meta,error:metaError}=await db.from('sellpia_stock_snapshots').select('snapshot_id,valid_row_count,upload_status').eq('snapshot_id',snapshotId).single();
+    if(metaError)throw readableDatabaseError(metaError);
+    if(meta.upload_status!=='ready'||!Number.isSafeInteger(Number(meta.valid_row_count))||Number(meta.valid_row_count)<1)throw new Error('비교할 기준 snapshot이 완전하지 않습니다.');
+    const rows=[];let cursor='';
+    for(;;){
+      let query=db.from('sellpia_stock_snapshot_rows').select('sellpia_sku_code,sellpia_product_code,sellpia_product_name,sellpia_option_name,own_sku,stock,available_stock,integrated_available_stock,safety_stock,supplier_code,supplier_name,supplier_group,supplier_address,supplier_market_name,supplier_phone,purchase_product_name,purchase_option_name,purchase_price,order_unit,minimum_order_unit,raw_payload').eq('snapshot_id',snapshotId).order('sellpia_sku_code',{ascending:true}).limit(1000);
+      if(cursor)query=query.gt('sellpia_sku_code',cursor);
+      const {data:chunk,error}=await query;if(error)throw readableDatabaseError(error);
+      rows.push(...(chunk||[]));if(rows.length>Number(meta.valid_row_count))throw new Error('기준 snapshot의 행 수가 변했습니다.');
+      if(!chunk?.length||chunk.length<1000)break;
+      const next=chunk[chunk.length-1].sellpia_sku_code;if(!next||next===cursor)throw new Error('기준 원본 페이징을 완료할 수 없습니다.');cursor=next;
+    }
+    if(rows.length!==Number(meta.valid_row_count))throw new Error('기준 snapshot의 일부 SKU를 읽지 못했습니다.');
+    const after=await loadLatestSellpiaOriginalStatus();
+    if((after.stateSnapshotId||after.snapshotId)!==snapshotId)throw new Error('비교 중 기준 원본이 변경됐습니다.');
+    return {snapshotId,rows};
+  }
+
   async function downloadSignedFiles(files = [], onProgress, source = '') {
     const result=[];
     for(let index=0;index<files.length;index++){
@@ -129,8 +213,10 @@
 
   function setOperationsHubSessionToken(sessionToken) {
     operationsHubSessionToken = cleanText(sessionToken);
+    if(typeof global.dispatchEvent==='function'&&typeof global.CustomEvent==='function')global.dispatchEvent(new global.CustomEvent('operations-hub-session-changed',{detail:{authenticated:Boolean(operationsHubSessionToken)}}));
     return Boolean(operationsHubSessionToken);
   }
+  function hasOperationsHubSession(){return Boolean(operationsHubSessionToken);}
 
   async function loginOperationsHub({username, password} = {}) {
     const safeUsername = cleanText(username);
@@ -4049,6 +4135,8 @@
   }
 
   async function uploadSellpiaSnapshot(files, fields = {}, onProgress) {
+    fields={...fields,price:Boolean(fields.price||fields.basePrice),basePrice:Boolean(fields.price||fields.basePrice)};
+    if(fields.synchronizationJob===true&&(!cleanText(fields.syncJobId)||!cleanText(fields.syncApplyToken)))throw new Error('동기화 서버의 작업별 반영 승인이 필요합니다.');
     const selectedFiles = Array.from(files || []);
     const parsed = await parseSellpiaUploadFiles(selectedFiles, {mode:fields.mode}, onProgress);
     const {normalizedRows, preflight} = parsed;
@@ -4063,11 +4151,12 @@
         onProgress?.({percent:21+Math.round(((index+1)/selectedFiles.length)*2),title:'보안 upload manifest 준비 중',detail:`${index+1}/${selectedFiles.length} checksum 준비 완료`});
       }
 
-      const requestId=global.crypto?.randomUUID?.();
+      const requestId=fields.requestId||global.crypto?.randomUUID?.();
       if(!requestId)throw new Error('브라우저에서 안전한 업로드 request_id를 생성할 수 없습니다.');
       const intent=await originalBoundaryRequest('upload-init',{
         request_id:requestId,upload_mode:uploadMode,files:sourceFilesMetadata,
         source_row_count:normalizedRows.length,
+        ...(fields.synchronizationJob===true?{sync_job_id:fields.syncJobId,sync_apply_token:fields.syncApplyToken}:{}),
         selected_fields:{inventory:Boolean(fields.inventory),price:Boolean(fields.price),basePrice:Boolean(fields.basePrice),purchasePrice:Boolean(fields.purchasePrice),basic:Boolean(fields.basic),status:Boolean(fields.status)}
       });
       intentId=intent.intent_id;snapshotId=intent.snapshot_id;
@@ -4097,7 +4186,7 @@
       }
 
       let affectedSkus=normalizedRows.map(row=>row.sellpia_sku_code);
-      if(uploadMode==='patch'&&(fields.price||fields.purchasePrice)){
+      if(uploadMode==='patch'&&(fields.price||fields.basePrice||fields.purchasePrice)){
         const {data:priceAffected,error:affectedError}=await db.rpc('operations_hub_sellpia_patch_price_affected_skus',{p_patch_snapshot_id:snapshotId,p_selected_fields:{price:Boolean(fields.price),basePrice:Boolean(fields.basePrice),purchasePrice:Boolean(fields.purchasePrice)}});
         if(affectedError)throw readableDatabaseError(affectedError);
         affectedSkus=Array.isArray(priceAffected)?priceAffected:[];
@@ -4120,7 +4209,10 @@
         matrixAffectedSkus:uploadMode==='patch'?normalizedRows.map(row=>row.sellpia_sku_code):[]
       };
     } catch (error) {
-      if(intentId&&!ready)try{await originalBoundaryRequest('upload-abort',{intent_id:intentId,reason:String(error?.message||error).slice(0,1000)});}catch(cleanupError){recordOriginalBoundaryDiagnostic('secure-upload-cleanup-failed',{intentId,message:String(cleanupError?.message||cleanupError)});}
+      // A synchronization job with an uncertain complete response must keep
+      // its intent for inspection. Never start a second full import on timeout.
+      if(intentId&&!ready&&fields.synchronizationJob!==true)try{await originalBoundaryRequest('upload-abort',{intent_id:intentId,reason:String(error?.message||error).slice(0,1000)});}catch(cleanupError){recordOriginalBoundaryDiagnostic('secure-upload-cleanup-failed',{intentId,message:String(cleanupError?.message||cleanupError)});}
+      if(fields.synchronizationJob===true&&intentId){error.sellpiaIntentId=intentId;error.sellpiaSnapshotId=snapshotId;error.sellpiaApplyUnknown=!ready;}
       throw error;
     }
   }
@@ -4947,6 +5039,7 @@
     checkOperationsHubSession,
     logoutOperationsHub,
     setOperationsHubSessionToken,
+    hasOperationsHubSession,
     getOriginalBoundaryDiagnostics:()=>originalBoundaryDiagnostics.map(entry=>({...entry})),
     loadProducts,
     loadMatrixGridDataset,
@@ -5080,6 +5173,9 @@
     downloadLatestSellerOriginals,
     loadLatestSellpiaOriginalStatus,
     downloadLatestSellpiaOriginals,
+    sellpiaSyncRequest,
+    loadSellpiaSyncArtifacts,
+    loadSellpiaSyncBaselineRows,
     prepareSellerExport,
     completeSellerExport,
     confirmChangesApplied,

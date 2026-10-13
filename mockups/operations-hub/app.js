@@ -12844,6 +12844,7 @@ function showPage(pageId) {
   if (target) target.classList.add('active-page');
   if(pageId==='matching'&&(liveData?.loadMatrixGridDataset||liveData?.loadFullMatrixDataset)&&window.HubMatrixDataset){if(!matrixDataset||matrixDirtySkus.size||matrixSourceReloadNeeded)void loadLiveMatrix({resetScroll:true,fullReload:matrixSourceReloadNeeded});else{matrixVirtualStart=-1;paintVirtualMatrix();}}
   if (pageId === 'jobs') loadChangeQueue();
+  if(pageId==='upload'&&liveData?.hasOperationsHubSession?.()!==false)void window.OperationsHubSellpiaSyncController?.refreshOverview().catch(()=>{});
   if (pageId === 'dashboard') window.SystemV3ChannelsPage?.show();
   if (pageId === 'ably-combinations') window.AblyWorkspace?.refresh();
   if (pageId === 'attributes') window.TagPriceWorkspace?.refresh();
@@ -12891,6 +12892,27 @@ const sellpiaPreflightState = {
 };
 const inventoryCountPreviewPanel = document.getElementById('inventory-count-preview');
 const inventoryCountState = {requestId:0,status:'idle',signature:'',result:null,error:'',detail:''};
+
+const sellpiaSyncController = window.SystemV3SellpiaSyncWorkspace?.mount({
+  data:liveData,
+  getDefaultPolicy:()=>({applicationMode:document.getElementById('seller-upload-mode')?.querySelector('input[name="seller-upload-mode"]:checked')?.value==='full'?'full':'patch',fields:{inventory:document.getElementById('upload-field-inventory').checked,price:document.getElementById('upload-field-price').checked,basePrice:document.getElementById('upload-field-price').checked,purchasePrice:document.getElementById('upload-field-purchase').checked,basic:document.getElementById('upload-field-basic').checked,status:document.getElementById('upload-field-status').checked}}),
+  afterApply:async(result,fields)=>{
+    let warning='';
+    if(result.recovered&&(fields.price||fields.purchasePrice))warning='원본과 매트릭스는 복구됐습니다. 이전 가격 계산의 처리 범위와 결과를 별도로 확인해주세요.';
+    else if(fields.price||fields.purchasePrice){
+      try{warning=materializationWarning(await materializeHubPrices(result.affectedSkus||[],{sources:['smartstore','makeshop','ably'],reason:'sellpia-source-sync'}));}
+      catch(error){warning='원본 반영은 완료됐지만 가격 계산을 다시 확인해야 합니다.';}
+    }
+    if(result.uploadMode==='patch'&&!result.recovered){
+      const changed=[...new Set((result.matrixAffectedSkus||[]).map(String))];
+      if(matrixDataset&&changed.length===Number(result.uploadedRowCount)&&changed.every(sku=>matrixDataset.bySku.has(sku)))markMatrixAffected(changed);
+      else matrixSourceReloadNeeded=true;
+    }else matrixSourceReloadNeeded=true;
+    await refreshLiveData({resetPage:true});
+    return {warning};
+  }
+});
+window.OperationsHubSellpiaSyncController=sellpiaSyncController;
 
 function isPatchableUploadSource(source = sourceSelect.value) {
   return ['sellpia','smartstore','makeshop','ably'].includes(source);

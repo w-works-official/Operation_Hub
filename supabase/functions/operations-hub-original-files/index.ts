@@ -88,16 +88,21 @@ async function beginUpload(sessionToken: string, body: Record<string, unknown>) 
     throw Object.assign(new Error("SELLPIA 업로드 총 용량은 60 MiB를 초과할 수 없습니다."), { code: "22023" });
   }
 
-  const { data: intent, error } = await guardClient.rpc("hub_original_upload_intent_begin_v2", {
+  const syncJobId=cleanText(body.sync_job_id);
+  if(syncJobId && Deno.env.get('SELLPIA_SYNC_APPLY_ENABLED')!=='true')throw Object.assign(new Error('DB 자동 반영이 비활성 상태입니다.'),{code:'55000'});
+  if(Boolean(syncJobId)!==Boolean(cleanText(body.sync_apply_token)))throw Object.assign(new Error('동기화 작업 범위 인증이 필요합니다.'),{code:'42501'});
+  const { data: intent, error } = await guardClient.rpc(syncJobId ? "hub_sellpia_sync_upload_begin_v1" : "hub_original_upload_intent_begin_v2", {
     p_session_token: sessionToken,
     p_request_id: cleanText(body.request_id),
     p_upload_mode: cleanText(body.upload_mode),
     p_files: files,
     p_selected_fields: body.selected_fields && typeof body.selected_fields === "object" ? body.selected_fields : {},
     p_source_row_count: Number(body.source_row_count || 0),
+    ...(syncJobId?{p_job_id:syncJobId,p_apply_token:cleanText(body.sync_apply_token)}:{}),
   });
   if (error) throw error;
   const result = Array.isArray(intent) ? intent[0] : intent;
+  if(syncJobId&&cleanText(result?.status)!=='uploading')return {...result,manifest:[],boundary:'signed-upload-v1',idempotent:true};
   const manifest = asArray(result?.manifest);
   const signedFiles = [];
   try {
@@ -161,6 +166,19 @@ async function finalizeUpload(sessionToken: string, body: Record<string, unknown
     return { ...status, boundary: "signed-upload-v1", idempotent: true };
   }
   if (cleanText(status?.status) !== "uploading") throw Object.assign(new Error("finalize 가능한 업로드 상태가 아닙니다."), { code: "55000" });
+  // A synchronized carrier is verified again at its permanent original path.
+  // This closes a same-size substitution between staging and the old importer.
+  const {data:syncData,error:syncError}=await adminClient.rpc('hub_sellpia_sync_import_status_v1',{p_session_token:sessionToken,p_intent_id:intentId});
+  if(syncError)throw syncError;
+  const sync=Array.isArray(syncData)?syncData[0]:syncData;
+  if(sync?.sync){
+    for(const file of asArray(sync.manifest)){
+      const {data:object,error:downloadError}=await adminClient.storage.from(BUCKET).download(cleanText(file.path));
+      if(downloadError||!object||object.size!==Number(file.size)||object.size>MAX_FILE_BYTES)throw Object.assign(new Error('동기화 원본 바이트 크기가 다릅니다.'),{code:'22023'});
+      const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await object.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('');
+      if(digest!==cleanText(file.client_sha256))throw Object.assign(new Error('동기화 원본 checksum이 다릅니다.'),{code:'22023'});
+    }
+  }
   const storageFiles = await inspectUploadedObjects(asArray(status?.manifest));
   const { data, error } = await adminClient.rpc("hub_original_upload_intent_uploaded_v1", {
     p_session_token: sessionToken,
@@ -168,7 +186,7 @@ async function finalizeUpload(sessionToken: string, body: Record<string, unknown
     p_storage_files: storageFiles,
   });
   if (error) throw error;
-  return { ...(Array.isArray(data) ? data[0] : data), boundary: "signed-upload-v1", digest_verification: "client-declared-only" };
+  return { ...(Array.isArray(data) ? data[0] : data), boundary: "signed-upload-v1", digest_verification: sync?.sync ? "server-actual-bytes-sha256" : "client-declared-only" };
 }
 
 async function abortUpload(sessionToken: string, body: Record<string, unknown>) {

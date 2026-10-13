@@ -36,6 +36,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npx playwright install --with-deps chromium
       - run: npm test
       - run: npm run build
       - name: Refuse deployment of a superseded main commit

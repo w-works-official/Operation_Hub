@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+test('actual Pages build excludes the complete local runner directory, including ignored machine configuration',async()=>{
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'hub-sync-packaging-'));
+  await fs.mkdir(path.join(root,'tools','sellpia-sync'),{recursive:true});
+  await fs.mkdir(path.join(root,'mockups','operations-hub'),{recursive:true});
+  await fs.writeFile(path.join(root,'package.json'),JSON.stringify({name:'operation-hub'}));
+  await fs.writeFile(path.join(root,'index.html'),'<a href="./mockups/operations-hub/">Hub</a>');
+  await fs.writeFile(path.join(root,'mockups','operations-hub','sellpia-sync-client.js'),'/* public frontend */');
+  await fs.writeFile(path.join(root,'tools','sellpia-sync','runner.mjs'),'/* local runner only */');
+  await fs.writeFile(path.join(root,'tools','sellpia-sync','worker.env.local'),'SYNTHETIC_LOCAL_ONLY=NEVER_PUBLISH');
+  await fs.writeFile(path.join(root,'tools','existing-public-tool.html'),'<p>existing tool</p>');
+  const script=fileURLToPath(new URL('../scripts/build-pages.mjs',import.meta.url));
+  const result=spawnSync(process.execPath,[script],{cwd:root,encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
+  await assert.rejects(fs.access(path.join(root,'_site','tools','sellpia-sync')));
+  assert.equal(await fs.readFile(path.join(root,'_site','tools','existing-public-tool.html'),'utf8'),'<p>existing tool</p>');
+  assert.equal(await fs.readFile(path.join(root,'_site','mockups','operations-hub','sellpia-sync-client.js'),'utf8'),'/* public frontend */');
+});

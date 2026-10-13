@@ -41,7 +41,7 @@ test('mapping import/update use guarded RPCs and announce readiness invalidation
  await api.importAblyInventoryMappings({batchKey:'hash',fileName:'source.xlsx',sha256:'sha256',rows:[]});
  await api.updateAblyInventoryMapping({product_code:'P',option_code:'O',sellpia_sku_code:'S',mapping_state:'verified',stock_policy:'individual',individual_stock:0,reason:'confirmed exception'});
  assert.equal(calls[0].args.p_file_sha256,'sha256');assert.equal(calls[1].args.p_individual_stock,0);
- assert.equal(calls[1].args.p_reason,'confirmed exception');assert.deepEqual(events,['ably-inventory-mappings-changed','ably-inventory-mappings-changed']);
+ assert.equal(calls[1].args.p_reason,'confirmed exception');assert.equal(events.filter(type=>type==='operations-hub-session-changed').length,1);assert.deepEqual(events.filter(type=>type==='ably-inventory-mappings-changed'),['ably-inventory-mappings-changed','ably-inventory-mappings-changed']);assert.equal(events.length,3);
 });
 test('canonical Ably mapping preserves SKU fan-out, replaces exact legacy ownership, and carries identity suppression',()=>{
  const start=source.indexOf('  function mergeVerifiedAblyMappings('),end=source.indexOf('  async function importAblyInventoryMappings(',start);
