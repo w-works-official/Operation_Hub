@@ -181,10 +181,9 @@ async function abortUpload(sessionToken: string, body: Record<string, unknown>) 
   const status = Array.isArray(statusData) ? statusData[0] : statusData;
   if (cleanText(status?.status) === "ready") throw Object.assign(new Error("ready snapshot은 cleanup할 수 없습니다."), { code: "55000" });
   const paths = asArray(status?.manifest).map((file) => cleanText(file.path)).filter((path) => path.startsWith(`sellpia/${status?.snapshot_id}/`));
-  if (paths.length) {
-    const { error: removeError } = await adminClient.storage.from(BUCKET).remove(paths);
-    if (removeError) throw removeError;
-  }
+  // The failure RPC locks the intent against completion. Transition first so
+  // a lost completion response cannot delete a successfully ready original.
+  // A Storage failure leaves an aborted intent that cleanup can safely retry.
   const { data, error } = await guardClient.rpc("hub_original_upload_intent_fail_v1", {
     p_session_token: sessionToken,
     p_intent_id: intentId,
@@ -192,6 +191,10 @@ async function abortUpload(sessionToken: string, body: Record<string, unknown>) 
     p_aborted: true,
   });
   if (error) throw error;
+  if (paths.length) {
+    const { error: removeError } = await adminClient.storage.from(BUCKET).remove(paths);
+    if (removeError) throw removeError;
+  }
   return { ...(Array.isArray(data) ? data[0] : data), removed_paths: paths.length, boundary: "signed-upload-v1" };
 }
 
