@@ -3233,9 +3233,20 @@ listingLinkModal.addEventListener('click', event => { if (event.target === listi
 const mappingPopover = document.getElementById('mapping-popover');
 const mappingSearchInput = document.getElementById('mapping-search-input');
 const mappingSearchResults = document.getElementById('mapping-search-results');
-const mappingState = {source:'', sku:'', anchor:null, requestId:0, timer:null, page:1, pageSize:24, count:0, mode:'search', fixedProductCode:''};
+const mappingState = {source:'', sku:'', anchor:null, requestId:0, timer:null, page:0, pageSize:100, count:0, mode:'search', fixedProductCode:'', items:[], itemKeys:new Set(), hasMore:false, loading:false, error:null};
 mappingSearchResults.setAttribute('aria-live', 'polite');
 mappingSearchResults.setAttribute('aria-busy', 'false');
+
+function resetMappingSearchResults() {
+  mappingState.page = 0;
+  mappingState.count = 0;
+  mappingState.items = [];
+  mappingState.itemKeys = new Set();
+  mappingState.hasMore = false;
+  mappingState.loading = false;
+  mappingState.error = null;
+  mappingSearchResults.scrollTop = 0;
+}
 
 function positionFloatingPanel(panel, anchor, width = 500) {
   const rect = anchor?.getBoundingClientRect?.() || {left:20, right:20, top:100, bottom:130};
@@ -3247,6 +3258,7 @@ function positionFloatingPanel(panel, anchor, width = 500) {
   const top = below + estimatedHeight <= window.innerHeight ? below : Math.max(12, rect.top - estimatedHeight - 8);
   panel.style.left = `${left}px`;
   panel.style.top = `${top}px`;
+  if (panel === mappingPopover) panel.style.setProperty('--mapping-available-height', `${Math.max(0, window.innerHeight - top - 12)}px`);
 }
 
 function closeMappingSearch() {
@@ -3254,6 +3266,7 @@ function closeMappingSearch() {
   mappingPopover.hidden = true;
   mappingState.requestId += 1;
   clearTimeout(mappingState.timer);
+  resetMappingSearchResults();
   mappingSearchResults.setAttribute('aria-busy', 'false');
 }
 
@@ -3265,8 +3278,7 @@ function openMappingSearch({source, sku, anchor, initialQuery = '', fixedProduct
   mappingState.source = source;
   mappingState.sku = sku;
   mappingState.anchor = anchor;
-  mappingState.page = 1;
-  mappingState.count = 0;
+  resetMappingSearchResults();
   mappingState.mode = exactProductCode ? 'remaining-options' : 'search';
   mappingState.fixedProductCode = exactProductCode;
   mappingPopover.classList.toggle('remaining-options-mode', Boolean(exactProductCode));
@@ -3296,14 +3308,35 @@ function openMappingSearch({source, sku, anchor, initialQuery = '', fixedProduct
   }
 }
 
-function renderMappingResults(result) {
-  const items = Array.isArray(result?.rows) ? result.rows : [];
+function renderMappingResults(result, {append = false} = {}) {
+  const fetched = Array.isArray(result?.rows) ? result.rows : [];
   const remainingOptionsMode = mappingState.mode === 'remaining-options';
-  mappingState.count = Number(result?.count || 0);
+  if (!append) {
+    mappingState.items = [];
+    mappingState.itemKeys = new Set();
+    mappingSearchResults.innerHTML = '';
+    mappingSearchResults.scrollTop = 0;
+  }
+  const items = fetched.filter(item => {
+    const key = JSON.stringify([item.source_channel || mappingState.source, item.product_code, item.option_code || '']);
+    if (mappingState.itemKeys.has(key)) return false;
+    mappingState.itemKeys.add(key);
+    return true;
+  });
+  mappingState.items.push(...items);
+  mappingState.count = append && !fetched.length ? mappingState.count : Number(result?.count || 0);
   mappingState.page = Number(result?.page || 1);
   const pageSize = Number(result?.pageSize || mappingState.pageSize);
-  const totalPages = Math.max(1, Math.ceil(mappingState.count / pageSize));
-  if (!items.length) {
+  mappingState.hasMore = !remainingOptionsMode && fetched.length > 0 && mappingState.page * pageSize < mappingState.count;
+  mappingState.error = null;
+  if (append && (!items.length || mappingState.items.length > mappingState.count || (!mappingState.hasMore && mappingState.items.length < mappingState.count))) {
+    mappingState.hasMore = false;
+    if (mappingState.items.length !== mappingState.count) mappingState.error = {
+      page:1, restart:true, title:'추가 검색 결과를 확인하지 못했습니다.',
+      detail:'검색 결과가 변경됐을 수 있습니다. 처음부터 다시 검색해주세요.'
+    };
+  }
+  if (!mappingState.items.length) {
     mappingSearchResults.innerHTML = remainingOptionsMode
       ? '<div class="mapping-empty"><b>남은 옵션이 없습니다.</b><span>이 상품코드의 옵션이 모두 연결됐거나 원본에 옵션이 없습니다.</span></div>'
       : '<div class="mapping-empty"><b>검색 결과가 없습니다.</b><span>코드 일부 또는 상품명으로 다시 검색해주세요.</span></div>';
@@ -3330,25 +3363,59 @@ function renderMappingResults(result) {
       </button>
     </article>`;
   }).join('');
-  mappingSearchResults.innerHTML = remainingOptionsMode
-    ? `${rows}<nav class="mapping-pagination mapping-remaining-count" aria-label="남은 옵션 수"><span>남은 옵션 ${formatNumber(mappingState.count)}개</span></nav>`
-    : `${rows}<nav class="mapping-pagination" aria-label="검색 결과 페이지">
-      <span>전체 ${formatNumber(mappingState.count)}개 · ${mappingState.page}/${totalPages}쪽</span>
-      <div><button type="button" data-mapping-page="${mappingState.page - 1}" ${mappingState.page <= 1 ? 'disabled' : ''}>이전</button><button type="button" data-mapping-page="${mappingState.page + 1}" ${mappingState.page >= totalPages ? 'disabled' : ''}>다음</button></div>
-    </nav>`;
+  const scrollTop = mappingSearchResults.scrollTop;
+  const footer = mappingSearchResults.querySelector('.mapping-search-footer');
+  if (footer) footer.insertAdjacentHTML('beforebegin', rows);
+  else mappingSearchResults.insertAdjacentHTML('beforeend', rows);
+  renderMappingSearchFooter();
+  mappingSearchResults.scrollTop = scrollTop;
 }
 
-async function runMappingSearch(page = mappingState.page) {
+function renderMappingSearchFooter() {
+  if (!mappingState.items.length) return;
+  let footer = mappingSearchResults.querySelector('.mapping-search-footer');
+  if (!footer) {
+    footer = document.createElement('footer');
+    footer.className = 'mapping-search-footer';
+    mappingSearchResults.append(footer);
+  }
+  const remainingOptionsMode = mappingState.mode === 'remaining-options';
+  const count = remainingOptionsMode
+    ? `남은 옵션 ${formatNumber(mappingState.items.length)}개`
+    : `전체 ${formatNumber(mappingState.count)}개 · ${formatNumber(mappingState.items.length)}개 표시`;
+  const error = mappingState.error;
+  footer.classList.toggle('error', Boolean(error));
+  footer.innerHTML = `<span>${count}</span>${error
+    ? `<b>${escapeHtml(error.title)}</b><span>${escapeHtml(error.detail)}</span><button type="button" data-mapping-retry>${error.restart ? '처음부터 다시 검색' : '다시 불러오기'}</button>`
+    : `<span>${mappingState.loading ? '추가 결과 불러오는 중…' : mappingState.hasMore ? '아래로 스크롤하면 계속 불러옵니다.' : '검색 결과를 모두 불러왔습니다.'}</span>`}`;
+}
+
+function loadMoreMappingResults() {
+  if (mappingPopover.hidden || mappingState.mode !== 'search' || !mappingState.hasMore || mappingState.loading || mappingState.error) return;
+  void runMappingSearch(mappingState.page + 1, {append:true});
+}
+
+async function runMappingSearch(page = 1, {append = false} = {}) {
+  if (append && (mappingState.loading || !mappingState.hasMore || mappingState.error || mappingPopover.hidden)) return;
   const {source, mode, fixedProductCode, pageSize} = mappingState;
   const keyword = mode === 'remaining-options' ? fixedProductCode : mappingSearchInput.value.trim();
-  const requestId = ++mappingState.requestId;
+  // Appending keeps the owner generation stable while an existing row's link
+  // save is in flight. A different query or closed picker invalidates both.
+  if (!append) {
+    mappingState.requestId += 1;
+    clearTimeout(mappingState.timer);
+    resetMappingSearchResults();
+  }
+  const requestId = mappingState.requestId;
   if (!keyword) {
     mappingSearchResults.innerHTML = '<div class="mapping-empty">검색어를 입력해주세요.</div>';
     mappingSearchResults.setAttribute('aria-busy', 'false');
     return;
   }
+  mappingState.loading = true;
   mappingSearchResults.setAttribute('aria-busy', 'true');
-  mappingSearchResults.innerHTML = '<div class="mapping-empty loading"><b>원본 검색 중</b><span>최신 정규화 데이터를 확인합니다.</span></div>';
+  if (append) renderMappingSearchFooter();
+  else mappingSearchResults.innerHTML = '<div class="mapping-empty loading"><b>원본 검색 중</b><span>최신 정규화 데이터를 확인합니다.</span></div>';
   try {
     let resolved;
     if (mode === 'remaining-options') {
@@ -3359,14 +3426,23 @@ async function runMappingSearch(page = mappingState.page) {
       resolved = await liveData.searchSellerItems(source, keyword, page, pageSize);
     }
     if (requestId !== mappingState.requestId) return;
-    renderMappingResults(resolved);
+    mappingState.loading = false;
+    renderMappingResults(resolved, {append});
+    // Small result batches must still be reachable if the list has not yet
+    // filled its viewport. Normal overflowing lists load only on user scroll.
+    requestAnimationFrame(() => {
+      if (requestId === mappingState.requestId && mappingSearchResults.scrollHeight <= mappingSearchResults.clientHeight + 1) loadMoreMappingResults();
+    });
   } catch (error) {
     if (requestId !== mappingState.requestId) return;
     console.error('seller source search failed', error);
     const timedOut = error?.code === '57014' || /statement timeout|canceling statement due to statement timeout/i.test(String(error?.message || ''));
     const title = timedOut ? '검색 시간이 초과됐습니다.' : '검색하지 못했습니다.';
     const detail = timedOut ? '검색 요청이 제한시간을 넘었습니다. 다시 검색해주세요.' : String(error?.message || error);
-    mappingSearchResults.innerHTML = `<div class="mapping-empty error"><b>${title}</b><span>${escapeHtml(detail)}</span><button type="button" data-mapping-retry>다시 검색</button></div>`;
+    mappingState.loading = false;
+    mappingState.error = {page, title, detail};
+    if (append) renderMappingSearchFooter();
+    else mappingSearchResults.innerHTML = `<div class="mapping-empty error"><b>${title}</b><span>${escapeHtml(detail)}</span><button type="button" data-mapping-retry>다시 검색</button></div>`;
   } finally {
     if (requestId === mappingState.requestId) mappingSearchResults.setAttribute('aria-busy', 'false');
   }
@@ -3375,7 +3451,7 @@ async function runMappingSearch(page = mappingState.page) {
 mappingSearchInput.addEventListener('input', () => {
   clearTimeout(mappingState.timer);
   mappingState.requestId += 1;
-  mappingState.page = 1;
+  resetMappingSearchResults();
   mappingSearchResults.setAttribute('aria-busy', String(Boolean(mappingSearchInput.value.trim())));
   mappingSearchResults.innerHTML = mappingSearchInput.value.trim()
     ? '<div class="mapping-empty loading">검색 준비 중</div>'
@@ -3383,8 +3459,14 @@ mappingSearchInput.addEventListener('input', () => {
   mappingState.timer = setTimeout(runMappingSearch, 260);
 });
 mappingSearchResults.addEventListener('click', event => {
-  if (event.target.closest('[data-mapping-retry]')) void runMappingSearch();
+  if (!event.target.closest('[data-mapping-retry]') || mappingState.loading) return;
+  const error = mappingState.error;
+  mappingState.error = null;
+  void runMappingSearch(error?.page || 1, {append:Boolean(mappingState.items.length && !error?.restart)});
 });
+mappingSearchResults.addEventListener('scroll', () => {
+  if (mappingSearchResults.scrollHeight - mappingSearchResults.scrollTop - mappingSearchResults.clientHeight <= 96) loadMoreMappingResults();
+}, {passive:true});
 document.getElementById('close-mapping-popover').addEventListener('click', closeMappingSearch);
 
 function applyLocalSellerLink(linked) {
@@ -3414,12 +3496,6 @@ function applyLocalSellerLink(linked) {
 }
 
 mappingSearchResults.addEventListener('click', async event => {
-  const pageButton = event.target.closest('[data-mapping-page]');
-  if (pageButton && !pageButton.disabled) {
-    mappingState.page = Math.max(1, Number(pageButton.dataset.mappingPage) || 1);
-    await runMappingSearch(mappingState.page);
-    return;
-  }
   const button = event.target.closest('[data-map-product]');
   if (!button || button.disabled) return;
   const {source, sku, mode, requestId} = mappingState;
@@ -13202,7 +13278,11 @@ document.addEventListener('click', event => {
   if (pageButton) showPage(pageButton.dataset.page);
   const toastButton = event.target.closest('[data-toast]');
   if (toastButton) showToast(toastButton.dataset.toast);
-  if (!mappingPopover.hidden && !event.target.closest('#mapping-popover,.mapping-code-button,[data-drawer-link-source]')) closeMappingSearch();
+  // Search/retry rendering can detach the clicked button before this event bubbles.
+  // The original event path still identifies an interaction inside the picker.
+  const mappingClickPath = typeof event.composedPath === 'function' ? event.composedPath() : [event.target.closest('#mapping-popover,.mapping-code-button,[data-drawer-link-source]')];
+  const insideMappingSearch = mappingClickPath.some(node => node === mappingPopover || node?.matches?.('.mapping-code-button,[data-drawer-link-source]'));
+  if (!mappingPopover.hidden && !insideMappingSearch) closeMappingSearch();
 });
 
 const sourceSelect = document.getElementById('source-select');

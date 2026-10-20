@@ -7,7 +7,7 @@
     <title>System V3 · 상품 운영 허브</title>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/static/pretendard.css">
-    <link rel="stylesheet" href="./style.css?v=20261020-manual-price-save-v1">
+    <link rel="stylesheet" href="./style.css?v=20261020-scroll-seller-search-v1">
     <link rel="stylesheet" href="./ably-combinations.css?v=20260910-rule-destination-v111">
     <link rel="stylesheet" href="./workspaces-v91.css?v=20260910-rule-destination-v111">
     <link rel="stylesheet" href="./price-rule-lab.css?v=20260910-rule-destination-v111">
@@ -803,7 +803,7 @@
       <div class="mapping-popover-head"><div><span id="mapping-source-label">판매처</span><h3><b id="mapping-target-sku">-</b> 연결 상품 찾기</h3></div><button id="close-mapping-popover" aria-label="검색창 닫기">×</button></div>
       <div class="mapping-search"><span>⌕</span><input id="mapping-search-input" placeholder="코드 또는 상품명 / 옵션명 교집합 검색" autocomplete="off"></div>
       <p id="mapping-search-help">최신 원본 데이터에서 검색합니다.</p>
-      <div id="mapping-search-results" class="mapping-search-results"><div class="mapping-empty">검색어를 입력해주세요.</div></div>
+      <div id="mapping-search-results" class="mapping-search-results" tabindex="0" role="region" aria-label="판매처 원본 검색 결과"><div class="mapping-empty">검색어를 입력해주세요.</div></div>
     </section>
     <div id="price-popover" class="price-popover" hidden></div>
     <div id="discount-editor-modal" class="modal-backdrop" hidden>
@@ -1068,7 +1068,7 @@
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
     <script src="./matrix-price-edit-policy.js?v=20261020-manual-price-save-v1"></script>
-    <script src="./app.js?v=20261020-exact-seller-search-v1"></script>
+    <script src="./app.js?v=20261020-scroll-seller-search-v1"></script>
     <script src="./mapping-import.js?v=20261013-blank-template-v1"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
