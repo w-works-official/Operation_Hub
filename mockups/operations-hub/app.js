@@ -3234,6 +3234,8 @@ const mappingPopover = document.getElementById('mapping-popover');
 const mappingSearchInput = document.getElementById('mapping-search-input');
 const mappingSearchResults = document.getElementById('mapping-search-results');
 const mappingState = {source:'', sku:'', anchor:null, requestId:0, timer:null, page:1, pageSize:24, count:0, mode:'search', fixedProductCode:''};
+mappingSearchResults.setAttribute('aria-live', 'polite');
+mappingSearchResults.setAttribute('aria-busy', 'false');
 
 function positionFloatingPanel(panel, anchor, width = 500) {
   const rect = anchor?.getBoundingClientRect?.() || {left:20, right:20, top:100, bottom:130};
@@ -3252,6 +3254,7 @@ function closeMappingSearch() {
   mappingPopover.hidden = true;
   mappingState.requestId += 1;
   clearTimeout(mappingState.timer);
+  mappingSearchResults.setAttribute('aria-busy', 'false');
 }
 
 function openMappingSearch({source, sku, anchor, initialQuery = '', fixedProductCode = '', replaceCurrent = false}) {
@@ -3281,6 +3284,7 @@ function openMappingSearch({source, sku, anchor, initialQuery = '', fixedProduct
   mappingSearchResults.innerHTML = exactProductCode
     ? '<div class="mapping-empty loading"><b>남은 옵션 확인 중</b><span>이미 연결된 옵션은 제외합니다.</span></div>'
     : '<div class="mapping-empty">검색어를 입력해주세요.</div>';
+  mappingSearchResults.setAttribute('aria-busy', 'false');
   mappingPopover.hidden = false;
   positionFloatingPanel(mappingPopover, anchor, 600);
   if (exactProductCode) {
@@ -3335,34 +3339,51 @@ function renderMappingResults(result) {
 }
 
 async function runMappingSearch(page = mappingState.page) {
-  const keyword = mappingState.mode === 'remaining-options' ? mappingState.fixedProductCode : mappingSearchInput.value.trim();
+  const {source, mode, fixedProductCode, pageSize} = mappingState;
+  const keyword = mode === 'remaining-options' ? fixedProductCode : mappingSearchInput.value.trim();
+  const requestId = ++mappingState.requestId;
   if (!keyword) {
     mappingSearchResults.innerHTML = '<div class="mapping-empty">검색어를 입력해주세요.</div>';
+    mappingSearchResults.setAttribute('aria-busy', 'false');
     return;
   }
-  const requestId = ++mappingState.requestId;
+  mappingSearchResults.setAttribute('aria-busy', 'true');
   mappingSearchResults.innerHTML = '<div class="mapping-empty loading"><b>원본 검색 중</b><span>최신 정규화 데이터를 확인합니다.</span></div>';
   try {
     let resolved;
-    if (mappingState.mode === 'remaining-options') {
-      const rows = await liveData.loadSellerProductOptions(mappingState.source, mappingState.fixedProductCode);
+    if (mode === 'remaining-options') {
+      const rows = await liveData.loadSellerProductOptions(source, fixedProductCode);
       const remaining = rows.filter(item => !Array.isArray(item.linked_skus) || item.linked_skus.length === 0);
       resolved = {rows:remaining, count:remaining.length, page:1, pageSize:Math.max(1, remaining.length)};
     } else {
-      resolved = await liveData.searchSellerItems(mappingState.source, keyword, page, mappingState.pageSize);
+      resolved = await liveData.searchSellerItems(source, keyword, page, pageSize);
     }
     if (requestId !== mappingState.requestId) return;
     renderMappingResults(resolved);
   } catch (error) {
+    if (requestId !== mappingState.requestId) return;
     console.error('seller source search failed', error);
-    mappingSearchResults.innerHTML = `<div class="mapping-empty error"><b>검색하지 못했습니다.</b><span>${escapeHtml(error?.message || error)}</span></div>`;
+    const timedOut = error?.code === '57014' || /statement timeout|canceling statement due to statement timeout/i.test(String(error?.message || ''));
+    const title = timedOut ? '검색 시간이 초과됐습니다.' : '검색하지 못했습니다.';
+    const detail = timedOut ? '검색 요청이 제한시간을 넘었습니다. 다시 검색해주세요.' : String(error?.message || error);
+    mappingSearchResults.innerHTML = `<div class="mapping-empty error"><b>${title}</b><span>${escapeHtml(detail)}</span><button type="button" data-mapping-retry>다시 검색</button></div>`;
+  } finally {
+    if (requestId === mappingState.requestId) mappingSearchResults.setAttribute('aria-busy', 'false');
   }
 }
 
 mappingSearchInput.addEventListener('input', () => {
   clearTimeout(mappingState.timer);
+  mappingState.requestId += 1;
   mappingState.page = 1;
+  mappingSearchResults.setAttribute('aria-busy', String(Boolean(mappingSearchInput.value.trim())));
+  mappingSearchResults.innerHTML = mappingSearchInput.value.trim()
+    ? '<div class="mapping-empty loading">검색 준비 중</div>'
+    : '<div class="mapping-empty">검색어를 입력해주세요.</div>';
   mappingState.timer = setTimeout(runMappingSearch, 260);
+});
+mappingSearchResults.addEventListener('click', event => {
+  if (event.target.closest('[data-mapping-retry]')) void runMappingSearch();
 });
 document.getElementById('close-mapping-popover').addEventListener('click', closeMappingSearch);
 

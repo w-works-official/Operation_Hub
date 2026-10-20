@@ -69,5 +69,7 @@
   "operationsHubWorksheetDimension.test.mjs",
   "operationsHubSellpiaAbortRace.mock.test.mjs",
   "operationsHubSellpiaInventoryCountTimeout.db.test.mjs",
-  "operationsHubMatrixPriceEditPolicy.test.mjs"
+  "operationsHubMatrixPriceEditPolicy.test.mjs",
+  "operationsHubSellerSearch.mock.test.mjs",
+  "operationsHubSellerSearchSql.test.mjs"
 ]

@@ -1679,16 +1679,17 @@
     return data || null;
   }
 
-  async function searchSellerItems(source, query, page = 1, pageSize = 24) {
+  async function searchSellerItems(source, query, page = 1, pageSize = 24, options = {}) {
     const safeSource = cleanText(source);
     if (!['smartstore', 'makeshop', 'ably'].includes(safeSource)) throw new Error('판매처를 확인해주세요.');
     const safePage = Math.max(1, Number(page) || 1);
     const safePageSize = Math.max(1, Math.min(Number(pageSize) || 24, 100));
-    const {data, error} = await db.rpc('search_operations_hub_seller_items_v2', {
+    const {data, error} = await db.rpc('search_operations_hub_seller_items_v3', {
       p_source:safeSource,
       p_query:cleanText(query),
       p_page:safePage,
-      p_page_size:safePageSize
+      p_page_size:safePageSize,
+      p_match_mode:options.matchMode === 'product' ? 'product' : 'auto'
     });
     if (error) throw error;
     const rows = data || [];
@@ -1702,7 +1703,7 @@
     const seen = new Set();
     const pageSize = 100;
     for (let page = 1; page <= 20; page += 1) {
-      const result = await searchSellerItems(source, exactProductCode, page, pageSize);
+      const result = await searchSellerItems(source, exactProductCode, page, pageSize, {matchMode:'product'});
       const rows = Array.isArray(result.rows) ? result.rows : [];
       for (const row of rows) {
         if (cleanText(row.product_code) !== exactProductCode) continue;
@@ -1712,6 +1713,7 @@
         options.push(row);
       }
       if (rows.length < pageSize || rows.some(row => cleanText(row.product_code) !== exactProductCode)) break;
+      if (page === 20 && result.count > page * pageSize) throw new Error('이 상품의 옵션이 2,000개를 초과해 전체 옵션을 표시할 수 없습니다. 상품 연결 관리에서 확인해주세요.');
     }
     return options.sort((left, right) => cleanText(left.option_code).localeCompare(cleanText(right.option_code), 'ko', {numeric:true}));
   }
