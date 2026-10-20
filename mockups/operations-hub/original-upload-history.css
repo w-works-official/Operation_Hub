@@ -1,0 +1,86 @@
+#upload .upload-history {
+  display: block;
+  min-width: 0;
+  align-self: start;
+}
+
+#upload .upload-history .panel-title {
+  gap: 8px;
+}
+
+#upload .upload-history .panel-title .btn {
+  flex: 0 0 auto;
+  padding-inline: 8px;
+}
+
+#upload #original-upload-history-list {
+  max-height: 72vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+#upload .upload-history .history-list article {
+  min-width: 0;
+}
+
+#upload .upload-history .history-list article > div > p {
+  min-width: 0;
+}
+
+#upload .upload-history .history-list p em,
+#upload .upload-history-files,
+#upload .upload-history-detail,
+#upload .upload-history-error,
+#upload .upload-history-empty,
+#upload #original-upload-history-status {
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+#upload .upload-history-files,
+#upload .upload-history-detail,
+#upload .upload-history-times,
+#upload .upload-history-error {
+  margin: 6px 0 0 48px;
+  color: #64748b;
+  font-size: var(--ui-font-caption, 12px);
+}
+
+#upload .upload-history-field {
+  font-weight: 700;
+}
+
+#upload .upload-history-times > time,
+#upload .upload-history-times > span {
+  display: block;
+  margin: 0;
+  color: #64748b;
+  font-size: inherit;
+  line-height: 1.6;
+}
+
+#upload .upload-history-error,
+#upload .upload-history .status.failed {
+  color: #b42318;
+}
+
+#upload .upload-history .status.failed {
+  background: #fff0f0;
+}
+
+#upload .upload-history .status.muted {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+#upload .upload-history-empty {
+  margin: 0;
+  padding: 18px 0;
+  color: #64748b;
+  font-size: var(--ui-font-support, 13px);
+}
+
+#upload .upload-history [hidden] {
+  display: none;
+}

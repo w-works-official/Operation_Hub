@@ -265,6 +265,7 @@ function operationsAuthMessage(reason, retryAfterSeconds = 0) {
 }
 
 function stopAuthenticatedOperationsHubData() {
+  window.SystemV3OriginalUploadHistory?.reset();
   for (const intervalId of operationsAuthState.intervals) window.clearInterval(intervalId);
   operationsAuthState.intervals = [];
   if (operationsAuthState.expiryTimer) window.clearTimeout(operationsAuthState.expiryTimer);
@@ -305,6 +306,7 @@ function scheduleOperationsAuthExpiry() {
 
 function startAuthenticatedOperationsHubData() {
   if (!operationsAuthState.authenticated || operationsAuthState.intervals.length) return;
+  window.SystemV3OriginalUploadHistory?.activate();
   void refreshLiveData({resetPage:true}).finally(() => schedulePendingPurchasePriceRecovery());
   operationsAuthState.intervals.push(window.setInterval(() => Promise.all([loadLiveSourceStatus(), loadLiveDashboardMetrics()]), 60000));
   operationsAuthState.intervals.push(window.setInterval(() => {
@@ -1936,6 +1938,8 @@ async function loadLiveDashboardMetrics() {
 async function refreshLiveData(options = {}) {
   if(document.getElementById('dashboard')?.classList.contains('active-page'))window.SystemV3ChannelsPage?.show();
   beginSystemRefresh();
+  const uploadHistoryPromise = operationsAuthState.authenticated && window.SystemV3OriginalUploadHistory
+    ? window.SystemV3OriginalUploadHistory.refresh().catch(() => false) : null;
   let result = {matrix:false, source:false, metrics:false, mapping:false};
   try {
     const shouldLoadMatrix = !((liveData?.loadMatrixGridDataset||liveData?.loadFullMatrixDataset)
@@ -1953,6 +1957,7 @@ async function refreshLiveData(options = {}) {
       loadMappingSyncStatus({markDisplayed:true})
     ]);
     result = {matrix:matrix === true, source:source === true, metrics:metrics === true, mapping:Boolean(mapping)};
+    if (uploadHistoryPromise) result.uploadHistory = await uploadHistoryPromise;
     return result;
   } finally {
     finishSystemRefresh();
@@ -12927,6 +12932,7 @@ function showPage(pageId) {
   if (target) target.classList.add('active-page');
   if(pageId==='matching'&&(liveData?.loadMatrixGridDataset||liveData?.loadFullMatrixDataset)&&window.HubMatrixDataset){if(!matrixDataset||matrixDirtySkus.size||matrixSourceReloadNeeded)void loadLiveMatrix({resetScroll:true,fullReload:matrixSourceReloadNeeded});else{matrixVirtualStart=-1;paintVirtualMatrix();}}
   if (pageId === 'jobs') loadChangeQueue();
+  if (pageId === 'upload') void window.SystemV3OriginalUploadHistory?.refresh();
   if (pageId === 'dashboard') window.SystemV3ChannelsPage?.show();
   if (pageId === 'ably-combinations') window.AblyWorkspace?.refresh();
   if (pageId === 'attributes') window.TagPriceWorkspace?.refresh();
@@ -13368,6 +13374,7 @@ uploadButton.addEventListener('click', async () => {
     sourceSelect.disabled = false;
     fileInput.disabled = false;
     setUploadCapability();
+    void window.SystemV3OriginalUploadHistory?.refresh();
   }
 });
 let toastTimer;

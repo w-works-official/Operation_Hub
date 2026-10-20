@@ -1347,6 +1347,92 @@
     return { events: data || [], latest };
   }
 
+  function normalizeOriginalUploadSnapshot(row, source) {
+    const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+    const count = (...values) => {
+      for (const value of values) {
+        if (typeof value !== 'number' && (typeof value !== 'string' || !/^\d+$/.test(value.trim()))) continue;
+        const number = Number(value);
+        if (Number.isSafeInteger(number) && number >= 0) return number;
+      }
+      return null;
+    };
+    const fileLists = [
+      row.metadata_source_files ?? metadata.source_files,
+      row.source_storage_files,
+      row.metadata_storage_files ?? metadata.source_storage_files,
+      row.source_file_names
+    ].filter(Array.isArray);
+    const files = fileLists.find(list => list.length > 0);
+    const legacyNames = cleanText(row.source_file_name).split(' | ').map(cleanText).filter(Boolean);
+    const fileNames = files
+      ? files.map(file => cleanText(typeof file === 'string' ? file : file?.name)).filter(Boolean)
+      : legacyNames;
+    const fileCount = files ? files.length : legacyNames.length || (fileLists.length ? 0 : null);
+    const status = cleanText(row.upload_status) || 'unknown';
+    return {
+      id:`${source}:${row.snapshot_id}`,
+      snapshotId:row.snapshot_id,
+      source,
+      fileNames,
+      fileCount,
+      inputRows:count(row.source_row_count),
+      uploadedRows:count(row.metadata_uploaded_rows, metadata.uploaded_row_count, row.source_row_count),
+      effectiveRows:count(row.metadata_final_rows, metadata.final_row_count, row.metadata_effective_rows, metadata.effective_row_count, row.valid_row_count),
+      invalidRows:count(row.invalid_row_count),
+      status,
+      uploadMode:cleanText(row.upload_mode || row.metadata_upload_mode || metadata.upload_mode) || 'full',
+      createdAt:row.created_at || null,
+      completedAt:row.completed_at || null,
+      errorMessage:status === 'failed' ? cleanText(row.metadata_error || metadata.error_message || row.upload_note) : ''
+    };
+  }
+
+  async function loadOriginalUploadHistory({limit = 20, offset = 0, signal} = {}) {
+    // Fetch one extra candidate from each source before merging. Keep the range below
+    // PostgREST's 1,000-row response cap so pagination cannot silently omit history.
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isInteger(offset) || offset < 0 || offset > 900 || offset + limit > 999) {
+      throw new RangeError('업로드 이력 조회 범위를 확인해주세요. 한 번에 최대 100건, 최근 999건까지 조회할 수 있습니다.');
+    }
+    const token = requireOperationsHubSessionToken();
+    const assertActive = () => {
+      if (signal?.aborted || operationsHubSessionToken !== token) {
+        const error = new Error('업로드 이력 조회가 취소되었습니다.');
+        error.name = 'AbortError';
+        throw error;
+      }
+    };
+    assertActive();
+    const session = await withAbortSignal(db.rpc('operations_hub_check_session_v1', {p_session_token:token}), signal);
+    assertActive();
+    throwOperationsHubRpcError(session.error);
+    if (!authPayload(session.data).authenticated) {
+      setOperationsHubSessionToken('');
+      throw operationsHubAuthError('운영 세션이 만료되었습니다.', 'invalid_session');
+    }
+    const fields = 'snapshot_id,source_row_count,valid_row_count,invalid_row_count,upload_status,upload_note,created_at,completed_at';
+    // Do not fetch full metadata: older snapshots can contain large affected_skus arrays.
+    const metadataFields = 'metadata_upload_mode:metadata->>upload_mode,metadata_source_files:metadata->source_files,metadata_storage_files:metadata->source_storage_files,metadata_uploaded_rows:metadata->>uploaded_row_count,metadata_final_rows:metadata->>final_row_count,metadata_effective_rows:metadata->>effective_row_count,metadata_error:metadata->>error_message';
+    const read = (table, select) => withAbortSignal(db.from(table).select(select)
+      .order('created_at', {ascending:false}).order('snapshot_id', {ascending:false})
+      .range(0, offset + limit), signal);
+    const [sellpia, sellers] = await Promise.all([
+      read('sellpia_stock_snapshots', `${fields},source_file_name,${metadataFields}`),
+      read('seller_inventory_snapshots', `${fields},source_channel,source_file_names,source_storage_files,upload_mode,${metadataFields}`)
+    ]);
+    assertActive();
+    throwOperationsHubRpcError(sellpia.error);
+    throwOperationsHubRpcError(sellers.error);
+    const rows = [
+      ...(sellpia.data || []).map(row => normalizeOriginalUploadSnapshot(row, 'sellpia')),
+      ...(sellers.data || []).map(row => normalizeOriginalUploadSnapshot(row, cleanText(row.source_channel)))
+    ].sort((a, b) => {
+      const date = value => Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0;
+      return date(b.createdAt) - date(a.createdAt) || String(b.snapshotId).localeCompare(String(a.snapshotId)) || a.source.localeCompare(b.source);
+    });
+    return {rows:rows.slice(offset, offset + limit), hasMore:rows.length > offset + limit};
+  }
+
   async function loadDashboardMetrics() {
     const {data, error} = await db
       .from('operations_hub_dashboard_metrics')
@@ -4985,6 +5071,7 @@
     loadDashboardMetrics,
     loadMappingSyncStatus,
     loadSourceStatus,
+    loadOriginalUploadHistory,
     loadTags,
     workDocument,
     ruleRegistry,

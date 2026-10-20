@@ -33,6 +33,7 @@
   "operationsHubSellerFanoutDirection.mock.test.mjs",
   "operationsHubMatrixGridFeed.mock.test.mjs",
   "operationsHubOriginalFileBoundary.mock.test.mjs",
+  "operationsHubOriginalUploadHistory.mock.test.mjs",
   "operationsHubCurrentPriceExport.mock.test.mjs",
   "operationsHubStockOnlyExport.mock.test.mjs",
   "operationsHubInventoryBatch.functional.test.mjs",
