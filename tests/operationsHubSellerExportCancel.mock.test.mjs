@@ -16,7 +16,7 @@ test('running saved-change export stops after the active 50-row validation batch
   liveData:{prepareSellerExport:async()=>({items:[]}),reviewSellerDraftsForExport:async options=>{context.cancel();assert.equal(state.cancelRequested,true);assert.equal(node('seller-export-cancel').textContent,'중단 요청됨');options.onProgress(50,100);throw Error('cancellation callback must stop this flow');},downloadLatestSellerOriginals:async()=>{calls.push('download-original');}},
   sellerExport:{downloadBlob:()=>calls.push('download-zip')},HubCurrentPriceExport:{refreshItems:async()=>{calls.push('calculate');},buildArchive:async()=>{calls.push('archive');}},
   loadChangeQueue:async()=>{},loadLiveMatrix:async()=>{}};
- vm.createContext(context);vm.runInContext(controller+'\nthis.run=runSellerExport;this.cancel=closeSellerExport;',context);
+ context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);vm.runInContext(controller+'\nthis.run=runSellerExport;this.cancel=closeSellerExport;',context);
  await context.run();
  assert.equal(state.running,false);assert.equal(state.cancelRequested,false);
  assert.equal(calls.includes('download-original'),false);assert.equal(calls.includes('calculate'),false);assert.equal(calls.includes('archive'),false);assert.equal(calls.includes('download-zip'),false);
@@ -33,7 +33,7 @@ test('database errors are labeled as export failures, not user cancellations',as
   showToast:m=>toasts.push(m),showSellerExportProgress:(p,t,d)=>progress.push({p,t,d}),showSellerExportExclusions(){},
   liveData:{prepareSellerExport:async()=>({items:[]}),reviewSellerDraftsForExport:async()=>{throw Error('DB 준비 오류');}},
   sellerExport:{downloadBlob(){},buildExportArchive(){}},HubCurrentPriceExport:{refreshItems(){},buildArchive(){}},loadChangeQueue:async()=>{},loadLiveMatrix:async()=>{}};
- vm.createContext(context);vm.runInContext(controller+'\nthis.run=runSellerExport;',context);await context.run();
+ context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);vm.runInContext(controller+'\nthis.run=runSellerExport;',context);await context.run();
  assert.ok(progress.some(item=>item.t==='내보내기 실패'&&/DB 준비 오류/.test(item.d)));
  assert.ok(toasts.some(message=>/원본 내보내기 실패/.test(message)));assert.ok(toasts.every(message=>!/중단했습니다/.test(message)));
 });

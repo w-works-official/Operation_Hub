@@ -102,7 +102,7 @@ function buildHarness({statusOverride=null,changeSecondSnapshot=false}={}){
  ctx.globalThis=ctx;ctx.window.globalThis=ctx;ctx.window.liveData=liveData;
  ctx.JSZip=class TransportZip extends JSZip{file(name,value,...rest){return super.file(name,value instanceof BlobClass?value.arrayBuffer().then(bytes=>new Uint8Array(bytes)):value,...rest);}};
  ctx.window.JSZip=ctx.JSZip;
- vm.createContext(ctx);
+ ctx.assertMatrixChangesSaved??=()=>true;ctx.requireMatrixChangesSaved??=()=>true;vm.createContext(ctx);
  for(const name of ['sellpia-inventory-count','seller-source-parsers','seller-export-adapter','current-price-export','ably-stock-export','ably-playauto-export','ably-inventory-export'])vm.runInContext(fs.readFileSync(`mockups/operations-hub/${name}.js`,'utf8'),ctx,{filename:name+'.js'});
  ctx.SystemV3SellpiaInventoryCount=ctx.window.SystemV3SellpiaInventoryCount||ctx.SystemV3SellpiaInventoryCount;
  ctx.SystemV3SellerParsers=ctx.window.SystemV3SellerParsers;ctx.HubCurrentPriceExport=ctx.window.HubCurrentPriceExport;ctx.AblyPlayautoExport=ctx.window.AblyPlayautoExport;ctx.sellerExport=ctx.window.SystemV3SellerExport;

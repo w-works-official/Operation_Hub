@@ -559,3 +559,13 @@ body.matrix-column-resizing,body.matrix-column-resizing *{cursor:col-resize!impo
 .matrix-multi-status .matrix-relation-badge{position:static;max-width:100%;font-size:8px}
 .matrix-table tbody tr.matrix-multi-listing-row>td:first-child{border-left:2px solid #7aa7ea}
 .matrix-table tbody tr.matrix-multi-listing-row>td:last-child{border-right:2px solid #7aa7ea}
+/* Calculated prices remain selectable/copyable while direct overrides are locked. */
+[data-formula-locked="true"] { cursor: not-allowed; }
+#matrix-body button[data-formula-locked="true"] { opacity: 1; color: inherit; }
+#matrix-body button[data-formula-locked="true"]:hover { outline: 1px solid #cbd5e1; outline-offset: -1px; }
+.matrix-table:not(.sellpia-unfrozen) #matrix-body td.sticky-col:has(>.shadow-markers) { position: sticky; }
+.matrix-table.sellpia-unfrozen #matrix-body td.sticky-col:has(>.shadow-markers) { position: static; }
+@media (max-width: 900px) {
+  .change-bar { flex-wrap: wrap; }
+  .change-bar > div { flex: 1 1 100%; min-width: 0; }
+}

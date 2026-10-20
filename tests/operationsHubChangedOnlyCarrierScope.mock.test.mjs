@@ -30,7 +30,7 @@ test('changed-only export derives its authoritative scope from carrier identitie
    HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver
   }
  };
- vm.createContext(ctx);vm.runInContext(functionSource+'\nthis.prepare=prepareChangedOnlyExport;',ctx);
+ ctx.assertMatrixChangesSaved??=()=>true;ctx.requireMatrixChangesSaved??=()=>true;vm.createContext(ctx);vm.runInContext(functionSource+'\nthis.prepare=prepareChangedOnlyExport;',ctx);
  let reference=null;
  for(let repeat=0;repeat<5;repeat++){
   const result=await ctx.prepare('smartstore',null,{download:false,includePrice:false,includeStock:true});

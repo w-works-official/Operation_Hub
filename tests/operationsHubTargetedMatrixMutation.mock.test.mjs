@@ -8,25 +8,27 @@ const service=fs.readFileSync('mockups/operations-hub/data-service.js','utf8');
 
 function editFlow({materializationFails=false}={}){
   const events=[],dirty=new Set(),versions=new Map();
+  const control={materializationFails};
   const context={
     pendingChanges:[{sku:'5566-1',fieldKey:'sellpia_purchase_price',before:'30000',after:'35000'}],
-    sellpiaSaveInFlight:false,sellpiaSavingChanges:[],sellpiaSavingCount:0,sellpiaSaveError:'',sellpiaAutosaveTimer:null,
+    sellpiaSaveInFlight:false,sellpiaSavingChanges:[],sellpiaSavingCount:0,sellpiaSaveError:'',matrixCalculationRetry:null,
     pendingChangeBatchId:'request-1',matrixDataset:{bySku:new Map([['5566-1',{}]])},matrixFullLoad:null,
     matrixDirtyVersions:versions,matrixDirtySkus:dirty,changeModal:{hidden:false},
     clearTimeout(){},setTimeout(){},updatePendingChangeUi(){},createRequestId:()=> 'request-1',
     liveData:{saveSellpiaChanges:async()=>{events.push('save');return {savedCount:1,queuedCount:0};}},
+    assertMatrixPriceChangesEditable:async()=>{},
     applySavedSellpiaChanges(){events.push('local-input');},
-    materializeHubPrices:async(skus,opts)=>{events.push(`calculate:${opts.sources===undefined?'default-sellers':opts.sources.join(',')}:${skus.join(',')}`);if(materializationFails)throw Error('calculation failed');return {status:'complete',affectedSkus:['5566-1','5566-2']};},
+    materializeHubPrices:async(skus,opts)=>{events.push(`calculate:${opts.sources===undefined?'default-sellers':opts.sources.join(',')}:${skus.join(',')}`);if(control.materializationFails)throw Error('calculation failed');return {status:'complete',affectedSkus:['5566-1','5566-2']};},
     materializationWarning:()=>'',markMatrixAffected:skus=>{events.push('dirty');for(const sku of skus){dirty.add(sku);versions.set(sku,(versions.get(sku)||0)+1);}},
     refreshMatrixSkus:async skus=>{events.push(`read:${skus.join(',')}`);return skus.map(sellpia_sku_code=>({sellpia_sku_code}));},
     removeSavedCellState(){},showToast(){},loadLiveDashboardMetrics(){},refreshChangeQueueInBackground(){},
-    restoreFailedChanges(){},scheduleSellpiaAutosave(){},console
+    restoreFailedChanges(){},console
   };
-  const start=app.indexOf('async function flushPendingSellpiaChanges('),end=app.indexOf('\nfunction editableMatrixGrid(',start);
+  const start=app.indexOf('async function reconcileSavedMatrixChanges('),end=app.indexOf('\nfunction editableMatrixGrid(',start);
   assert.ok(start>0&&end>start);
   vm.createContext(context);
-  vm.runInContext(app.slice(start,end)+'\nthis.flush=flushPendingSellpiaChanges;',context);
-  return {context,events,dirty};
+  vm.runInContext(app.slice(start,end)+'\nthis.flush=flushPendingSellpiaChanges;this.retry=retrySavedMatrixCalculation;',context);
+  return {context,events,dirty,control};
 }
 
 test('purchase price edit saves, recalculates with default seller scopes, then patches only the affected SKUs',async()=>{
@@ -42,6 +44,18 @@ test('calculation error still re-reads the saved SKU instead of leaving optimist
   await context.flush();
   assert.deepEqual(events,['save','local-input','dirty','calculate:default-sellers:5566-1','dirty','read:5566-1']);
   assert.equal(context.pendingChanges.length,0,'already saved input must not be resubmitted');
+  assert.match(context.matrixCalculationRetry.error,/calculation failed/,'the calculation failure remains available for explicit retry');
+});
+
+test('explicit calculation retry refreshes affected rows without submitting the committed input again',async()=>{
+  const {context,events,control}=editFlow({materializationFails:true});
+  await context.flush();
+  control.materializationFails=false;
+  assert.equal(await context.retry(),true);
+  assert.equal(events.filter(event=>event==='save').length,1,'retry does not repeat a committed input write');
+  assert.equal(context.matrixCalculationRetry,null);
+  assert.equal(context.sellpiaSaveInFlight,false);
+  assert.equal(events.at(-1),'read:5566-1,5566-2');
 });
 
 function targetedRead(responses){

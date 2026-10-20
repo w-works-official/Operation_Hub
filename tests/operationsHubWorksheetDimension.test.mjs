@@ -14,7 +14,7 @@ const sheetPath='xl/worksheets/sheet1.xml';
 class TestFile extends Blob {constructor(parts,name,options={}){super(parts,options);this.name=name;}}
 function context(){
   const value={console,Blob,File:TestFile,JSZip,XLSX,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,Date,Math,Intl,setTimeout,performance:{now:()=>Date.now()},formatNumber:String,CHANNEL_LABELS:{smartstore:'스마트스토어'}};
-  value.window=value;value.globalThis=value;vm.createContext(value);
+  value.window=value;value.globalThis=value;value.assertMatrixChangesSaved??=()=>true;value.requireMatrixChangesSaved??=()=>true;vm.createContext(value);
   for(const name of ['sellpia-inventory-count','seller-source-parsers','seller-export-adapter','current-price-export'])vm.runInContext(fs.readFileSync(path.join(repo,`mockups/operations-hub/${name}.js`),'utf8'),value,{filename:name+'.js'});
   return value;
 }

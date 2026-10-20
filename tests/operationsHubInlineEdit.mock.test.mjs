@@ -37,7 +37,10 @@ assert.match(source, /function openMatrixInlineEditor\(cell\)[\s\S]*?const \{num
 assert.match(source, /matrixBody\.addEventListener\('dblclick'[\s\S]*?openMatrixInlineEditor\(cell\)/, 'double-click editing must use the shared inline editor');
 assert.match(source, /let completed = false[\s\S]*?if \(completed\) return;[\s\S]*?completed = true/, 'blur after Enter must not save the same edit twice');
 assert.match(source, /keyEvent\.key === 'Enter'\) finish\(true\)[\s\S]*?keyEvent\.key === 'Escape'\) finish\(false\)[\s\S]*?input\.addEventListener\('blur', \(\) => finish\(true\)\)/, 'Enter, Escape and blur completion paths must remain wired');
-assert.match(source, /cell\.matches\('\.sellpia-edit'\)[\s\S]*?commitEditableCellValue\(cell, after\)/, 'system-master and permitted Sellpia metadata edits must enter the immediate-save queue');
-assert.match(source, /function addPendingChange[\s\S]*?scheduleSellpiaAutosave\(\)[\s\S]*?function flushPendingSellpiaChanges[\s\S]*?liveData\.saveSellpiaChanges/, 'matrix master edits must continue from the short debounce to the Supabase save adapter');
+assert.match(source, /cell\.matches\('\.sellpia-edit'\)[\s\S]*?commitEditableCellValue\(cell, after\)/, 'permitted system-master and Sellpia metadata edits must enter the pending queue');
+const staging=source.slice(source.indexOf('function addPendingChange('),source.indexOf('function hasPendingMatrixChanges('));
+assert.match(staging,/updatePendingChangeUi\(\)/,'staged input updates the pending change bar');
+assert.doesNotMatch(staging,/setTimeout|flushPendingSellpiaChanges|saveSellpiaChanges/,'Enter and blur stage an edit without writing it');
+assert.match(source,/getElementById\('save-matrix-changes'\)\.addEventListener\('click'[\s\S]*?flushPendingSellpiaChanges\(\)/,'only the explicit Save action continues staged system inputs to the save adapter');
 
 console.log('Operations hub inline edit validation and save flow: passed');

@@ -26,7 +26,7 @@ function harness(rows, {rejectIds = [], cancelId = null} = {}) {
       else r.status='validated';
     }
   }};
-  vm.createContext(context);
+  context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);
   vm.runInContext(helpers+'\nthis.review = reviewSellerDraftsForExport;',context);
   return {...context, validated, queries};
 }
@@ -68,7 +68,7 @@ function harness(rows, {rejectIds = [], cancelId = null} = {}) {
     from(table){return {select(){return this;},eq(){return this;},order(){return this;},
       range:async()=>({data:[]}),maybeSingle:async()=>({data:{error_message:'원래 서버 차단 사유'}})}}
   }};
-  vm.createContext(context);vm.runInContext(fn+'\nthis.prepare=prepareSellerExport;',context);
+  context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);vm.runInContext(fn+'\nthis.prepare=prepareSellerExport;',context);
   await assert.rejects(context.prepare({batchId:'fixture',mode:'change_queue',changeIds:[1],sources:['smartstore']}),/원래 서버 차단 사유/);
 }
 // Exercise the real ZIP orchestration with a fixture file patcher; existing
@@ -108,7 +108,7 @@ for (const allExcluded of [false,true]) {
     },downloadBlob:()=>calls.push('download')},
     loadChangeQueue:async()=>{},loadLiveMatrix:async()=>{}};
   context.HubCurrentPriceExport={refreshItems:async(items,files,options)=>{calls.push('refresh-current');assert.equal(options.includeRules,false);return {items,excludedItems:[]};},buildArchive:async(...args)=>{calls.push('build-current');return context.sellerExport.buildExportArchive(...args);}};
-  vm.createContext(context);
+  context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);
   vm.runInContext(app.slice(app.indexOf('async function runSellerExport()'),app.indexOf("document.getElementById('matrix-match-stock-btn').addEventListener"))+'\nthis.run=runSellerExport;',context);
   await context.run();
   assert.equal(state.running,false);
@@ -129,7 +129,7 @@ for(const scenario of ['rule-only','explicit-rows','missing-module']){
   liveData:{reviewSellerDraftsForExport:async options=>{calls.push({name:'review',options});return {changeIds:explicit?[1]:[],excluded:[]};},downloadLatestSellerOriginals:async()=>new Map(),prepareSellerExport:async()=>{calls.push({name:'prepare'});return {items:[price]};},completeSellerExport:async()=>calls.push({name:'complete'})},
   sellerExport:{buildExportArchive:async()=>{throw Error('legacy archive fallback must not run');},downloadBlob:()=>calls.push({name:'download'})},loadChangeQueue:async()=>{},loadLiveMatrix:async()=>{}};
  if(!missing)context.HubCurrentPriceExport={refreshItems:async(items,files,options)=>{calls.push({name:'refresh',options,inputCount:items.length});return {items:explicit?items:[price],excludedItems:[]};},buildArchive:async(files,items)=>{calls.push({name:'build',items});return {manifest:[],blob:new Blob(),appliedItems:items,skippedItems:[]};}};
- vm.createContext(context);vm.runInContext(app.slice(app.indexOf('async function runSellerExport()'),app.indexOf("document.getElementById('matrix-match-stock-btn').addEventListener"))+'\nthis.run=runSellerExport;',context);
+ context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);vm.runInContext(app.slice(app.indexOf('async function runSellerExport()'),app.indexOf("document.getElementById('matrix-match-stock-btn').addEventListener"))+'\nthis.run=runSellerExport;',context);
  await context.run();assert.equal(state.running,false);
  if(missing){assert.equal(calls.length,0,'missing module must fail before queue validation or other export work');assert.ok(toasts.some(t=>/모듈|수식|계산/.test(t)));continue;}
  const refresh=calls.find(c=>c.name==='refresh');assert.ok(refresh,'controller must call current-price refresh');assert.equal(refresh.options.includeRules,!explicit);

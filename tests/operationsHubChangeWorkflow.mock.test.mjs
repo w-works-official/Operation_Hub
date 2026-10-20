@@ -33,9 +33,15 @@ assert.ok(localAssets.every(asset => /\?v=[^&\"]+$/.test(asset)), "all deployed 
 assert.match(html,/discount-price-math\.js\?v=[^"]+[\s\S]*?data-service\.js\?v=[^"]+[\s\S]*?app\.js\?v=[^"]+/,"the matrix resolver, data adapter and app must all be cache-versioned");
 assert.match(data, /loadChangeQueue[\s\S]*?loadChangeQueueStats[\s\S]*?loadChangeEvents[\s\S]*?validateChangeQueue[\s\S]*?cancelChangeQueue[\s\S]*?retryChangeQueue/, "the frontend data adapter must expose the complete queue workflow");
 assert.match(data, /p_batch_id:batchId/, "writes must send their stable request batch ID to the database");
-assert.match(app, /const batchId = pendingChangeBatchId \|\| createRequestId\(\)[\s\S]*?saveSellpiaChanges\(snapshot, batchId\)[\s\S]*?pendingChangeBatchId = batchId/, "Sellpia automatic-save retries must reuse the same batch ID after failure");
-assert.match(app, /SELLPIA_AUTOSAVE_DELAY_MS = 450[\s\S]*?scheduleSellpiaAutosave[\s\S]*?flushPendingSellpiaChanges\(\{automatic:true\}\)/, "Sellpia cell edits must automatically persist after a short batching delay");
-assert.match(app, /pendingChanges\.splice\(0, pendingChanges\.length\)[\s\S]*?restoreFailedChanges\(snapshot\)/, "new edits must remain separate while an automatic save is in flight and failed snapshots must be restored");
+assert.match(app, /const batchId = pendingChangeBatchId \|\| createRequestId\(\)[\s\S]*?saveSellpiaChanges\(snapshot, batchId\)[\s\S]*?pendingChangeBatchId = batchId/, "manual-save retries must reuse the same batch ID after an input-save failure");
+const pendingStaging = app.slice(app.indexOf('function addPendingChange('), app.indexOf('function hasPendingMatrixChanges('));
+assert.match(pendingStaging, /pendingChanges\.push\(change\)[\s\S]*?updatePendingChangeUi\(\)/, "cell edits stage visible changes before the operator saves");
+assert.doesNotMatch(pendingStaging, /setTimeout|flushPendingSellpiaChanges|saveSellpiaChanges/, "staging an edit must never schedule or perform a database write");
+assert.doesNotMatch(app, /SELLPIA_AUTOSAVE_DELAY_MS|scheduleSellpiaAutosave|flushPendingSellpiaChanges\(\{automatic:true\}\)/, "system input writes must require explicit Save");
+assert.match(html, /id="save-matrix-changes"[^>]*>변경사항 저장/, "the change bar must expose one-click explicit Save");
+assert.match(html, /id="retry-matrix-calculation"/, "committed inputs must have a separate calculation/refresh retry action");
+assert.match(app, /getElementById\('save-matrix-changes'\)\.addEventListener\('click'[\s\S]*?flushPendingSellpiaChanges\(\)/, "the Save button invokes the existing bounded save flow");
+assert.match(app, /pendingChanges\.splice\(0, pendingChanges\.length\)[\s\S]*?restoreFailedChanges\(snapshot\)/, "new edits remain separate during manual Save and failed input snapshots are restored");
 assert.match(app, /function renderChangeQueue[\s\S]*?function runQueueAction/, "the live queue must render and execute state actions");
 assert.match(app, /if \(pageId === 'jobs'\) loadChangeQueue\(\)/, "opening the queue page must load live DB rows");
 

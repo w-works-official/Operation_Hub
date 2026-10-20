@@ -61,7 +61,7 @@ function harness({mappingRows=null,mappingDrift=false,templateError=false,failMa
  class TransportZip extends JSZip{file(name,value,...rest){return super.file(name,value instanceof Blob?value.arrayBuffer().then(buffer=>new Uint8Array(buffer)):value,...rest);}}
  const context={console,Blob,File:TestFile,JSZip:TransportZip,XLSX,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,TextEncoder,TextDecoder,Date,Math,Intl,crypto:globalThis.crypto,setTimeout,performance:{now:()=>Date.now()},CustomEvent:class{constructor(type,init){this.type=type;this.detail=init?.detail;}},dispatchEvent(){},liveData,sellerExportState:{running:false},formatNumber:String,CHANNEL_LABELS:{smartstore:'스마트스토어',makeshop:'메이크샵'},__systemV3InventoryBatchBusy:false,__systemV3DirectExportBusy:false};
  context.globalThis=context;context.window=context;context.refreshMatrixSkus=async skus=>{timeline.push('matrix-refresh');return skus;};
- vm.createContext(context);
+ context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);
  for(const name of ['sellpia-inventory-count','seller-source-parsers','seller-export-adapter','current-price-export','ably-inventory-export'])vm.runInContext(fs.readFileSync(path.join(repo,`mockups/operations-hub/${name}.js`),'utf8'),context,{filename:name+'.js'});
  context.sellerExport=context.SystemV3SellerExport;
  context.sellerExport={...context.sellerExport,downloadBlob(blob,name){timeline.push('download');downloads.push({blob,name});}};

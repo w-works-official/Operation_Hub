@@ -68,5 +68,6 @@
   "operationsHubAblyMappingPrefetchFixtureDatabase.test.mjs",
   "operationsHubWorksheetDimension.test.mjs",
   "operationsHubSellpiaAbortRace.mock.test.mjs",
-  "operationsHubSellpiaInventoryCountTimeout.db.test.mjs"
+  "operationsHubSellpiaInventoryCountTimeout.db.test.mjs",
+  "operationsHubMatrixPriceEditPolicy.test.mjs"
 ]

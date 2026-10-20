@@ -33,7 +33,7 @@ function harness({batches, refreshError = false, action = 'draft'} = {}) {
     loadChangeQueue:async () => { refreshed.push('queue'); },
     loadLiveDashboardMetrics:async () => { refreshed.push('dashboard'); }
   };
-  vm.createContext(context);
+  context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);
   vm.runInContext(progress + handlers + '\nthis.api = {runSellerExport, closeSellerExport, openSellerExport};', context);
   return {state, calls, notices, refreshed, ...context.api, node:id => document.getElementById(`seller-export-${id}`), modal:context.sellerExportModal};
 }

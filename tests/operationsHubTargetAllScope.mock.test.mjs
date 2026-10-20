@@ -40,7 +40,7 @@ async function run(mode,{ambiguous=false,download=false,expectedPlanFingerprint=
   },
   window:{SystemV3SellerParsers:{async parseSellerFiles(){return {normalizedRows:carrierRows};}},HubCurrentPriceExport:globalThis.HubCurrentPriceExport,HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver}
  };
- vm.createContext(context);vm.runInContext(source+'\nthis.prepare=prepareChangedOnlyExport;',context);
+ context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);vm.runInContext(source+'\nthis.prepare=prepareChangedOnlyExport;',context);
  const result=await context.prepare('smartstore',['S1'],{download,mode,expectedPlanFingerprint,includePrice:true,includeStock:true});
  return {result,serialized,downloads};
 }
@@ -106,7 +106,7 @@ test('MakeShop target_all keeps physical continuation rows and full_original cou
     {product_code:'P2',option_code:'O2',source_row_no:5,stock:6,base_price:2000,discounted_base_price:2000,option_price:0,final_price:2000,discount_terms:[],raw_payload:{source_file_name:'makeshop.xlsx'}}
    ]};}},HubCurrentPriceExport:globalThis.HubCurrentPriceExport,HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver}
   };
-  vm.createContext(context);vm.runInContext(source+'\nthis.prepare=prepareChangedOnlyExport;',context);
+  context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);vm.runInContext(source+'\nthis.prepare=prepareChangedOnlyExport;',context);
   return context.prepare('makeshop',['S1'],{download:false,mode,includePrice:false,includeStock:true,stockSource:'stock'});
  }
  const scoped=await prepare('target_all',4);

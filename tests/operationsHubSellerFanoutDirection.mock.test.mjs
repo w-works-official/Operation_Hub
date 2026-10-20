@@ -140,7 +140,7 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
    HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver
   }
  };
- vm.createContext(context);
+ context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);
  vm.runInContext(functionSource+'\nthis.prepare=prepareChangedOnlyExport;',context);
  const result=await context.prepare('smartstore',[...prices.keys()],{
   download:false,mode,priceMode:'sellpia_source',includePrice:true,includeStock

@@ -24,10 +24,10 @@ assert.match(data, /saveSellpiaChanges[\s\S]*?system_base_price[\s\S]*?system_st
 assert.match(data, /systemChangeSource[\s\S]*?p_change_source:systemChangeSource[\s\S]*?p_metadata:systemMetadata/, 'explicit source acceptance must be preserved in the canonical audit event');
 assert.match(data, /previewPriceRuleSet[\s\S]*?시스템 기준가격을 먼저 저장해주세요/, 'price calculations must reject missing canonical base prices instead of treating them as zero');
 
-assert.match(app, /systemOperationalCell\(product, 'system_stock'[\s\S]*?systemOperationalCell\(product, 'system_base_price'/, 'the matrix must show editable system stock and price cells');
+assert.match(app, /systemOperationalCell\(product, 'system_stock'[\s\S]*?systemOperationalCell\(product, 'system_base_price'/, 'the matrix must show canonical system stock and price cells with the active edit policy');
 assert.match(app, /원본 미반영[\s\S]*?원본 갱신 있음[\s\S]*?원본과 다름[\s\S]*?원본과 일치/, 'canonical cells must expose source state without rendering the source number as the system value');
 assert.doesNotMatch(app, /<em>원본 \$\{hasSource \? formatNullableNumber\(sourceValue\)/, 'the matrix must not print raw source numbers inside canonical cells');
-assert.match(app, /원본 숫자는 자동 반영되지 않으며[\s\S]*?선택 셀 원본값 갱신/, 'canonical cell help must state that copying a source value is explicit only');
+assert.match(app, /입력한 값은 변경사항 저장을 누르면 저장됩니다\.[\s\S]*?원본값 복사는 선택 셀 또는 컬럼 원본값 갱신에서 실행합니다\./, 'canonical cell help must distinguish explicit Save from the separate source-copy actions');
 assert.match(app, /async function refreshSelectedSystemValuesFromSource[\s\S]*?await previewSelectedSourceRefreshBatch\(\)/, 'selected source values must start with a write-free server preview');
 assert.match(app, /async function applySelectedSourceRefreshBatch[\s\S]*?dryRun:false[\s\S]*?reloadSelectedSourceRefreshRows/, 'the previewed batch must be applied separately');
 assert.match(app, /reloadSelectedSourceRefreshRows[\s\S]*?loadProductsBySkus[\s\S]*?verifySourceRefreshTargets/, 'completed source refreshes must repaint from a targeted database reread');
