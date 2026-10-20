@@ -78,6 +78,32 @@ function fixture(){
  const f=fixture();SystemV3Data.upsertCalculatedPriceResults=async()=>{throw Error('write unavailable');};await assert.rejects(f.run({sources:[]}),/write unavailable/,'persistence errors must not be mislabeled as successful error-row saves');
 }
 {
+ const f=fixture(),write=SystemV3Data.upsertCalculatedPriceResults,failure=Error('second bounded write failed');let writes=0;
+ SystemV3Data.upsertCalculatedPriceResults=async payload=>{if(++writes===2)throw failure;return write(payload);};
+ await assert.rejects(f.run({sources:['smartstore']}),error=>{
+  assert.equal(error,failure,'the original persistence error remains visible to the save UI');
+  assert.deepEqual([...error.affectedSkus].sort(),['A','B','C','D'],'fatal errors retain the seed, its dependent, linked sibling, and sibling dependent');
+  assert.equal(new Set(error.affectedSkus).size,error.affectedSkus.length,'the recovery scope contains no repeated SKU');
+  return true;
+ });
+ assert.equal(f.qa.writes.length,1,'a completed bounded write remains recorded before the later failure');
+ assert.ok(f.qa.progress.some(progress=>progress.totalSkus===4),'the complete linked and dependent closure was resolved before the failure');
+}
+{
+ const f=fixture(),failure=Error('next input fingerprint unavailable');let fingerprints=0;
+ SystemV3Data.loadInputFingerprints=async skus=>{
+  if(++fingerprints===3)throw failure;
+  return Object.fromEntries(skus.map(sku=>[sku,'unchanged-input']));
+ };
+ await assert.rejects(f.run({sources:['smartstore']}),error=>{
+  assert.equal(error,failure);
+  assert.deepEqual([...error.affectedSkus].sort(),['A','B','C','D'],'a later fingerprint failure still exposes the complete known refresh scope');
+  return true;
+ });
+ assert.equal(f.qa.writes.length,1,'the fingerprint failure occurs after the first bounded write');
+ assert.equal(f.qa.progress.some(progress=>progress.phase==='complete'),false,'failed calculation cannot publish a completed summary');
+}
+{
  const f=fixture();f.registry.assignments=[];f.registry.dependencies=[];const seeds=Array.from({length:405},(_,i)=>'staged'+i);for(const sku of seeds)f.products[sku]={sellpia_sku_code:sku,system_base_price:1000,__sellerPriceComponents:{}};
  let sellerRead=false;SystemV3Data.loadInternalFormulaProducts=async skus=>skus.map(s=>f.products[s]);SystemV3Data.loadFormulaProducts=async()=>{sellerRead=true;assert.equal(f.rows().filter(r=>r.scope==='').length,405,'every internal result precedes a heavy seller read');throw Error('seller timeout');};
  const r=await f.run({skus:seeds,sources:['smartstore'],boundedSkus:seeds});assert.ok(sellerRead);assert.equal(f.rows().filter(r=>r.scope===''&&r.status==='calculated').length,405);assert.equal(r.totalSkus,405);

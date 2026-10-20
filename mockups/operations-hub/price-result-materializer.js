@@ -13,6 +13,8 @@
   const seeds=unique(skus||[]);aborted(signal);
   const bound=boundedSkus?new Set(unique(boundedSkus)):null;
   if(!seeds.length)return {generationId:null,status:'complete',totalSkus:0,persistedRows:0,errorRows:0};
+  const affected=new Set(),queue=[];
+  try{
   const generation=await D.beginCalculationGeneration({reason,requestId:requestId||g.crypto.randomUUID()});
   const generationId=generation?.generation_id;if(!generationId)throw Error('계산 세대 응답을 확인하지 못했습니다.');
   const summary={generationId,calculatedAt:generation.calculated_at,status:'running',totalSkus:0,completedSkus:0,persistedRows:0,errorRows:0};
@@ -22,7 +24,6 @@
   for(const source of selected){try{configs[source]=await P.settings(source);}catch(error){aborted(signal);sourceErrors.set(source,message(error));}}
   const descendants=new Map();for(const edge of registry.dependencies||[]){if(!descendants.has(edge.parent_sku))descendants.set(edge.parent_sku,[]);descendants.get(edge.parent_sku).push(edge.child_sku);}
   const maximum=Math.min(50000,Math.max(seeds.length,Number(maxAffectedSkus)||50000));
-  const affected=new Set(),queue=[];
   function add(values){const pending=[...values];for(let i=0;i<pending.length;i++){const sku=pending[i];if(affected.has(sku))continue;if(bound&&!bound.has(sku))throw Error('지정한 bounded 계산 범위 밖의 의존 SKU: '+sku);affected.add(sku);queue.push(sku);if(affected.size>maximum)throw Error(`영향 SKU가 이 작업의 안전 한도 ${maximum.toLocaleString('ko-KR')}개를 넘습니다. 범위를 나누세요.`);pending.push(...(descendants.get(sku)||[]));}summary.totalSkus=affected.size;}
   add(seeds);
   // Close sibling and downstream dependencies before writing any result.
@@ -116,6 +117,12 @@
   }
   summary.affectedSkus=[...affected];
   summary.status=summary.errorRows?'partial':'complete';progress('complete');return summary;
+  }catch(error){
+   // Some bounded batches may already be saved. Let callers re-read every
+   // known affected row even when a later RPC or cancellation stops the job.
+   const failure=error&&typeof error==='object'?error:new Error(message(error));
+   failure.affectedSkus=unique([...seeds,...affected]);throw failure;
+  }
  }
  g.HubPriceMaterializer={materialize};
 })(typeof window==='undefined'?globalThis:window);

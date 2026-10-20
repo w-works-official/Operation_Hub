@@ -7,7 +7,7 @@
  const fieldLabels={...M.fields,calculated_base_price:'시스템 기준가격 · 매트릭스',basis_sku_price:'이전 계산 결과'};
  const fieldHelp={
   representative_base_price:'전체 현재 옵션의 유효 기준가에서 계산한 상품 대표가입니다. 해당 SKU의 판매처 등록가 수식에서만 명시적으로 선택합니다.',
-  purchase_price:'셀피아 원본에서 읽은 매입가입니다.',
+  purchase_price:'매트릭스에서 수정한 운영 매입가를 우선 사용합니다. 수정값이 없으면 업로드한 셀피아 원본 매입가를 사용합니다.',
   source_base_price:'셀피아 원본 파일의 판매가이며, 기존 저장 수식에서 “판매가”로 부르던 기준값입니다.',
   actual_inbound_cost:'매입가에 쌍/낱개 환산·보정 등을 적용한 실제 입고 단가입니다.',
   basis_sku_price:'다단계 계산 연결용 값입니다. 첫 수식 결과를 다음 수식의 시작값으로 이어줄 때만 사용합니다. 직접 값을 입력하는 항목이 아닙니다.',

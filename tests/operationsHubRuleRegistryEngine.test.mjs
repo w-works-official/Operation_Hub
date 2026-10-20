@@ -106,3 +106,20 @@ test('actual inbound cost rounds fractional won after any assigned formula',()=>
  }
  assert.throws(()=>H.transform(37119,{steps:[{op:'divide',value:2}]}),/정수/,'other price stages still require an explicit rounding rule');
 });
+test('saved Matrix purchase price drives the assigned inbound and base chain with zero and raw fallback intact',()=>{
+ const inbound=rule('matrix-half','actual_inbound_cost','purchase_price','self',[{op:'divide',value:2}]);
+ const base=rule('matrix-base','calculated_base_price','actual_inbound_cost','self',[{op:'multiply',value:2.2},{op:'round',unit:500,rounding:'up'}]);
+ const cases=[
+  [{sellpia_source_purchase_price:53500},26750,59000],
+  [{sellpia_purchase_price:60000,purchase_price:53500,sellpia_source_purchase_price:53500},30000,66000],
+  [{sellpia_purchase_price:0,purchase_price:60000,sellpia_source_purchase_price:53500},0,0],
+  [{sellpia_purchase_price:null,sellpia_source_purchase_price:53500},26750,59000],
+  [{sellpia_purchase_price:null,purchase_price:60000,sellpia_source_purchase_price:53500},30000,66000]
+ ];
+ for(const [product,expectedInbound,expectedBase] of cases){
+  const evaluator=H.createEvaluator({products:{'synthetic-purchase':product},rules:[inbound,base],assignments:[assignment('synthetic-purchase',inbound),assignment('synthetic-purchase',base)]});
+  assert.equal(evaluator.evaluate('synthetic-purchase','actual_inbound_cost').value,expectedInbound);
+  assert.equal(evaluator.evaluate('synthetic-purchase','calculated_base_price').value,expectedBase);
+  assert.equal(product.sellpia_source_purchase_price,53500,'formulas must not change the immutable source');
+ }
+});

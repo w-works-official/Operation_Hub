@@ -10,15 +10,15 @@ function editFlow({materializationFails=false}={}){
   const events=[],dirty=new Set(),versions=new Map();
   const context={
     pendingChanges:[{sku:'5566-1',fieldKey:'sellpia_purchase_price',before:'30000',after:'35000'}],
-    sellpiaSaveInFlight:false,sellpiaSavingCount:0,sellpiaSaveError:'',sellpiaAutosaveTimer:null,
-    pendingChangeBatchId:'request-1',matrixDataset:{bySku:new Map([['5566-1',{}]])},
+    sellpiaSaveInFlight:false,sellpiaSavingChanges:[],sellpiaSavingCount:0,sellpiaSaveError:'',sellpiaAutosaveTimer:null,
+    pendingChangeBatchId:'request-1',matrixDataset:{bySku:new Map([['5566-1',{}]])},matrixFullLoad:null,
     matrixDirtyVersions:versions,matrixDirtySkus:dirty,changeModal:{hidden:false},
     clearTimeout(){},setTimeout(){},updatePendingChangeUi(){},createRequestId:()=> 'request-1',
     liveData:{saveSellpiaChanges:async()=>{events.push('save');return {savedCount:1,queuedCount:0};}},
     applySavedSellpiaChanges(){events.push('local-input');},
-    materializeHubPrices:async(skus,opts)=>{events.push(`calculate:${opts.sources.length}:${skus.join(',')}`);if(materializationFails)throw Error('calculation failed');return {status:'complete'};},
-    materializationWarning:()=>'',markMatrixAffected:skus=>{events.push('dirty');for(const sku of skus){dirty.add(sku);versions.set(sku,1);}},
-    refreshMatrixSkus:async skus=>{events.push(`read:${skus.join(',')}`);return [];},
+    materializeHubPrices:async(skus,opts)=>{events.push(`calculate:${opts.sources===undefined?'default-sellers':opts.sources.join(',')}:${skus.join(',')}`);if(materializationFails)throw Error('calculation failed');return {status:'complete',affectedSkus:['5566-1','5566-2']};},
+    materializationWarning:()=>'',markMatrixAffected:skus=>{events.push('dirty');for(const sku of skus){dirty.add(sku);versions.set(sku,(versions.get(sku)||0)+1);}},
+    refreshMatrixSkus:async skus=>{events.push(`read:${skus.join(',')}`);return skus.map(sellpia_sku_code=>({sellpia_sku_code}));},
     removeSavedCellState(){},showToast(){},loadLiveDashboardMetrics(){},refreshChangeQueueInBackground(){},
     restoreFailedChanges(){},scheduleSellpiaAutosave(){},console
   };
@@ -29,17 +29,18 @@ function editFlow({materializationFails=false}={}){
   return {context,events,dirty};
 }
 
-test('purchase price edit saves, recalculates internal fields, then patches only the affected SKU',async()=>{
+test('purchase price edit saves, recalculates with default seller scopes, then patches only the affected SKUs',async()=>{
   const {context,events,dirty}=editFlow();
   await context.flush();
-  assert.deepEqual(events,['save','local-input','calculate:0:5566-1','dirty','read:5566-1']);
+  assert.deepEqual(events,['save','local-input','dirty','calculate:default-sellers:5566-1','dirty','read:5566-1,5566-2']);
   assert.equal(dirty.size,0,'successful targeted refresh clears this version of the dirty marker');
+  assert.deepEqual(Array.from(context.sellpiaSavingChanges),[],'settled saves release the pending input overlay');
 });
 
 test('calculation error still re-reads the saved SKU instead of leaving optimistic old output',async()=>{
   const {context,events}=editFlow({materializationFails:true});
   await context.flush();
-  assert.deepEqual(events,['save','local-input','calculate:0:5566-1','dirty','read:5566-1']);
+  assert.deepEqual(events,['save','local-input','dirty','calculate:default-sellers:5566-1','dirty','read:5566-1']);
   assert.equal(context.pendingChanges.length,0,'already saved input must not be resubmitted');
 });
 

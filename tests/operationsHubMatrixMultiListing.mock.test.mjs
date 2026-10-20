@@ -59,7 +59,8 @@ assert.doesNotMatch(data.slice(data.indexOf('async function loadMatrixSellerList
 assert.match(data, /searchMatrixSellerListingSkus[\s\S]*?relationType:'all'[\s\S]*?component\?\.sku/, 'seller identity search must resolve matching groups back to Sellpia SKUs');
 assert.match(app, /matrixMultiListingCells[\s\S]*?sellerListings\.length > 1/, 'single-listing rendering stays on the existing renderer');
 assert.match(app, /matrixExpectedListingCount[\s\S]*?ensureMatrixSellerListings[\s\S]*?slice\(0,100\)/, 'only visible multi-listing groups are enriched in a bounded request');
-assert.match(app, /targets\.forEach\(sku=>matrixSellerListingsCache\.delete\(sku\)\)[\s\S]*?matrixDataset\.patch/, 'J: targeted refresh invalidates listing detail before patching the SKU');
+const targetedRefresh = app.slice(app.indexOf('async function refreshMatrixSkus('), app.indexOf('\nfunction matrixRowName('));
+assert.match(targetedRefresh, /const rows=loaded\.filter\([\s\S]*?===requestVersion\)[\s\S]*?rows\.forEach\(row=>matrixSellerListingsCache\.delete\(row\.sellpia_sku_code\)\)[\s\S]*?matrixDataset\.patch\(rows\)/, 'J: targeted refresh invalidates listing detail for accepted current rows before patching those same SKUs');
 assert.match(app, /matrixVirtualLayout[\s\S]*?virtualRange[\s\S]*?rows\.slice\(start,end\)/, 'dynamic row height must preserve virtualized viewport rendering');
 assert.match(app, /data-link-product-code[\s\S]*?data-link-option-code[\s\S]*?openListingLinkManager/, 'each visible identity opens the exact existing relation manager target');
 assert.match(app, /__hubShadow\?\.\[prefix\]\?\.lookup === 'conflict'[\s\S]*?label:'충돌'/, 'F: inverse ambiguity remains visibly conflicted');

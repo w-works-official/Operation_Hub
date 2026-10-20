@@ -4,7 +4,10 @@
  const platformTargets=['platform_registration_price','platform_option_price','platform_discount_price','platform_final_price','platform_price'];
  const platformFields=[...platformTargets,'platform_option_input','platform_final_input'];
  const targets=['actual_inbound_cost','basis_sku_price','calculated_base_price','calculated_stock',...platformTargets];
- const raw={purchase_price:'sellpia_source_purchase_price',source_base_price:'sellpia_source_sale_price',actual_inbound_cost:'actual_inbound_cost',basis_sku_price:'system_base_price',calculated_base_price:'system_base_price',system_stock:'system_stock',calculated_stock:'system_stock'};
+ const raw={purchase_price:'sellpia_purchase_price',source_base_price:'sellpia_source_sale_price',actual_inbound_cost:'actual_inbound_cost',basis_sku_price:'system_base_price',calculated_base_price:'system_base_price',system_stock:'system_stock',calculated_stock:'system_stock'};
+ // Matrix edits are operational overrides. Keep the uploaded source immutable
+ // and use it only when no current operational purchase price is available.
+ function purchasePrice(product){return product?.sellpia_purchase_price??product?.purchase_price??product?.sellpia_source_purchase_price;}
  fields.representative_base_price='상품 대표 기준가';
  const key=(sku,field,scope='')=>JSON.stringify([sku,field,scope||'']);
  const isPlatform=field=>platformFields.includes(field);
@@ -126,7 +129,7 @@
     const upstream=field==='basis_sku_price'&&slots.has(key(sku,'actual_inbound_cost'))?'actual_inbound_cost':field==='calculated_base_price'&&(slots.has(key(sku,'basis_sku_price'))||slots.has(key(sku,'actual_inbound_cost')))?'basis_sku_price':null;
     if(upstream){const input=evaluate(sku,upstream,'',[...stack,k]);const result={...input,trace:[...input.trace,{sku,field,value:input.value,inherited_from:upstream}]};cache.set(k,result);return result;}
     if(field==='calculated_base_price'&&legacyCalculate){const legacy=legacyCalculate(sku);if(legacy){const result={...legacy,versions:legacy.versions||[],trace:legacy.trace||[{sku,field,value:legacy.value}]};numeric(result.value,'계산값');cache.set(k,result);return result;}}
-    const value=numeric(p[field]??p[raw[field]],sku+' '+fields[field]);if(value<0)throw Error('음수 기준값');const result={value,base:value,trace:[{sku,field,value}],formula:fields[field],versions:[]};cache.set(k,result);return result;
+     const value=numeric(field==='purchase_price'?purchasePrice(p):p[field]??p[raw[field]],sku+' '+fields[field]);if(value<0)throw Error('음수 기준값');const result={value,base:value,trace:[{sku,field,value}],formula:fields[field],versions:[]};cache.set(k,result);return result;
    }
    const rule=registry.get(assignment.rule_id);if(!rule||rule.is_active===false)throw Error('적용된 규칙이 없거나 비활성 상태입니다.');validateRule(rule);
    if(rule.target_field!==field||(rule.scope||'')!==(scope||''))throw Error('배정된 규칙의 단계 또는 판매처가 다릅니다.');
@@ -152,5 +155,5 @@
  }
  function descendants(requested,dependencies){const all=new Set(requested);let changed=true;while(changed){changed=false;for(const d of dependencies)if(all.has(d.parent_sku)&&!all.has(d.child_sku)){all.add(d.child_sku);changed=true;}if(all.size>2000)throw Error('연결 SKU가 2,000개를 넘습니다.');}return [...all];}
  function validateGraph(input){const evaluator=createEvaluator(input);return {valid:true,results:(input.assignments||[]).map(a=>({sku:a.sku,target_field:a.target_field,scope:a.scope||'',result:evaluator.evaluate(a.sku,a.target_field,a.scope||'')}))};}
- g.HubRuleRegistry={fields,targets,platformFields,makeshopDiscountCatalog,makeshopDiscountConfig,isPlatform,key,parseSteps,stepsText,validateRule,validateConfig,transform,inverse,inverseTransform:inverse,createEvaluator,validateGraph,expandSkus,descendants};
+ g.HubRuleRegistry={fields,purchasePrice,targets,platformFields,makeshopDiscountCatalog,makeshopDiscountConfig,isPlatform,key,parseSteps,stepsText,validateRule,validateConfig,transform,inverse,inverseTransform:inverse,createEvaluator,validateGraph,expandSkus,descendants};
 })(typeof window==='undefined'?globalThis:window);

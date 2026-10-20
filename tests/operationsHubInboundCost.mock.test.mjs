@@ -36,7 +36,7 @@ assert.match(html, /id="inbound-cost-tag-form"/);
 assert.match(html, /id="inbound-cost-modal"/);
 assert.match(app, /data-inbound-cost-edit/);
 assert.match(app, /실입고가를 DB에 바로 저장했습니다/);
-assert.match(app, /calculateInboundCostPreview\(product\.sellpia_source_purchase_price, tag\)/, 'formula preview must use the immutable Sellpia raw purchase source');
+assert.match(app, /calculateInboundCostPreview\(window\.HubRuleRegistry\.purchasePrice\(product\), tag\)/, 'formula preview must use the saved Matrix purchase price, with immutable source fallback');
 assert.match(app, /parts\.push\(`÷ \$\{divide\.toLocaleString\('ko-KR'\)\}`\)/);
 assert.match(csv, /label:'셀피아 매입가'/);
 assert.match(csv, /label:'실입고가 수식태그'/);

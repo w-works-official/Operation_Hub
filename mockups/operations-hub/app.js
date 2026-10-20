@@ -16,6 +16,7 @@ const pendingChanges = [];
 let pendingChangeBatchId = null;
 let sellpiaAutosaveTimer = null;
 let sellpiaSaveInFlight = false;
+let sellpiaSavingChanges = [];
 let sellpiaSavingCount = 0;
 let sellpiaSaveError = '';
 const SELLPIA_AUTOSAVE_DELAY_MS = 450;
@@ -1351,6 +1352,7 @@ const matrixSellerListingsCache=new Map(),matrixSellerListingsPending=new Set();
 let matrixSellerListingsVersion=0,matrixSellerSearchKey='',matrixSellerSearchSkus=[];
 const matrixDirtySkus=new Set();
 const matrixDirtyVersions=new Map();let matrixDirtyVersion=0;
+const matrixSkuReadVersions=new Map();let matrixSkuReadVersion=0;
 function markMatrixAffected(skus){for(const sku of skus||[]){matrixDirtySkus.add(sku);matrixDirtyVersions.set(sku,++matrixDirtyVersion);}}
 let matrixSourceReloadNeeded=false;
 window.addEventListener('hub-matrix-source-reloaded',()=>{matrixSourceReloadNeeded=true;});
@@ -1407,19 +1409,53 @@ function rebindVirtualMatrixSelection(){
  paintMatrixCellSelection();
 }
 
+function overlayPendingMatrixChanges(products) {
+  const changes=[...sellpiaSavingChanges,...pendingChanges];
+  if(!changes.length)return products;
+  const bySku=new Map();
+  for(const change of changes){if(!bySku.has(change.sku))bySku.set(change.sku,[]);bySku.get(change.sku).push(change);}
+  return products.map(product=>{
+    const pending=bySku.get(product.sellpia_sku_code);if(!pending)return product;
+    const row={...product};
+    for(const change of pending){row[change.fieldKey]=change.after;if(change.fieldKey==='sellpia_own_code')row.own_code=change.after;}
+    return row;
+  });
+}
+
+function replaceMatrixRowsPreservingEditor(markup) {
+  const editor=document.activeElement?.closest('.inline-editor');
+  const activeRow=editor?.closest('tr[data-sku]');
+  if(!activeRow||!matrixBody.contains(activeRow)){matrixBody.innerHTML=markup;return;}
+  const nextBody=document.createElement('tbody');nextBody.innerHTML=markup;
+  const freshActive=[...nextBody.children].find(row=>row.dataset.sku===activeRow.dataset.sku);
+  if(freshActive&&freshActive.children.length===activeRow.children.length){
+    const oldCells=[...activeRow.children];
+    [...freshActive.children].forEach((cell,index)=>{if(oldCells[index]&&!oldCells[index].contains(editor))oldCells[index].replaceWith(cell);});
+  }
+  // Keep the focused input connected. Moving or replacing its row would end
+  // an edit while a prior save or dependent-SKU read is still completing.
+  const current=[...matrixBody.children],position=current.filter(row=>row.dataset.sku).indexOf(activeRow);
+  const next=[...nextBody.children].filter(row=>row!==freshActive);
+  const anchor=Math.min(position,next.length);
+  for(const row of current)if(row!==activeRow)row.remove();
+  next.forEach((row,index)=>{if(index<anchor)matrixBody.insertBefore(row,activeRow);else matrixBody.append(row);});
+  pendingHubPriceRender=true;
+}
+
 function renderLiveMatrixRows(products) {
   if(typeof matrixDataset!=='undefined'&&matrixDataset&&!matrixVirtualPainting){matrixVirtualStart=-1;paintVirtualMatrix();return;}
   if(typeof matrixVirtualPainting==='undefined'||!matrixVirtualPainting)clearMatrixCellSelection();
   matrixRowsBySku.clear();
   if (!products.length) {
-    matrixBody.innerHTML = `<tr class="matrix-empty-row"><td colspan="${MATRIX_COLUMN_COUNT}"><b>검색 결과가 없습니다.</b><span>SKU 또는 자사코드를 다시 확인해주세요.</span></td></tr>`;
+    replaceMatrixRowsPreservingEditor(`<tr class="matrix-empty-row"><td colspan="${MATRIX_COLUMN_COUNT}"><b>검색 결과가 없습니다.</b><span>SKU 또는 자사코드를 다시 확인해주세요.</span></td></tr>`);
     return;
   }
   const sellerBaseMerges = buildSellerBaseMerges(products);
   const productIdentityMerges = buildProductIdentityMerges(products);
   let previousProductGroup = '';
   let previousResultGroup = '';
-  matrixBody.innerHTML = products.map((product, rowIndex) => {
+  products=overlayPendingMatrixChanges(products);
+  const markup = products.map((product, rowIndex) => {
     if (product.__codeListPlaceholder) return renderCodeListPlaceholderRow(product);
     matrixRowsBySku.set(product.sellpia_sku_code, product);
     const sku = escapeHtml(product.sellpia_sku_code);
@@ -1489,6 +1525,10 @@ function renderLiveMatrixRows(products) {
       <td class="profile-cell${profile.material ? '' : ' data-gap'}">${escapeHtml(profile.material || '-')}</td><td class="profile-cell${profile.product_group ? '' : ' data-gap'}">${escapeHtml(profile.product_group || '-')}</td><td class="profile-tags-cell">${appliedTagChips || (tagSummary ? `<span class="tag" title="${escapeHtml(tagSummary)}">${escapeHtml(tagSummary)}</span>` : mappingTag)}</td><td>${formatLiveTime(product.sellpia_source_updated_at || product.sellpia_inventory_at || product.updated_at)}</td>
     </tr>`;
   }).join('');
+  replaceMatrixRowsPreservingEditor(markup);
+  for(const change of [...sellpiaSavingChanges,...pendingChanges]){
+    matrixBody.querySelector(`tr[data-sku="${CSS.escape(change.sku)}"] .sellpia-edit[data-field-key="${CSS.escape(change.fieldKey)}"]`)?.classList.add('pending');
+  }
   applyColumnVisibility(activeView);
 }
 
@@ -1968,12 +2008,16 @@ async function refreshMatrixSkus(skus = []) {
   const targets = [...new Set(skus.map(sku => String(sku || '').trim()).filter(Boolean))];
   const hasTargetedGrid=Boolean(matrixDataset&&Object.prototype.hasOwnProperty.call(liveData||{},'loadMatrixGridRowsBySkus'));
   if (!targets.length || !(hasTargetedGrid||liveData?.loadProductsBySkus)) return [];
-  const patchAt=performance.now(),rows=hasTargetedGrid
+  const requestVersion=++matrixSkuReadVersion;
+  targets.forEach(sku=>matrixSkuReadVersions.set(sku,requestVersion));
+  const patchAt=performance.now(),loaded=hasTargetedGrid
     ?await liveData.loadMatrixGridRowsBySkus(targets)
     :await (async()=>{const values=[];for(let i=0;i<targets.length;i+=200)values.push(...await liveData.loadProductsBySkus(targets.slice(i,i+200)));return values;})();
+  if(hasTargetedGrid&&loaded.length!==targets.length)throw Error('Matrix 대상 SKU 일부가 누락되어 부분 갱신하지 않았습니다.');
+  const rows=loaded.filter(row=>matrixSkuReadVersions.get(String(row.sellpia_sku_code))===requestVersion);
+  if(!rows.length)return [];
   if(matrixDataset){
-    if(rows.length!==targets.length)throw Error('Matrix 대상 SKU 일부가 누락되어 부분 갱신하지 않았습니다.');
-    targets.forEach(sku=>matrixSellerListingsCache.delete(sku));matrixSellerListingsVersion+=1;matrixVirtualLayout=null;
+    rows.forEach(row=>matrixSellerListingsCache.delete(row.sellpia_sku_code));matrixSellerListingsVersion+=1;matrixVirtualLayout=null;
     matrixDataset.patch(rows);matrixPerformance.patchMs=performance.now()-patchAt;
     const selectedAt=performance.now();
     matrixState.rows=matrixDataset.select({...matrixState,skus:matrixState.codeListSkus,
@@ -3452,6 +3496,7 @@ function applySavedSellpiaChanges(savedChanges, result = {}) {
     if (!product) continue;
     Object.assign(product, savedRow);
   }
+  for(const product of overlayPendingMatrixChanges([...matrixRowsBySku.values()]))matrixRowsBySku.set(product.sellpia_sku_code,product);
   for (const repriced of result.repricedRows || []) {
     const product = matrixRowsBySku.get(repriced.sellpia_sku_code);
     if (!product) continue;
@@ -3486,6 +3531,7 @@ async function flushPendingSellpiaChanges({automatic = false} = {}) {
   const batchId = pendingChangeBatchId || createRequestId();
   pendingChangeBatchId = null;
   sellpiaSaveInFlight = true;
+  sellpiaSavingChanges = snapshot;
   sellpiaSavingCount = snapshot.length;
   sellpiaSaveError = '';
   updatePendingChangeUi();
@@ -3494,21 +3540,31 @@ async function flushPendingSellpiaChanges({automatic = false} = {}) {
     const result = await liveData.saveSellpiaChanges(snapshot, batchId);
     saved = true;
     applySavedSellpiaChanges(snapshot, result);
+    const savedSkus=[...new Set(snapshot.map(change=>change.sku))];
+    const affectedSkus=new Set(savedSkus);
+    markMatrixAffected(savedSkus);
     const priceInputSkus = [...new Set(snapshot.filter(change => ['system_base_price','sellpia_purchase_price'].includes(change.fieldKey)).map(change => change.sku))];
     let calculationError = '';
     if (priceInputSkus.length) {
-      try { calculationError = materializationWarning(await materializeHubPrices(priceInputSkus,{reason:'sellpia-price-input-save',sources:snapshot.some(change=>change.fieldKey==='system_base_price')?['smartstore','makeshop','ably']:[]})); }
-      catch (error) { calculationError = error?.message || String(error); console.error('saved Sellpia value price materialization failed', error); }
+      try {
+        const calculation=await materializeHubPrices(priceInputSkus,{reason:'sellpia-price-input-save'});
+        for(const sku of calculation?.affectedSkus||[])affectedSkus.add(sku);
+        calculationError=materializationWarning(calculation);
+      }
+      catch (error) { for(const sku of error?.affectedSkus||[])affectedSkus.add(sku);calculationError = error?.message || String(error); console.error('saved Sellpia value price materialization failed', error); }
     }
     // The saved input and materialized result must be read back together from
     // the same compact Grid projection.  Never reload all 23k SKUs for one edit.
-    const savedSkus=[...new Set(snapshot.map(change=>change.sku))];
-    markMatrixAffected(savedSkus);
+    const refreshSkus=[...affectedSkus];
+    markMatrixAffected(refreshSkus);
+    // The saved input may normalize to a source fallback (for example a
+    // cleared purchase override). Only newer unsaved edits may cover this read.
+    sellpiaSavingChanges=[];
     if(matrixDataset){
       try{
-        const versions=new Map(savedSkus.map(sku=>[sku,matrixDirtyVersions.get(sku)]));
-        await refreshMatrixSkus(savedSkus);
-        savedSkus.forEach(sku=>{if(matrixDirtyVersions.get(sku)===versions.get(sku))matrixDirtySkus.delete(sku);});
+        const versions=new Map(refreshSkus.map(sku=>[sku,matrixDirtyVersions.get(sku)]));
+        const refreshed=await refreshMatrixSkus(refreshSkus);
+        refreshed.forEach(row=>{const sku=row.sellpia_sku_code;if(!matrixFullLoad&&matrixDirtyVersions.get(sku)===versions.get(sku))matrixDirtySkus.delete(sku);});
       }catch(error){
         console.error('saved Sellpia SKU targeted Matrix refresh failed',error);
         calculationError=[calculationError,`Matrix 부분 갱신 실패: ${error?.message||error}`].filter(Boolean).join(' · ');
@@ -3538,6 +3594,7 @@ async function flushPendingSellpiaChanges({automatic = false} = {}) {
     return null;
   } finally {
     sellpiaSaveInFlight = false;
+    sellpiaSavingChanges = [];
     sellpiaSavingCount = 0;
     updatePendingChangeUi();
     if (saved && pendingChanges.length) scheduleSellpiaAutosave();
@@ -12779,7 +12836,7 @@ function updateInboundCostModalPreview() {
     equation = value === null ? '직접 입력 금액을 적어주세요.' : '직접 확인한 실입고가';
   } else if (mode === 'formula') {
     const tag = inboundCostState.tags.find(item => String(item.tag_id) === document.getElementById('inbound-cost-formula').value);
-    value = tag ? calculateInboundCostPreview(product.sellpia_source_purchase_price, tag) : unified.calculated ? unified.value : null;
+    value = tag ? calculateInboundCostPreview(window.HubRuleRegistry.purchasePrice(product), tag) : unified.calculated ? unified.value : null;
     equation = tag ? `${inboundCostFormulaLabel(tag)} = ${formatNullableNumber(value)}원` : unified.calculated ? `${unified.tagName} · ${unified.error || `저장된 계산값 ${formatNullableNumber(value)}원`}` : '수식태그를 선택해주세요.';
   }
   document.getElementById('inbound-cost-preview').textContent = value === null || !Number.isFinite(value) ? '-' : `${formatNullableNumber(value)}원`;

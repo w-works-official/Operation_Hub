@@ -1,5 +1,6 @@
 (function(g){
  'use strict';
+ const purchasePrice=product=>g.HubRuleRegistry?.purchasePrice?g.HubRuleRegistry.purchasePrice(product):product?.sellpia_purchase_price??product?.purchase_price??product?.sellpia_source_purchase_price;
  function fromSavedRule(rule,type,basis='inbound'){
   if(type==='formula')return {...rule,enabled:true};
   if(type==='inbound'){
@@ -17,7 +18,7 @@
   if(rules.length!==1)throw Error(sku+': '+(output.scope||'공통')+' '+output.output_field+' 수식 '+rules.length+'개 · '+rules.map(f=>f.name||f.tag_id).join(', '));
   const f=rules[0];let base;
   if(f.basis==='sku'){if(!links[sku])throw Error(sku+': 기준 6mm SKU 미지정');base=calculate(links[sku],products,formulas,links,[...stack,sku],output).value;}
-  else base=f.basis==='inbound'?p.actual_inbound_cost:f.basis==='purchase'?p.sellpia_source_purchase_price:p.sellpia_source_sale_price;
+  else base=f.basis==='inbound'?p.actual_inbound_cost:f.basis==='purchase'?purchasePrice(p):p.sellpia_source_sale_price;
   if(base===null||base===undefined||base===''||!Number.isFinite(Number(base))||Number(base)<0)throw Error(sku+': 기준가격 없음');
   const multiplier=Number(f.multiplier),add=Number(f.add),unit=Number(f.unit);
   if(!Number.isFinite(multiplier)||multiplier<0||!Number.isFinite(add)||!Number.isFinite(unit)||unit<1)throw Error('수식 값을 확인하세요.');
