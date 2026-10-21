@@ -71,5 +71,8 @@
   "operationsHubSellpiaInventoryCountTimeout.db.test.mjs",
   "operationsHubMatrixPriceEditPolicy.test.mjs",
   "operationsHubSellerSearch.mock.test.mjs",
-  "operationsHubSellerSearchSql.test.mjs"
+  "operationsHubSellerSearchSql.test.mjs",
+  "operationsHubPriceDecisionExportRead.mock.test.mjs",
+  "operationsHubPriceDecisionExportReadSql.test.mjs",
+  "operationsHubSmartstoreExportReadFlow.test.mjs"
 ]

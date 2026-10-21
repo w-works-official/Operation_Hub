@@ -8929,6 +8929,8 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
   if(stockSource&&!['stock','available_stock'].includes(stockSource))throw Error('재고 내보내기 기준을 확인해주세요.');
   if(stockSource&&!includeStock)throw Error('재고 기준은 재고를 내보낼 때만 선택할 수 있습니다.');
   if(priceMode==='sellpia_source'&&includePrice&&(!['smartstore','makeshop'].includes(source)||!Array.isArray(skus)||!skus.length))throw Error('셀피아 판매가 기준은 스마트스토어·메이크샵의 태그 또는 SKU 범위에서만 사용할 수 있습니다.');
+  const decisionReadMode=includePrice&&source==='smartstore'&&priceMode==='sellpia_source'?'sellpia_export':'editor';
+  if(decisionReadMode==='sellpia_export'&&typeof liveData.loadExportCurrentPriceDecisions!=='function')throw Error('내보내기 현재 가격 조회 기능을 불러오지 못했습니다. 새로고침 후 다시 확인해주세요.');
   const clock=()=>globalThis.performance?.now?.()??Date.now(),started=clock(),timings={download_ms:0,parse_ms:0,mapping_ms:0,target_ms:0,plan_ms:0,serialize_ms:0},queries=[];
   const requested=Array.isArray(skus)?new Set(skus.map(value=>String(value||'').trim()).filter(Boolean)):null;
   const stockExcluded=new Set(excludedStockSkus.map(value=>String(value||'').trim()).filter(Boolean));
@@ -8938,7 +8940,8 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
   timings.download_ms=Math.round(clock()-mark);
   const files=filesBySource.get(source)||[];if(!files.length)throw Error(`${CHANNEL_LABELS[source]||source} 최신 보관 원본이 없습니다.`);
   const outputs=[],skipped=[],plans=[],sourcePriceProofs=new Map(),currentPriceDecisionProofs=[],currentPriceDecisionRequests=[],matchedSelectedSkus=new Set(),crossFileMappingsByIdentity=new Map(),crossFileBlockedProducts=new Map(),fileContexts=[];let carrierRows=0,matchedSkuCount=0,exportAudit=null;
-  const onQuery=query=>{queries.push(query);onProgress?.(`${source} · ${query.query} · 대상 ${formatNumber(query.scope_count)} · ${formatNumber(query.latency_ms)}ms`);};
+  const exportDecisionReadContext={};
+  const onQuery=query=>{queries.push(query);onProgress?.(`${source} · ${query.query} · 대상 ${formatNumber(query.scope_count)}${Number.isFinite(query.processed_count)?` · 처리 ${formatNumber(query.processed_count)}/${formatNumber(query.total_count)} SKU`:''} · ${formatNumber(query.latency_ms)}ms`);};
   for(const file of files){
     mark=clock();
     const parsed=await window.SystemV3SellerParsers.parseSellerFiles(source,[file],{price:Boolean(includePrice),discount:Boolean(includePrice),inventory:Boolean(includeStock)});
@@ -8980,17 +8983,24 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
     onProgress?.(`${source} · carrier에서 확정된 ${formatNumber(matchedSkus.length)} SKU의 목표값만 조회합니다.`);
     mark=clock();
     const targets=includePrice&&priceMode==='rules'&&matchedSkus.length?await liveData.loadCarrierMatrixTargets({source,skus:matchedSkus,onQuery}):{rows:[]};
+    if(includePrice&&matchedSkus.length)onProgress?.(`현재 가격 결정 조회 중 · ${formatNumber(matchedSkus.length)} SKU`);
+    const decisionResponse=includePrice&&decisionReadMode==='sellpia_export'
+      ?await liveData.loadExportCurrentPriceDecisions({source,skus:matchedSkus,onQuery,consistency:exportDecisionReadContext})
+      :includePrice&&matchedSkus.length?await liveData.loadCurrentPriceDecisions({source,skus:matchedSkus}):{rows:[],groups:[]};
     const currentDecisions=includePrice
-      ?matchedSkus.length
-        ?window.HubCurrentPriceDecisionResolver.normalize(await liveData.loadCurrentPriceDecisions({source,skus:matchedSkus}),{source,skus:matchedSkus})
-        :window.HubCurrentPriceDecisionResolver.normalize({rows:[],groups:[]},{source,skus:[]})
+      ?window.HubCurrentPriceDecisionResolver.normalize(decisionResponse,{source,skus:matchedSkus})
       :null;
+    if(includePrice&&decisionReadMode==='sellpia_export'){
+      const productProofs=new Set([...(currentDecisions.groups||[]),...(currentDecisions.absence_proofs||[])].map(group=>JSON.stringify([group.source_channel,group.seller_product_code])));
+      for(const row of mappingRows)if(!productProofs.has(JSON.stringify([source,String(row.product_code||'').trim()])))throw Error('내보내기 현재 가격의 상품 연결 증거가 누락되었습니다. 미리보기를 다시 확인해주세요.');
+    }
     if(includePrice&&matchedSkus.length)window.HubCurrentPriceDecisionResolver.attach(mappingRows,currentDecisions,{source});
     const currentDecisionProof=includePrice?window.HubCurrentPriceDecisionResolver.proof(currentDecisions):null;
-    if(includePrice){currentPriceDecisionProofs.push([file.name,currentDecisionProof]);currentPriceDecisionRequests.push({fileName:file.name,source,skus:[...matchedSkus],expectedProof:currentDecisionProof});}
+    if(includePrice){currentPriceDecisionProofs.push([file.name,currentDecisionProof]);currentPriceDecisionRequests.push({fileName:file.name,source,skus:[...matchedSkus],readMode:decisionReadMode,expectedProof:currentDecisionProof});}
     const selectedMapped=includePrice&&priceMode==='sellpia_source'?[...new Set(mappingRows.filter(row=>requested.has(String(row.sku||'').trim())
       &&!window.HubCurrentPriceDecisionResolver.decisionForMapping(currentDecisions,row,{source})).map(row=>String(row.sku||'').trim()).filter(Boolean))]:[];
     for(const row of mappingRows)if(includePrice&&priceMode==='sellpia_source'&&requested.has(row.sku))matchedSelectedSkus.add(row.sku);
+    if(includePrice&&priceMode==='sellpia_source'&&selectedMapped.length)onProgress?.(`셀피아 원본 판매가 조회 중 · ${formatNumber(selectedMapped.length)} SKU`);
     const sourcePrices=includePrice&&priceMode==='sellpia_source'&&selectedMapped.length?await liveData.loadSellpiaSourcePricesForExport({skus:selectedMapped,onQuery}):includePrice&&priceMode==='sellpia_source'?new Map():null;
     const stockSources=includeStock&&stockSource&&matchedSkus.length?(stockSourcesOverride||await liveData.loadSellpiaStockSourcesForExport({skus:matchedSkus,onQuery})):null;
     if(sourcePrices)for(const [sku,value] of sourcePrices){if(sourcePriceProofs.has(sku)&&sourcePriceProofs.get(sku)!==value)throw Error(`${sku}: 파일 간 셀피아 원본 가격이 다릅니다.`);sourcePriceProofs.set(sku,value);}
@@ -9098,8 +9108,12 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
       const confirmed=await liveData.loadSellpiaSourcePricesForExport({skus:[...sourcePriceProofs.keys()],onQuery});
       for(const [sku,value] of sourcePriceProofs)if(confirmed.get(sku)!==value)throw Error(`${sku}: 파일 생성 도중 최신 셀피아 원본 판매가가 변경됐습니다. 미리보기를 다시 실행하세요.`);
     }
+    const exportDecisionVerifyContext={};
     if(includePrice)for(const request of currentPriceDecisionRequests){
-      const response=await liveData.loadCurrentPriceDecisions({source:request.source,skus:request.skus});
+      onProgress?.(`현재 가격 결정 최종 검증 중 · ${formatNumber(request.skus.length)} SKU`);
+      const response=request.readMode==='sellpia_export'
+        ?await liveData.loadExportCurrentPriceDecisions({source:request.source,skus:request.skus,onQuery,consistency:exportDecisionVerifyContext})
+        :await liveData.loadCurrentPriceDecisions({source:request.source,skus:request.skus});
       const confirmed=window.HubCurrentPriceDecisionResolver.proof(window.HubCurrentPriceDecisionResolver.normalize(response,{source:request.source,skus:request.skus}));
       window.HubCurrentPriceDecisionResolver.assertProof(request.expectedProof,confirmed);
     }
@@ -9129,6 +9143,8 @@ function reportSellerExportProgress(source,detail){
     :message.startsWith('엑셀 가격')?{percent:75,title:'엑셀 가격 반영'}
     :message.startsWith('엑셀 원본')?{percent:65,title:'엑셀 행 확인'}
     :message.startsWith('가격 계획')?{percent:55,title:'가격 계획 계산'}
+    :message.startsWith('현재 가격 결정')||message.includes('내보내기 현재 가격 결정')?{percent:50,title:'현재 가격 결정 조회'}
+    :message.startsWith('셀피아 원본 판매가')||message.includes('latest Sellpia source sale prices')?{percent:52,title:'셀피아 원본 판매가 조회'}
     :{percent:45,title:'carrier 대상 조회'};
   globalThis.dispatchEvent(new CustomEvent('system-v3-seller-export-progress',{detail:{source,...stage,detail:message}}));
 }

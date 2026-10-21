@@ -17,6 +17,19 @@ function decisionTuple(decision){
 }
 function normalizeCurrentPriceDecisions(response,{source,skus=[]}={}){
  const requested=[...new Set((skus||[]).map(value=>String(value||'').trim()).filter(Boolean))].sort(),allowed=new Set(requested),rows=Array.isArray(response?.rows)?response.rows:[];
+ const exportEvidence={};
+ if(response?.proof_version!==undefined){
+  if(response.proof_version!=='sellpia-export-v1'||!Array.isArray(response.absence_proofs)||!response.snapshots||typeof response.snapshots!=='object'||Array.isArray(response.snapshots))throw Error('내보내기 가격 검증 증거 형식이 올바르지 않습니다.');
+  if(requested.length&&!['seller_snapshot_id','sellpia_snapshot_id','sellpia_observed_at'].every(key=>Object.hasOwn(response.snapshots,key)))throw Error('내보내기 원본 snapshot 증거가 누락되었습니다.');
+  const activeProducts=new Set((response.groups||[]).map(group=>JSON.stringify([group.source_channel,group.seller_product_code])));
+  for(const proof of response.absence_proofs){
+   if(proof?.source_channel!==source||!String(proof.seller_product_code||'').trim()||proof.mapping_valid!==true||Number(proof.revision)!==0||!Array.isArray(proof.targets)
+     ||typeof proof.mapping_fingerprint!=='string'||!proof.sellpia_prices||typeof proof.sellpia_prices!=='object'||Array.isArray(proof.sellpia_prices)
+     ||proof.snapshot_id!==response.snapshots.seller_snapshot_id||proof.sellpia_snapshot_id!==response.snapshots.sellpia_snapshot_id||proof.source_observed_at!==response.snapshots.sellpia_observed_at
+     ||activeProducts.has(JSON.stringify([proof.source_channel,proof.seller_product_code])))throw Error('내보내기 가격 결정 없음 증거가 올바르지 않습니다.');
+  }
+  Object.assign(exportEvidence,{proof_version:response.proof_version,absence_proofs:response.absence_proofs,snapshots:response.snapshots});
+ }
  if((response?.groups||[]).some(group=>group.mapping_valid===false))throw Error('현재 가격 결정 판매처 연결이 변경되었습니다. 가격 미리보기를 다시 확인해주세요.');
  const byIdentity=new Map(),rowsBySku=new Map();
  for(const row of rows){
@@ -33,7 +46,7 @@ function normalizeCurrentPriceDecisions(response,{source,skus=[]}={}){
   byIdentity.set(key,normalized);if(!rowsBySku.has(sku))rowsBySku.set(sku,[]);rowsBySku.get(sku).push(normalized);
  }
  const bySku=new Map([...rowsBySku].filter(([,skuRows])=>skuRows.length===1).map(([sku,skuRows])=>[sku,skuRows[0]]));
- return {source,skus:requested,bySku,byIdentity,rowsBySku,groups:Array.isArray(response?.groups)?response.groups:[]};
+ return {source,skus:requested,bySku,byIdentity,rowsBySku,groups:Array.isArray(response?.groups)?response.groups:[],...exportEvidence};
 }
 function decisionForMapping(decisions,mapping,{source=decisions?.source}={}){
  const sku=String(mapping?.sku||mapping?.sellpia_sku_code||'').trim(),product=String(mapping?.seller_product_code||mapping?.product_code||'').trim(),option=String(mapping?.seller_option_code??mapping?.option_code??'').trim();
@@ -51,7 +64,9 @@ function currentPriceDecisionProof(decisions){
  rows.sort((a,b)=>JSON.stringify([a.sku,a.identity||[]]).localeCompare(JSON.stringify([b.sku,b.identity||[]])));
  const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
  const groups=(decisions?.groups||[]).map(group=>({source_channel:group.source_channel||decisions?.source||'',seller_product_code:String(group.seller_product_code||''),revision:group.revision??null,mapping_fingerprint:group.mapping_fingerprint||'',input_fingerprints:canonical(group.input_fingerprints||{}),snapshot_id:group.snapshot_id||'',targets:(group.targets||[]).map(target=>({sku:String(target.sku||''),seller_product_code:String(target.seller_product_code||''),seller_option_code:String(target.seller_option_code??''),price:target.price||null,source_row_no:target.source_row_no??null})).sort((a,b)=>JSON.stringify([a.sku,a.seller_product_code,a.seller_option_code]).localeCompare(JSON.stringify([b.sku,b.seller_product_code,b.seller_option_code])))})).sort((a,b)=>JSON.stringify([a.source_channel,a.seller_product_code]).localeCompare(JSON.stringify([b.source_channel,b.seller_product_code])));
- return JSON.stringify({source:decisions?.source||'',rows,groups});
+ const exportEvidence=decisions?.proof_version?{proof_version:decisions.proof_version,absence_proofs:(decisions.absence_proofs||[]).map(canonical).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),snapshots:canonical(decisions.snapshots)}:{};
+ const proof={source:decisions?.source||'',rows,groups,...exportEvidence};
+ return JSON.stringify(decisions?.proof_version?canonical(proof):proof);
 }
 function assertCurrentPriceDecisionProof(expected,actual){
  if(!expected||expected!==actual)throw Error('미리보기 후 현재 가격 결정이 추가되거나 변경되었습니다. 가격 미리보기를 다시 확인해주세요.');

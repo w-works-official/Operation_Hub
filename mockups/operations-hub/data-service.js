@@ -2236,6 +2236,55 @@
     return {rows,groups:[...groups.values()]};
   }
 
+  function canonicalExportDecisionEvidence(value) {
+    if(Array.isArray(value))return value.map(canonicalExportDecisionEvidence);
+    if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonicalExportDecisionEvidence(value[key])]));
+    return value;
+  }
+
+  async function loadExportCurrentPriceDecisions({source,skus=[],signal=null,onQuery=null,consistency=null}={}) {
+    if(source!=='smartstore')throw Error('내보내기 현재 가격 조회는 스마트스토어만 지원합니다.');
+    const codes=[...new Set(skus.map(cleanText).filter(Boolean))],rows=[],groups=new Map(),absenceProofs=new Map();
+    const proofVersion='sellpia-export-v1',canonical=value=>JSON.stringify(canonicalExportDecisionEvidence(value));
+    throwIfAborted(signal);
+    if(!codes.length)return {rows,groups:[],proof_version:proofVersion,absence_proofs:[],snapshots:{}};
+    // This context holds only validation evidence for this preview/run. It
+    // never reuses database responses, and must not survive the operation.
+    const context=consistency||{};
+    context.groups??=new Map();context.absenceProofs??=new Map();
+    let snapshots=null;
+    for(let offset=0;offset<codes.length;offset+=200){
+      throwIfAborted(signal);
+      const batch=codes.slice(offset,offset+200);
+      let query=db.rpc('hub_price_decision_export_read_v1',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_skus:batch});
+      if(signal&&typeof query.abortSignal==='function')query=query.abortSignal(signal);
+      const {data}=await carrierRead('내보내기 현재 가격 결정',batch.length,query,event=>onQuery?.({...event,processed_count:event.status==='ok'?offset+batch.length:offset,total_count:codes.length}));
+      throwIfAborted(signal);
+      if(data?.proof_version!==proofVersion||!Array.isArray(data.rows)||!Array.isArray(data.groups)||!Array.isArray(data.absence_proofs)
+        ||!data.snapshots||typeof data.snapshots!=='object'||Array.isArray(data.snapshots)
+        ||!['seller_snapshot_id','sellpia_snapshot_id','sellpia_observed_at'].every(key=>Object.hasOwn(data.snapshots,key)))throw Error('내보내기 현재 가격 응답 형식이 올바르지 않습니다.');
+      const snapshotProof=canonical(data.snapshots);
+      if(context.proofVersion&&context.proofVersion!==proofVersion||context.snapshotProof&&context.snapshotProof!==snapshotProof)throw Error('내보내기 조회 중 원본 snapshot이 변경되었습니다. 미리보기를 다시 확인해주세요.');
+      context.proofVersion=proofVersion;context.snapshotProof=snapshotProof;
+      snapshots=data.snapshots;
+      for(const [kind,entries,local,other] of [['group',data.groups,groups,context.absenceProofs],['absence',data.absence_proofs,absenceProofs,context.groups]]){
+        const seen=kind==='group'?context.groups:context.absenceProofs;
+        for(const entry of entries){
+          const product=cleanText(entry?.seller_product_code);
+          if(entry?.source_channel!==source||!product||!Array.isArray(entry.targets)
+            ||entry.snapshot_id!==snapshots.seller_snapshot_id||entry.sellpia_snapshot_id!==snapshots.sellpia_snapshot_id
+            ||entry.source_observed_at!==snapshots.sellpia_observed_at
+            ||kind==='absence'&&(entry.mapping_valid!==true||Number(entry.revision)!==0))throw Error('내보내기 현재 가격 상품 증거가 올바르지 않습니다.');
+          const key=JSON.stringify([source,product]),proof=canonical(entry),previous=seen.get(key);
+          if(other.has(key)||previous&&previous!==proof)throw Error('내보내기 조회 중 가격 결정 또는 상품 연결이 변경되었습니다. 미리보기를 다시 확인해주세요.');
+          seen.set(key,proof);local.set(key,entry);
+        }
+      }
+      rows.push(...data.rows);
+    }
+    return {rows,groups:[...groups.values()],proof_version:proofVersion,absence_proofs:[...absenceProofs.values()],snapshots};
+  }
+
   async function attachCurrentPriceDecisions(products,signal=null) {
     const codes=[...new Set(products.map(row=>cleanText(row.sellpia_sku_code)).filter(Boolean))],bySku=new Map();
     for(let offset=0;offset<codes.length;offset+=2000){
@@ -5025,6 +5074,7 @@
     loadMatrixExportSnapshot,
     loadCarrierMatrixTargets,
     loadCurrentPriceDecisions,
+    loadExportCurrentPriceDecisions,
     applyPriceDecision,
     loadPriceDecisionHistory,
     summarizeMatrixStocksForExport,

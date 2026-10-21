@@ -132,6 +132,30 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
      const original=rowsByFile.get(definition.file)[0];return {source_channel:source,seller_product_code:product,revision:decision.revision,mapping_fingerprint:`mapping-${product}`,input_fingerprints:{},snapshot_id:`snapshot-${product}`,mapping_valid:true,targets:[{sku:decision.sku,member_skus:[decision.sku],seller_product_code:product,seller_option_code:decision.seller_option_code,price:{base:original.base_price,discounted:original.discounted_base_price,option:original.option_price,final:original.final_price,terms:original.discount_terms},current_state:{price:decision.price,event_id:decision.event_id,revision:decision.revision},source_row_no:original.source_row_no,raw_payload:original.raw_payload}]};
     });
     return {rows,groups};
+   },
+   async loadExportCurrentPriceDecisions({source,skus}){
+    const current=await this.loadCurrentPriceDecisions({source,skus});
+    const snapshots={seller_snapshot_id:'seller-snapshot-current',sellpia_snapshot_id:'sellpia-snapshot-current',sellpia_observed_at:'2026-10-08T00:00:00Z'};
+    const groups=current.groups.map(group=>({...group,snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at}));
+    const activeProducts=new Set(groups.map(group=>group.seller_product_code));
+    const requestedProducts=[...new Set(definitions.filter(definition=>skus.includes(definition.sku)).map(definition=>definition.product))];
+    const absence_proofs=requestedProducts.filter(product=>!activeProducts.has(product)).map(product=>{
+     // Like the actual export RPC, a requested SKU expands to every canonical
+     // option/member of each seller product, independently of carrier file.
+     const members=definitions.filter(definition=>definition.product===product);
+     const targets=[...new Set(members.map(member=>member.option))].sort().map(option=>{
+      const options=members.filter(member=>member.option===option),definition=options[0],original=rowsByFile.get(definition.file)[0];
+      const memberSkus=[...new Set(options.map(member=>member.sku))].sort();
+      return {sku:memberSkus[0],member_skus:memberSkus,seller_product_code:product,seller_option_code:option,
+       price:{base:original.base_price,discounted:original.discounted_base_price,option:original.option_price,final:original.final_price,terms:original.discount_terms},
+       source_row_no:original.source_row_no,source_valid:true,
+       component_members:memberSkus.map((sku,index)=>({sku,component_qty:1,component_role:'primary',mapping_source:'explicit',listing_id:1,component_id:index+1}))};
+     });
+     return {source_channel:source,seller_product_code:product,revision:0,mapping_valid:true,mapping_fingerprint:`mapping-${product}`,
+      snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at,
+      sellpia_prices:Object.fromEntries([...new Set(members.map(member=>member.sku))].sort().map(sku=>[sku,prices.get(sku)])),targets};
+    });
+    return {rows:current.rows,groups,proof_version:'sellpia-export-v1',absence_proofs,snapshots};
    }
   },
   window:{
