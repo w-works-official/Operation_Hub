@@ -1433,31 +1433,103 @@
     return {rows:rows.slice(offset, offset + limit), hasMore:rows.length > offset + limit};
   }
 
-  async function loadDashboardMetrics() {
-    const {data, error} = await db
-      .from('operations_hub_dashboard_metrics')
-      .select('total_sku,connected_sku,unmatched_sku,seller_sku_total,seller_connected_sku,seller_unmatched_sku,seller_unmatched_smartstore,seller_unmatched_makeshop,seller_unmatched_ably,inventory_mismatch_sku,projected_inventory_mismatch_sku,inventory_draft_cells,inventory_failed_cells,latest_sync_at,today_picked,shortage_drawer_qty')
-      .single();
-    if (error) throw error;
+  async function readSellerUnmatchedPage({offset = 0, limit = 1000, expectedVersion = null, signal, token = requireOperationsHubSessionToken()} = {}) {
+    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 0 || limit > 1000) {
+      throw new RangeError('판매처 미연결 목록 조회 범위가 올바르지 않습니다.');
+    }
+    const assertActive = () => {
+      throwIfAborted(signal);
+      if (token !== operationsHubSessionToken) {
+        const error = new Error('판매처 미연결 목록 조회가 취소되었습니다.');
+        error.name = 'AbortError';
+        throw error;
+      }
+    };
+    assertActive();
+    const {data, error} = await withAbortSignal(db.rpc('hub_seller_unmatched_read_v1', {
+      p_session_token:token, p_offset:offset, p_limit:limit, p_expected_version:expectedVersion
+    }), signal);
+    assertActive();
+    throwOperationsHubRpcError(error);
+    const counts = data?.source_counts;
+    const count = value => Number.isSafeInteger(value) && value >= 0;
+    if (data?.contract_version !== 1 || typeof data.cache_version !== 'string' || !data.cache_version.trim() || !count(data.total)
+      || !counts || !['smartstore','makeshop','ably'].every(source => count(counts[source]))
+      || counts.smartstore + counts.makeshop + counts.ably !== data.total
+      || !['seller_total','seller_connected','seller_excluded'].every(field => count(data[field]))
+      || data.seller_connected + data.seller_excluded + data.total !== data.seller_total
+      || data.offset !== offset || !Array.isArray(data.rows) || typeof data.has_more !== 'boolean'
+      || data.rows.length !== (limit ? Math.min(limit, Math.max(0, data.total - offset)) : 0)
+      || data.has_more !== (offset + data.rows.length < data.total)) {
+      throw new Error('판매처 미연결 목록의 건수 또는 응답 형식을 확인하지 못했습니다. 다시 조회해주세요.');
+    }
+    if (expectedVersion !== null && data.cache_version !== expectedVersion) {
+      throw new Error('판매처 미연결 목록 조회 중 원본 또는 연결 상태가 변경되었습니다. 다시 조회해주세요.');
+    }
+    for (const row of data.rows) {
+      if (!['smartstore','makeshop','ably'].includes(row?.source_channel)
+        || typeof row.product_code !== 'string' || !row.product_code.trim()
+        || typeof row.option_code !== 'string') {
+        throw new Error('판매처 미연결 상품·옵션 식별자가 올바르지 않습니다. 다시 조회해주세요.');
+      }
+    }
     return data;
   }
 
-  async function loadAllSellerUnmatchedSkus({onProgress = null} = {}) {
-    const rows = [];
-    const pageSize = 1000;
-    onProgress?.({loaded:0, message:'판매처 미연결 SKU 조회 중'});
-    for (let from = 0; ; from += pageSize) {
-      const {data, error} = await db
-        .from('operations_hub_seller_unmatched_live')
-        .select('source_channel,product_code,option_code,product_name,option_name')
-        .order('source_channel')
-        .order('product_code')
-        .order('option_code')
-        .range(from, from + pageSize - 1);
-      if (error) throw error;
-      rows.push(...(data || []));
-      onProgress?.({loaded:rows.length, message:`판매처 미연결 SKU ${rows.length.toLocaleString()}개 조회`});
-      if (!data || data.length < pageSize) break;
+  function sellerUnmatchedReadProof(data) {
+    return JSON.stringify([data.cache_version, data.total, data.seller_total, data.seller_connected, data.seller_excluded,
+      ...['smartstore','makeshop','ably'].map(source => data.source_counts[source])]);
+  }
+
+  async function loadDashboardMetrics() {
+    const token = requireOperationsHubSessionToken();
+    const [{data, error}, unmatchedRead] = await Promise.all([
+      db.from('operations_hub_dashboard_metrics')
+        .select('total_sku,connected_sku,unmatched_sku,seller_sku_total,seller_connected_sku,seller_unmatched_sku,seller_unmatched_smartstore,seller_unmatched_makeshop,seller_unmatched_ably,inventory_mismatch_sku,projected_inventory_mismatch_sku,inventory_draft_cells,inventory_failed_cells,latest_sync_at,today_picked,shortage_drawer_qty')
+        .single(),
+      readSellerUnmatchedPage({limit:0, token}).then(value => ({value}), error => ({error}))
+    ]);
+    if (error) throw error;
+    if (unmatchedRead.error) {
+      if (unmatchedRead.error.operationsHubAuthRequired || unmatchedRead.error.name === 'AbortError') throw unmatchedRead.error;
+      // Keep unrelated metrics available, but never present a cached count as
+      // the current unmatched result when its authoritative read failed.
+      const result = {...data, seller_unmatched_sku:null, seller_unmatched_cache_version:null,
+        seller_sku_total:null, seller_connected_sku:null, seller_excluded_sku:null,
+        seller_unmatched_error:unmatchedRead.error.message || String(unmatchedRead.error)};
+      for (const source of ['smartstore','makeshop','ably']) result[`seller_unmatched_${source}`] = null;
+      return result;
+    }
+    const unmatched = unmatchedRead.value;
+    const result = {...data, seller_unmatched_sku:unmatched.total, seller_unmatched_cache_version:unmatched.cache_version,
+      seller_sku_total:unmatched.seller_total, seller_connected_sku:unmatched.seller_connected, seller_excluded_sku:unmatched.seller_excluded};
+    for (const source of ['smartstore','makeshop','ably']) result[`seller_unmatched_${source}`] = unmatched.source_counts[source];
+    return result;
+  }
+
+  async function loadAllSellerUnmatchedSkus({onProgress = null, signal} = {}) {
+    const token = requireOperationsHubSessionToken(), rows = [], seen = new Set();
+    const sourceCounts = {smartstore:0, makeshop:0, ably:0}, pageSize = 1000;
+    let version = null, proof = null, total = 0;
+    onProgress?.({loaded:0, total:0, message:'판매처 미연결 상품·옵션 조회 중'});
+    for (let offset = 0; ; offset += pageSize) {
+      const data = await readSellerUnmatchedPage({offset, limit:pageSize, expectedVersion:version, signal, token});
+      if (proof !== null && sellerUnmatchedReadProof(data) !== proof) {
+        throw new Error('판매처 미연결 목록 조회 중 집계가 변경되었습니다. 다시 조회해주세요.');
+      }
+      version = data.cache_version; proof = sellerUnmatchedReadProof(data); total = data.total;
+      for (const row of data.rows) {
+        const identity = JSON.stringify([row.source_channel, row.product_code, row.option_code]);
+        if (seen.has(identity)) throw new Error('판매처 미연결 목록에 중복 상품·옵션이 있습니다. 다시 조회해주세요.');
+        seen.add(identity); sourceCounts[row.source_channel]++; rows.push(row);
+      }
+      onProgress?.({loaded:rows.length, total, message:`판매처 미연결 상품·옵션 ${rows.length.toLocaleString()} / ${total.toLocaleString()}건 조회`});
+      if (!data.has_more) break;
+    }
+    const final = await readSellerUnmatchedPage({limit:0, expectedVersion:version, signal, token});
+    if (rows.length !== total || sellerUnmatchedReadProof(final) !== proof
+      || ['smartstore','makeshop','ably'].some(source => sourceCounts[source] !== final.source_counts[source])) {
+      throw new Error('판매처 미연결 목록과 집계 건수가 일치하지 않습니다. 다시 조회해주세요.');
     }
     return rows;
   }

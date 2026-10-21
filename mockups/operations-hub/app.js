@@ -1971,8 +1971,21 @@ async function loadLiveSourceStatus() {
   }
 }
 
+let liveDashboardMetricsRequestId = 0;
 async function loadLiveDashboardMetrics() {
+  const requestId = ++liveDashboardMetricsRequestId, sessionId = operationsAuthState.sessionId;
+  const isCurrent = () => requestId === liveDashboardMetricsRequestId
+    && operationsAuthState.authenticated && sessionId === operationsAuthState.sessionId;
+  const clearUnmatched = message => {
+    document.getElementById('live-unmatched-sku').textContent = '-';
+    document.getElementById('live-unmatched-detail').textContent = message;
+    document.getElementById('matrix-unmatched-badge').textContent = '-';
+    document.getElementById('matrix-unmatched-badge').title = message;
+    document.getElementById('dashboard-unmatched-alert').textContent = '판매처 미연결 집계 확인 필요';
+    document.getElementById('dashboard-unmatched-detail').textContent = message;
+  };
   if (!liveData?.loadDashboardMetrics) {
+    clearUnmatched('집계 연결 대기');
     setSystemHealthComponent('metrics', false);
     document.getElementById('live-today-picked').textContent = '-';
     document.getElementById('live-shortage-drawer').textContent = '주문 DB 연결 대기';
@@ -1980,19 +1993,20 @@ async function loadLiveDashboardMetrics() {
   }
   try {
     const metrics = await liveData.loadDashboardMetrics();
+    if (!isCurrent()) return false;
     const total = Number(metrics.total_sku || 0);
     const connected = Number(metrics.connected_sku || 0);
-    const hasSellerBreakdown = ['seller_unmatched_smartstore','seller_unmatched_makeshop','seller_unmatched_ably']
-      .every(key => metrics[key] != null);
+    const hasSellerBreakdown = !metrics.seller_unmatched_error
+      && typeof metrics.seller_unmatched_cache_version === 'string' && Boolean(metrics.seller_unmatched_cache_version.trim())
+      && ['seller_unmatched_smartstore','seller_unmatched_makeshop','seller_unmatched_ably']
+        .every(key => Number.isSafeInteger(metrics[key]) && metrics[key] >= 0);
     const sellerUnmatchedBySource = new Map([
       ['smartstore', Number(metrics.seller_unmatched_smartstore || 0)],
       ['makeshop', Number(metrics.seller_unmatched_makeshop || 0)],
       ['ably', Number(metrics.seller_unmatched_ably || 0)]
     ]);
     const sellerUnmatchedTotal = [...sellerUnmatchedBySource.values()].reduce((sum, value) => sum + value, 0);
-    const unmatched = hasSellerBreakdown
-      ? sellerUnmatchedTotal
-      : Number(metrics.seller_unmatched_sku ?? metrics.unmatched_sku ?? 0);
+    const unmatched = sellerUnmatchedTotal;
     const unmatchedDetail = ['smartstore','makeshop','ably']
       .map(source => `${CHANNEL_LABELS[source]} ${formatNumber(sellerUnmatchedBySource.get(source) || 0)}`)
       .join(' · ');
@@ -2006,11 +2020,17 @@ async function loadLiveDashboardMetrics() {
     document.getElementById('live-connected-rate').textContent = total ? `${((connected / total) * 100).toFixed(1)}%` : '0%';
     document.getElementById('live-inventory-mismatch').textContent = formatNumber(projectedMismatch);
     document.getElementById('live-inventory-mismatch-detail').textContent = `원본 ${formatNumber(mismatched)} · 수정안 ${formatNumber(inventoryDraftCells)}셀${inventoryFailedCells ? ` · 실패 ${formatNumber(inventoryFailedCells)}셀` : ''}`;
-    document.getElementById('live-unmatched-sku').textContent = formatNumber(unmatched);
-    document.getElementById('live-unmatched-detail').textContent = hasSellerBreakdown ? unmatchedDetail : '셀피아 SKU 연결 없음';
-    document.getElementById('matrix-unmatched-badge').textContent = formatNumber(unmatched);
-    document.getElementById('dashboard-unmatched-alert').textContent = `판매처 미연결 SKU ${formatNumber(unmatched)}건`;
-    document.getElementById('dashboard-unmatched-detail').textContent = hasSellerBreakdown ? unmatchedDetail : '판매처별 셀피아 SKU 연결 없음';
+    if (hasSellerBreakdown) {
+      document.getElementById('live-unmatched-sku').textContent = formatNumber(unmatched);
+      document.getElementById('live-unmatched-detail').textContent = unmatchedDetail;
+      document.getElementById('matrix-unmatched-badge').textContent = formatNumber(unmatched);
+      document.getElementById('matrix-unmatched-badge').title = `셀피아 연결이 없는 판매처 상품·옵션 ${formatNumber(unmatched)}건 · 숨김·의도적 연결 해제 제외 · 셀피아 SKU 미매칭 필터와 별도 집계`;
+      document.getElementById('dashboard-unmatched-alert').textContent = `판매처 미연결 상품·옵션 ${formatNumber(unmatched)}건`;
+      document.getElementById('dashboard-unmatched-detail').textContent = unmatchedDetail;
+    } else {
+      clearUnmatched('조회 실패 · 미연결 양식과 같은 집계를 다시 조회해주세요.');
+      console.error('operations hub seller unmatched metrics load failed', metrics.seller_unmatched_error || 'verified counts missing');
+    }
     document.getElementById('dashboard-inventory-alert').textContent = `수정안 반영 후 재고 차이 ${formatNumber(projectedMismatch)}건 · 원본 ${formatNumber(mismatched)}건`;
     const picking = metrics.today_picked;
     const shortage = metrics.shortage_drawer_qty;
@@ -2022,10 +2042,12 @@ async function loadLiveDashboardMetrics() {
       ? formatLiveTime(metrics.latest_sync_at).split(' ').pop()
       : '-';
     document.getElementById('live-latest-sync-detail').textContent = metrics.latest_sync_at ? '실데이터 기준' : '동기화 기록 없음';
-    setSystemHealthComponent('metrics', true);
-    return true;
+    setSystemHealthComponent('metrics', hasSellerBreakdown);
+    return hasSellerBreakdown;
   } catch (error) {
+    if (!isCurrent()) return false;
     console.error('operations hub dashboard metrics load failed', error);
+    clearUnmatched('조회 실패 · 미연결 양식과 같은 집계를 다시 조회해주세요.');
     document.getElementById('live-catalog-state').textContent = '집계 오류';
     document.getElementById('live-today-picked').textContent = '-';
     document.getElementById('live-shortage-drawer').textContent = '조회 실패 · 주문 DB 상태 확인';

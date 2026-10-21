@@ -75,7 +75,9 @@ assert.match(html, /class="side-metrics"[\s\S]*?id="live-connected-sku"[\s\S]*?i
 assert.match(dataSource, /\.from\('operations_hub_dashboard_metrics'\)/, "dashboard metrics must load from the database");
 assert.match(dataSource, /projected_inventory_mismatch_sku[\s\S]*?inventory_draft_cells/, "dashboard metrics must distinguish projected mismatches from raw snapshots");
 assert.match(dataSource, /seller_unmatched_sku/, "dashboard metrics must request the seller-side unmatched count");
-assert.match(source, /seller_unmatched_sku \?\? metrics\.unmatched_sku/, "the sidebar must prefer seller SKUs with no Sellpia connection");
+assert.match(source, /!metrics\.seller_unmatched_error[\s\S]*?typeof metrics\.seller_unmatched_cache_version === 'string'/, "seller unmatched badges require the authoritative reader's successful versioned result");
+assert.doesNotMatch(source, /seller_unmatched_sku \?\? metrics\.unmatched_sku/, "seller identity counts must never fall back to the unrelated Sellpia unmatched-SKU population");
+assert.match(source, /const clearUnmatched = message =>[\s\S]*?live-unmatched-sku'\)\.textContent = '-';[\s\S]*?matrix-unmatched-badge'\)\.textContent = '-';/, "an unavailable authoritative count must clear old badges instead of showing zero or cached counts");
 assert.match(html, /판매처 미연결[\s\S]*?셀피아 SKU 연결 없음/, "the sidebar label must state the seller-side unmatched definition");
 assert.match(dataSource, /seller_unmatched_smartstore[\s\S]*?seller_unmatched_makeshop[\s\S]*?seller_unmatched_ably/, "dashboard metrics must carry a per-channel seller unmatched breakdown");
 assert.match(source, /스마트스토어.*메이크샵.*에이블리/, "the sidebar detail must render each marketplace separately");

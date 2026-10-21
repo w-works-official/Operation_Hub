@@ -221,14 +221,14 @@
     }
     button.disabled=true;
     try{
-      button.textContent='판매처 미연결 SKU 조회 중…';
+      button.textContent='판매처 미연결 상품·옵션 조회 중…';
       const items=await global.SystemV3Data.loadAllSellerUnmatchedSkus({onProgress:progress=>{
-        button.textContent=progress?.message||'판매처 미연결 SKU 조회 중…';
+        button.textContent=progress?.message||'판매처 미연결 상품·옵션 조회 중…';
       }});
       const bytes=await buildSellerUnmatchedTemplate(items);
       download(bytes,'매칭값_일괄등록_판매처SKU미매칭.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       const counts=items.reduce((result,item)=>{const source=text(item?.source_channel);result[source]=(result[source]||0)+1;return result;},{});
-      byId('status').textContent=`판매처 미연결 SKU ${items.length.toLocaleString()}개를 채운 XLSX 양식을 받았습니다. 스마트스토어 ${(counts.smartstore||0).toLocaleString()}개 · 메이크샵 ${(counts.makeshop||0).toLocaleString()}개 · 에이블리 ${(counts.ably||0).toLocaleString()}개입니다. B열 셀피아 SKU를 채운 뒤 그대로 업로드하세요.`;
+      byId('status').textContent=`판매처 미연결 상품·옵션 ${items.length.toLocaleString()}건을 채운 XLSX 양식을 받았습니다. 스마트스토어 ${(counts.smartstore||0).toLocaleString()}건 · 메이크샵 ${(counts.makeshop||0).toLocaleString()}건 · 에이블리 ${(counts.ably||0).toLocaleString()}건입니다. 숨김·의도적 연결 해제는 제외한 판매처·상품코드·옵션코드별 건수이며 셀피아 SKU 미매칭 수와는 다릅니다. B열 셀피아 SKU를 채운 뒤 그대로 업로드하세요.`;
     }catch(error){
       console.error('seller unmatched mapping template download failed',error);
       byId('status').textContent=`판매처 SKU 미매칭 양식을 만들지 못했습니다: ${error?.message||error}`;
