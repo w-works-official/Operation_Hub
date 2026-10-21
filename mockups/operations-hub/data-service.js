@@ -2244,23 +2244,23 @@
 
   async function loadExportCurrentPriceDecisions({source,skus=[],signal=null,onQuery=null,consistency=null}={}) {
     if(source!=='smartstore')throw Error('내보내기 현재 가격 조회는 스마트스토어만 지원합니다.');
-    const codes=[...new Set(skus.map(cleanText).filter(Boolean))],rows=[],groups=new Map(),absenceProofs=new Map();
-    const proofVersion='sellpia-export-v1',canonical=value=>JSON.stringify(canonicalExportDecisionEvidence(value));
+    const codes=[...new Set(skus.map(cleanText).filter(Boolean))],rows=[],groups=new Map(),absenceProofs=new Map(),carrierProofs=new Map();
+    const proofVersion='sellpia-export-v2',canonical=value=>JSON.stringify(canonicalExportDecisionEvidence(value));
     throwIfAborted(signal);
-    if(!codes.length)return {rows,groups:[],proof_version:proofVersion,absence_proofs:[],snapshots:{}};
+    if(!codes.length)return {rows,groups:[],proof_version:proofVersion,absence_proofs:[],carrier_proofs:[],snapshots:{}};
     // This context holds only validation evidence for this preview/run. It
     // never reuses database responses, and must not survive the operation.
     const context=consistency||{};
-    context.groups??=new Map();context.absenceProofs??=new Map();
+    context.groups??=new Map();context.absenceProofs??=new Map();context.carrierProofs??=new Map();
     let snapshots=null;
     for(let offset=0;offset<codes.length;offset+=200){
       throwIfAborted(signal);
       const batch=codes.slice(offset,offset+200);
-      let query=db.rpc('hub_price_decision_export_read_v1',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_skus:batch});
+      let query=db.rpc('hub_price_decision_export_read_v2',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_skus:batch});
       if(signal&&typeof query.abortSignal==='function')query=query.abortSignal(signal);
       const {data}=await carrierRead('내보내기 현재 가격 결정',batch.length,query,event=>onQuery?.({...event,processed_count:event.status==='ok'?offset+batch.length:offset,total_count:codes.length}));
       throwIfAborted(signal);
-      if(data?.proof_version!==proofVersion||!Array.isArray(data.rows)||!Array.isArray(data.groups)||!Array.isArray(data.absence_proofs)
+      if(data?.proof_version!==proofVersion||!Array.isArray(data.rows)||!Array.isArray(data.groups)||!Array.isArray(data.absence_proofs)||!Array.isArray(data.carrier_proofs)
         ||!data.snapshots||typeof data.snapshots!=='object'||Array.isArray(data.snapshots)
         ||!['seller_snapshot_id','sellpia_snapshot_id','sellpia_observed_at'].every(key=>Object.hasOwn(data.snapshots,key)))throw Error('내보내기 현재 가격 응답 형식이 올바르지 않습니다.');
       const snapshotProof=canonical(data.snapshots);
@@ -2280,9 +2280,19 @@
           seen.set(key,proof);local.set(key,entry);
         }
       }
+      for(const entry of data.carrier_proofs){
+        const product=cleanText(entry?.seller_product_code);
+        if(entry?.source_channel!==source||!product||!Array.isArray(entry.targets)||typeof entry.mapping_fingerprint!=='string'
+          ||!entry.sellpia_prices||typeof entry.sellpia_prices!=='object'||Array.isArray(entry.sellpia_prices)
+          ||entry.snapshot_id!==snapshots.seller_snapshot_id||entry.sellpia_snapshot_id!==snapshots.sellpia_snapshot_id
+          ||entry.source_observed_at!==snapshots.sellpia_observed_at)throw Error('내보내기 carrier 연결 증거가 올바르지 않습니다.');
+        const key=JSON.stringify([source,product]),proof=canonical(entry),previous=context.carrierProofs.get(key);
+        if(previous&&previous!==proof)throw Error('내보내기 조회 중 carrier 연결 또는 원본이 변경되었습니다. 미리보기를 다시 확인해주세요.');
+        context.carrierProofs.set(key,proof);carrierProofs.set(key,entry);
+      }
       rows.push(...data.rows);
     }
-    return {rows,groups:[...groups.values()],proof_version:proofVersion,absence_proofs:[...absenceProofs.values()],snapshots};
+    return {rows,groups:[...groups.values()],proof_version:proofVersion,absence_proofs:[...absenceProofs.values()],carrier_proofs:[...carrierProofs.values()],snapshots};
   }
 
   async function attachCurrentPriceDecisions(products,signal=null) {

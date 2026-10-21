@@ -38,7 +38,12 @@ function evidence(parsed,skus){
       if(requested.has('C'))rows.push({sku:'C',source_channel:'smartstore',seller_product_code:product,seller_option_code:'C',mapping_valid:true,...state});
     }else absence_proofs.push(entry);
   }
-  return {rows,groups,proof_version:'sellpia-export-v1',absence_proofs,snapshots:{...snapshots}};
+  const carrier_proofs=[...groups,...absence_proofs].map(entry=>{
+    const {revision,mapping_valid,input_fingerprints,...proof}=plain(entry);
+    proof.targets=proof.targets.map(({current_state,raw_payload,...target})=>target);
+    return proof;
+  });
+  return {rows,groups,proof_version:'sellpia-export-v2',absence_proofs,carrier_proofs,snapshots:{...snapshots}};
 }
 
 async function harness(){
@@ -46,7 +51,7 @@ async function harness(){
   let parsed;
   const db={
     async rpc(name,args){
-      assert.equal(name,'hub_price_decision_export_read_v1','preview and generation must use the optimized read without calling the editor RPC');
+      assert.equal(name,'hub_price_decision_export_read_v2','preview and generation must use the optimized read without calling the editor RPC');
       calls.push({name,args:plain(args)});
       if(state.error)return {data:null,error:state.error};
       const data=evidence(parsed,args.p_skus);state.mutate?.(data,calls.length);
@@ -111,7 +116,7 @@ test('final generation rejects new, removed or changed decisions and source/mapp
     data=>{data.rows[0].price=baseTuple(20000,-1000);data.groups[0].targets[0].current_state.price=baseTuple(20000,-1000);},
     data=>{const group=data.groups.shift();data.rows=[];delete group.input_fingerprints;group.revision=0;delete group.targets[0].current_state;data.absence_proofs.push(group);},
     data=>{const index=data.absence_proofs.findIndex(entry=>entry.seller_product_code==='1003'),group=data.absence_proofs.splice(index,1)[0];group.revision=1;group.input_fingerprints={D:'new-decision'};const row={sku:'D',source_channel:'smartstore',seller_product_code:'1003',seller_option_code:'D',price:baseTuple(5500),event_id:8,revision:1,decision_source:'matrix_manual',effective_at:'2026-10-21T00:02:00Z',mapping_valid:true};group.targets[0].current_state=row;data.rows.push(row);data.groups.push(group);},
-    data=>{data.snapshots.seller_snapshot_id='new-seller-snapshot';for(const group of [...data.groups,...data.absence_proofs])group.snapshot_id='new-seller-snapshot';}
+    data=>{data.snapshots.seller_snapshot_id='new-seller-snapshot';for(const group of [...data.groups,...data.absence_proofs,...data.carrier_proofs])group.snapshot_id='new-seller-snapshot';}
   ];
   for(const mutate of mutations){
     const h=await harness(),preview=await h.run({download:false});
@@ -126,7 +131,7 @@ test('missing product proof, invalid orphan decisions and RPC timeouts fail with
     const h=await harness();
     if(kind==='timeout')h.state.error={code:'57014',message:'synthetic decision read timeout'};
     else h.state.mutate=data=>{
-      if(kind==='missing-proof')data.absence_proofs=data.absence_proofs.filter(entry=>entry.seller_product_code!=='1003');
+      if(kind==='missing-proof')data.carrier_proofs=data.carrier_proofs.filter(entry=>entry.seller_product_code!=='1003');
       else data.rows.push({sku:'A',source_channel:'smartstore',seller_product_code:'ORPHAN',seller_option_code:'missing',price:baseTuple(5000),event_id:90,revision:1,decision_source:'matrix_manual',effective_at:'2026-10-21T00:00:00Z',mapping_valid:false});
     };
     await assert.rejects(h.run({download:false}),/증거|identity|timeout|연결/);
@@ -139,5 +144,33 @@ test('the final raw Sellpia source-price recheck also blocks a value changed aft
   h.state.sourcePriceAtRead=(sku,index)=>sku==='A'&&index===3?32100:rawPrices[sku];
   await assert.rejects(h.run({download:true,expectedPlanFingerprint:preview.planFingerprint}),/셀피아 원본 판매가가 변경/);
   assert.equal(h.tableReads.length,3);assert.equal(h.calls.length,2,'the raw source mismatch stops generation before final decision verification');
+  assert.equal(h.downloads.length,0);
+});
+
+function cacheOnlyProduct(data){
+  data.absence_proofs=data.absence_proofs.filter(entry=>entry.seller_product_code!=='1001');
+  const carrier=data.carrier_proofs.find(entry=>entry.seller_product_code==='1001');
+  for(const target of carrier.targets)for(const component of target.component_members||[])component.mapping_source='carrier_cache';
+  return carrier;
+}
+
+test('cache-only carrier mappings remain exportable without fabricating canonical price groups and final cache drift blocks generation',async()=>{
+  const h=await harness();h.state.mutate=data=>{cacheOnlyProduct(data);};
+  const preview=await h.run({download:false});
+  assert.equal(preview.scopeSummary.outputRowCount,3);
+  assert.equal(preview.plans[0].preview.find(row=>row.sku==='A').diff.price.after.final,32000);
+  const output=await cells(preview.outputs[0].blob);
+  assert.equal(Number(output.find(row=>String(row[0])==='1001')[5]),32000);
+  h.state.mutate=(data,index)=>{const carrier=cacheOnlyProduct(data);if(index===3)carrier.mapping_fingerprint='cache-only-mapping-changed';};
+  await assert.rejects(h.run({download:true,expectedPlanFingerprint:preview.planFingerprint}),/미리보기|변경/);
+  assert.equal(h.downloads.length,0);
+});
+
+test('carrier coverage requires the exact mapped option and SKU rather than just the seller product',async()=>{
+  const h=await harness();h.state.mutate=data=>{
+    const carrier=cacheOnlyProduct(data),target=carrier.targets.find(target=>target.seller_option_code==='A');
+    target.sku='OTHER';target.member_skus=['OTHER'];
+  };
+  await assert.rejects(h.run({download:false}),/증거|연결|identity/);
   assert.equal(h.downloads.length,0);
 });

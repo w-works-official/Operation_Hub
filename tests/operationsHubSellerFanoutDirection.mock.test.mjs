@@ -136,7 +136,8 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
    async loadExportCurrentPriceDecisions({source,skus}){
     const current=await this.loadCurrentPriceDecisions({source,skus});
     const snapshots={seller_snapshot_id:'seller-snapshot-current',sellpia_snapshot_id:'sellpia-snapshot-current',sellpia_observed_at:'2026-10-08T00:00:00Z'};
-    const groups=current.groups.map(group=>({...group,snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at}));
+    const groups=current.groups.map(group=>({...group,snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at,
+     sellpia_prices:Object.fromEntries([...new Set(definitions.filter(definition=>definition.product===group.seller_product_code).map(definition=>definition.sku))].sort().map(sku=>[sku,prices.get(sku)]))}));
     const activeProducts=new Set(groups.map(group=>group.seller_product_code));
     const requestedProducts=[...new Set(definitions.filter(definition=>skus.includes(definition.sku)).map(definition=>definition.product))];
     const absence_proofs=requestedProducts.filter(product=>!activeProducts.has(product)).map(product=>{
@@ -155,7 +156,12 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
       snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at,
       sellpia_prices:Object.fromEntries([...new Set(members.map(member=>member.sku))].sort().map(sku=>[sku,prices.get(sku)])),targets};
     });
-    return {rows:current.rows,groups,proof_version:'sellpia-export-v1',absence_proofs,snapshots};
+    const carrier_proofs=[...groups,...absence_proofs].map(entry=>{
+     const {revision,mapping_valid,input_fingerprints,...proof}=plain(entry);
+     proof.targets=proof.targets.map(({current_state,raw_payload,...target})=>target);
+     return proof;
+    });
+    return {rows:current.rows,groups,proof_version:'sellpia-export-v2',absence_proofs,carrier_proofs,snapshots};
    }
   },
   window:{

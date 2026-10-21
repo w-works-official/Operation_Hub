@@ -8991,8 +8991,12 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
       ?window.HubCurrentPriceDecisionResolver.normalize(decisionResponse,{source,skus:matchedSkus})
       :null;
     if(includePrice&&decisionReadMode==='sellpia_export'){
-      const productProofs=new Set([...(currentDecisions.groups||[]),...(currentDecisions.absence_proofs||[])].map(group=>JSON.stringify([group.source_channel,group.seller_product_code])));
-      for(const row of mappingRows)if(!productProofs.has(JSON.stringify([source,String(row.product_code||'').trim()])))throw Error('내보내기 현재 가격의 상품 연결 증거가 누락되었습니다. 미리보기를 다시 확인해주세요.');
+      const carrierIdentities=new Set();
+      for(const proof of currentDecisions.carrier_proofs||[])for(const target of proof.targets||[]){
+        const product=String(target.seller_product_code||proof.seller_product_code||'').trim(),option=String(target.seller_option_code??'').trim();
+        for(const sku of [...(target.member_skus||[]),target.sku].map(value=>String(value||'').trim()).filter(Boolean))carrierIdentities.add(JSON.stringify([proof.source_channel,product,option,sku]));
+      }
+      for(const row of mappingRows)if(!carrierIdentities.has(JSON.stringify([source,String(row.product_code||'').trim(),String(row.option_code??'').trim(),String(row.sku||'').trim()])))throw Error('내보내기 현재 가격의 상품 연결 증거가 누락되었습니다. 미리보기를 다시 확인해주세요.');
     }
     if(includePrice&&matchedSkus.length)window.HubCurrentPriceDecisionResolver.attach(mappingRows,currentDecisions,{source});
     const currentDecisionProof=includePrice?window.HubCurrentPriceDecisionResolver.proof(currentDecisions):null;

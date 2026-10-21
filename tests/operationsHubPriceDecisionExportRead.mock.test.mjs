@@ -14,12 +14,13 @@ function absent(sku, product = `P-${sku}`) {
     snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at,
     sellpia_prices:{[sku]:1000},targets:[{sku,member_skus:[sku],seller_product_code:product,seller_option_code:'1',price:{...tuple},source_row_no:2,source_valid:true,current_state:null}]};
 }
-function response(skus) {return {rows:[],groups:[],proof_version:'sellpia-export-v1',absence_proofs:skus.map(sku=>absent(sku)),snapshots:{...snapshots}};}
+function carrierProof(entry){const {revision,mapping_valid,...proof}=plain(entry);return proof;}
+function response(skus) {return {rows:[],groups:[],proof_version:'sellpia-export-v2',absence_proofs:skus.map(sku=>absent(sku)),carrier_proofs:skus.map(sku=>carrierProof(absent(sku))),snapshots:{...snapshots}};}
 
 function harness(reply = args => ({data:response(args.p_skus),error:null})) {
   const calls=[],events=[];
   const db={
-    async rpc(name,args){calls.push({name,args:plain(args)});assert.equal(name,'hub_price_decision_export_read_v1','the optimized reader cannot silently fall back to the old group reader');return reply(args,calls.length);},
+    async rpc(name,args){calls.push({name,args:plain(args)});assert.equal(name,'hub_price_decision_export_read_v2','the optimized reader cannot silently fall back to the old group reader');return reply(args,calls.length);},
     from(){throw Error('no direct table reads in export decision reader');},
     storage:new Proxy({},{get(){throw Error('no storage access');}})
   };
@@ -38,7 +39,8 @@ test('optimized export decision reader executes the actual data service in bound
   assert.deepEqual(calls.map(call=>call.args.p_skus.length),[...Array(22).fill(200),187]);
   assert.ok(calls.every(call=>call.args.p_source==='smartstore'&&call.args.p_session_token==='test-session'));
   assert.equal(result.absence_proofs.length,4587);
-  assert.equal(result.proof_version,'sellpia-export-v1');
+  assert.equal(result.proof_version,'sellpia-export-v2');
+  assert.equal(result.carrier_proofs.length,4587);
   assert.deepEqual(plain(result.snapshots),snapshots);
   assert.ok(events.every(event=>event.full_snapshot===false&&event.status==='ok'));
 });
@@ -52,7 +54,7 @@ test('reader refuses invalid sources, unauthenticated calls, malformed responses
   const failure=harness(()=>({data:null,error:{code:'57014',message:'synthetic timeout'}}));
   await assert.rejects(failure.api.loadExportCurrentPriceDecisions({source:'smartstore',skus:['A']}),/timeout/);
   assert.equal(failure.calls.length,1);
-  for(const data of [{rows:[],groups:[]},{...response(['A']),proof_version:'unknown'},{...response(['A']),absence_proofs:null}]){
+  for(const data of [{rows:[],groups:[]},{...response(['A']),proof_version:'unknown'},{...response(['A']),absence_proofs:null},{...response(['A']),carrier_proofs:null}]){
     const bad=harness(()=>({data,error:null}));
     await assert.rejects(bad.api.loadExportCurrentPriceDecisions({source:'smartstore',skus:['A']}));
     assert.equal(bad.calls.length,1);
@@ -98,6 +100,25 @@ test('absence becoming an active group between files and aborted requests cannot
   assert.equal(aborted.calls.length,0);
 });
 
+test('cache-only carrier evidence is retained independently and conflicts between files fail closed',async()=>{
+  const proof=carrierProof(absent('A','CACHE-ONLY'));
+  const h=harness((args,index)=>{
+    const carrier=plain(proof);if(index>1)carrier.mapping_fingerprint='changed-cache-mapping';
+    return {data:{...response([]),carrier_proofs:[carrier]},error:null};
+  });
+  const consistency={},first=await h.api.loadExportCurrentPriceDecisions({source:'smartstore',skus:['A'],consistency});
+  assert.deepEqual(plain(first.absence_proofs),[]);assert.deepEqual(plain(first.groups),[]);
+  assert.equal(first.carrier_proofs[0].seller_product_code,'CACHE-ONLY');
+  await assert.rejects(h.api.loadExportCurrentPriceDecisions({source:'smartstore',skus:['A'],consistency}),/변경/);
+  const {resolver:api}=harness(),baseline={...response([]),carrier_proofs:[proof]};
+  const evidence=value=>api.proof(api.normalize(value,{source:'smartstore',skus:['A']}));
+  const expected=evidence(baseline);
+  for(const mutate of [entry=>{entry.mapping_fingerprint='changed';},entry=>{entry.sellpia_prices.A=1234;},entry=>{entry.targets[0].price.final=1234;}]){
+    const changed=plain(baseline);mutate(changed.carrier_proofs[0]);
+    assert.throws(()=>api.assertProof(expected,evidence(changed)),/미리보기/);
+  }
+});
+
 test('canonical resolver proof captures absence, raw source, snapshot and mapping drift and new or removed decisions',async()=>{
   const {resolver:api}=harness();
   const baseline=response(['A','B']);
@@ -109,8 +130,8 @@ test('canonical resolver proof captures absence, raw source, snapshot and mappin
     value=>{value.absence_proofs[0].mapping_fingerprint='different';},
     value=>{value.absence_proofs[0].sellpia_prices.A=2000;},
     value=>{value.absence_proofs[0].targets[0].price.final=1500;},
-    value=>{value.snapshots.sellpia_snapshot_id='different';for(const entry of value.absence_proofs)entry.sellpia_snapshot_id='different';},
-    value=>{value.snapshots.seller_snapshot_id='different';for(const entry of value.absence_proofs)entry.snapshot_id='different';},
+    value=>{value.snapshots.sellpia_snapshot_id='different';for(const entry of [...value.absence_proofs,...value.carrier_proofs])entry.sellpia_snapshot_id='different';},
+    value=>{value.snapshots.seller_snapshot_id='different';for(const entry of [...value.absence_proofs,...value.carrier_proofs])entry.snapshot_id='different';},
     value=>{value.absence_proofs.shift();value.rows.push({sku:'A',source_channel:'smartstore',seller_product_code:'P-A',seller_option_code:'1',price:tuple,event_id:1,revision:1,decision_source:'matrix_manual',effective_at:'2026-10-21T00:00:00Z',mapping_valid:true});}
   ]){
     const changed=plain(baseline);edit(changed);
