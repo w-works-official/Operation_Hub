@@ -172,3 +172,79 @@ test('original objects, Maps and readonly term objects remain immutable and outp
  result.rows[0].row.raw_payload.untouched='output-only';result.rows[0].proof.get('nested').source='output-only';result.terms[0].value=123;
  assert.deepEqual(group,before);
 });
+
+test('fixed-discount sale-price options are exact discrete anchors rather than a continuous interval',()=>{
+ const group=fixture({terms:[],finals:[10500,18700,12300,17000]}),result=api.basePriceOptions(group,{basicDiscount:0});
+ assert.equal(result.valid,true);assert.equal(result.editable,true);assert.equal(result.discrete,true);
+ assert.deepEqual(result.allowedBasePrices,[17000,18700]);assert.deepEqual(result.candidates,result.allowedBasePrices);
+ assert.equal(result.minBasePrice,17000);assert.equal(result.maxBasePrice,18700);assert.deepEqual(result.issues,[]);
+ assert.equal(api.validate(group,draft(group,12300,0)).valid,false,'6,400 won exceeds the 6,150 won allowance');
+ assert.equal(api.validate(group,draft(group,17000,0)).valid,true);
+ assert.equal(api.validate(group,draft(group,18000,0)).valid,false,'a number inside the extrema still needs a zero-price option');
+ assert.deepEqual(api.priceRange(group,{basicDiscount:0}),result);
+ for(const base of result.allowedBasePrices)assert.equal(api.validate(group,draft(group,base,0)).valid,true);
+});
+
+test('changing only the fixed basic discount recomputes all allowable anchors and preserves the default current discount',()=>{
+ const group=fixture({finals:[10500,18700,12300,17000]});
+ assert.deepEqual(api.priceRange(group).allowedBasePrices,api.priceRange(group,{basicDiscount:1000}).allowedBasePrices);
+ const result=api.priceRange(group,{basicDiscount:10000});
+ assert.deepEqual(result.allowedBasePrices,[20500,22300,27000,28700]);assert.equal(result.basicDiscount,10000);
+ for(const base of result.allowedBasePrices){const valid=api.validate(group,draft(group,base,10000));assert.equal(valid.valid,true);assert.ok(valid.rows.some(row=>row.option===0));}
+ const percent=fixture({base:20000,terms:[{...basic(10),unit:'percent'}],finals:[18000,19000]});
+ assert.equal(api.priceRange(percent).basicDiscount,2000,'a percent original defaults to its current effective amount, like the amount editor');
+});
+
+test('price options enforce the ten-won limit step and the exact 2,000 won negative-option threshold',()=>{
+ const group=fixture({terms:[],finals:[2000,3010]});
+ assert.deepEqual(api.priceRange(group,{basicDiscount:19}).allowedBasePrices,[3029]);
+ assert.deepEqual(api.priceRange(group,{basicDiscount:20}).allowedBasePrices,[2020,3030]);
+ const low=fixture({terms:[],finals:[990,1000,1010]});
+ assert.deepEqual(api.priceRange(low,{basicDiscount:0}).allowedBasePrices,[990]);
+ assert.deepEqual(api.priceRange(low,{basicDiscount:1000}).allowedBasePrices,[1990,2000,2010]);
+ const impossible=api.priceRange(fixture({terms:[],finals:[50,79]}),{basicDiscount:0});
+ assert.equal(impossible.valid,false);assert.equal(impossible.editable,true);assert.deepEqual(impossible.allowedBasePrices,[]);
+ assert.equal(impossible.minBasePrice,null);assert.equal(impossible.maxBasePrice,null);
+ assert.deepEqual(impossible.issues.map(issue=>issue.code),['NO_ALLOWED_BASE_PRICE','NEGATIVE_OPTION_BELOW_2000','OPTION_BOUNDS']);
+});
+
+test('the finite price option set agrees with actual plan validation for every integer in a bounded price domain',()=>{
+ for(const [finals,discount] of [[[990,1000,1010],0],[[990,1000,1010],1000],[[600,1900],600],[[500,1000],0]]){
+  const group=fixture({terms:[],finals}),expected=[];
+  for(let base=0;base<=2500;base++)if(api.validate(group,draft(group,base,discount)).valid)expected.push(base);
+  assert.deepEqual(api.priceRange(group,{basicDiscount:discount}).allowedBasePrices,expected,`fixed discount ${discount}, finals ${finals}`);
+ }
+});
+
+test('zero and optionless prices have exact singleton options, while unsafe additions are never rounded into candidates',()=>{
+ const zero=fixture({base:0,terms:[],finals:[0],originalOptions:[0]});assert.deepEqual(api.priceRange(zero,{basicDiscount:0}).allowedBasePrices,[0]);
+ const optionless=fixture({terms:[],finals:[6000]});optionless.rows[0].row.option_code='';
+ assert.deepEqual(api.priceRange(optionless,{basicDiscount:3000}).allowedBasePrices,[9000]);assert.equal(plan(optionless,9000,3000).rows[0].option,0);
+ const max=Number.MAX_SAFE_INTEGER,large=fixture({finals:[max-1,max]});
+ assert.deepEqual(api.priceRange(large,{basicDiscount:1}).allowedBasePrices,[max]);
+ const overflow=api.priceRange(large,{basicDiscount:2});assert.equal(overflow.valid,false);assert.equal(overflow.editable,true);
+ assert.deepEqual(overflow.allowedBasePrices,[]);assert.ok(overflow.issues.some(issue=>issue.code==='UNSAFE_BASE_PRICE'));
+});
+
+test('invalid fixed discounts and protected product evidence never produce speculative price options',()=>{
+ const group=fixture();
+ for(const value of ['',null,undefined,true,-1,1.5,NaN,Infinity,Number.MAX_SAFE_INTEGER+1,'1e3',' 1000 ','1,000']){
+  const result=api.priceRange(group,{basicDiscount:value});assert.equal(result.valid,false);assert.equal(result.editable,false);assert.deepEqual(result.candidates,[]);
+  assert.equal(result.issues[0].code,'INVALID_BASIC_DISCOUNT');assert.ok(result.reason.length<50);
+ }
+ for(const options of [null,[],{other:1}])assert.equal(api.priceRange(group,options).valid,false);
+ assert.deepEqual(api.priceRange(group,{basicDiscount:'2000'}),api.priceRange(group,{basicDiscount:2000}));
+ for(const change of [value=>{value.blockedReason='확정 가격 보호';},value=>{value.rows[0].mappingAmbiguous=true;},value=>{delete value.rows[0].final;},value=>{value.rows.push(structuredClone(value.rows[0]));},value=>{value.rows[0].row.raw_payload.smartstore_basic_discount_value=null;}]){
+  const blocked=structuredClone(group);change(blocked);const result=api.priceRange(blocked,{basicDiscount:2000});
+  assert.equal(result.valid,false);assert.equal(result.editable,false);assert.deepEqual(result.allowedBasePrices,[]);assert.equal(result.issues[0].code,'PRODUCT_NOT_EDITABLE');
+ }
+});
+
+test('price options use every sibling without mutating raw rows, fixed prices, proofs or caller options',()=>{
+ const group=fixture({count:218}),before=structuredClone(group),options=Object.freeze({basicDiscount:2000});
+ for(const entry of group.rows){Object.freeze(entry.row.raw_payload);Object.freeze(entry.row);Object.freeze(entry);}
+ const result=api.priceRange(group,options);assert.deepEqual(group,before);assert.equal(result.valid,true);
+ assert.deepEqual(result.allowedBasePrices,[9000]);
+ result.allowedBasePrices.push(1);result.candidates.push(2);
+ assert.deepEqual(api.priceRange(group,options).allowedBasePrices,[9000]);assert.deepEqual(group,before);
+});

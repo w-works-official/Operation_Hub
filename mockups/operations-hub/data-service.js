@@ -2308,6 +2308,49 @@
     return {rows,groups:[...groups.values()]};
   }
 
+  function normalizeProductPriceSetting(row,source) {
+    if(!row||row.source_channel!==source||typeof row.product_code!=='string'||!row.product_code.trim()||row.product_code.length>128||row.product_code!==row.product_code.trim())throw Error('저장된 상품 판매가 응답을 확인할 수 없습니다.');
+    const number=(value,label)=>{if(typeof value==='string'&&!/^\d+$/.test(value)||!['string','number'].includes(typeof value))throw Error(`${label} 형식을 확인해주세요.`);const result=Number(value);if(!Number.isSafeInteger(result)||result<0)throw Error(`${label} 형식을 확인해주세요.`);return result;};
+    const setting={productCode:row.product_code,basePrice:number(row.base_price,'판매가'),basicDiscount:number(row.basic_discount,'기본할인'),revision:number(row.revision,'저장 버전'),updatedAt:row.updated_at};
+    if(setting.basicDiscount>setting.basePrice||setting.revision<1||typeof setting.updatedAt!=='string'||!Number.isFinite(Date.parse(setting.updatedAt)))throw Error('저장된 상품 판매가의 금액·버전·시각을 확인할 수 없습니다.');
+    return setting;
+  }
+
+  async function loadProductPriceSettings({source,productCodes=[],signal=null,onQuery=null}={}) {
+    if(source!=='smartstore'||!Array.isArray(productCodes)||productCodes.some(code=>typeof code!=='string'||!code.trim()||code!==code.trim()||code.length>128))throw Error('상품 판매가 조회 범위를 확인해주세요.');
+    const codes=[...new Set(productCodes)].sort(),settings=[],seen=new Set();
+    for(let offset=0;offset<codes.length;offset+=200){
+      throwIfAborted(signal);const batch=codes.slice(offset,offset+200),started=performance.now();
+      let request=db.rpc('hub_product_price_settings_read_v1',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_product_codes:batch});
+      if(signal&&typeof request.abortSignal==='function')request=request.abortSignal(signal);
+      const {data,error}=await request;throwIfAborted(signal);if(error)throw readableDatabaseError(error);
+      if(data?.contract_version!==1||data.source!==source||!Array.isArray(data.settings))throw Error('저장된 상품 판매가 조회 응답 형식 오류');
+      for(const row of data.settings){const setting=normalizeProductPriceSetting(row,source);if(!batch.includes(setting.productCode)||seen.has(setting.productCode))throw Error('저장된 상품 판매가 응답에 중복되거나 범위를 벗어난 상품이 있습니다.');seen.add(setting.productCode);settings.push(setting);}
+      onQuery?.({query:'product_price_settings',scope_count:batch.length,latency_ms:Math.round(performance.now()-started)});
+    }
+    return {contractVersion:1,source,settings:settings.sort((a,b)=>a.productCode.localeCompare(b.productCode))};
+  }
+
+  async function saveProductPriceSettings({source,settings=[],requestId=null}={}) {
+    if(source!=='smartstore'||!Array.isArray(settings)||!settings.length||settings.length>500)throw Error('저장할 상품 판매가 범위를 확인해주세요.');
+    const seen=new Set(),rows=settings.map(setting=>{
+      if(!setting||Object.keys(setting).some(key=>!['productCode','basePrice','basicDiscount','expectedRevision'].includes(key))||typeof setting.productCode!=='string'||!setting.productCode.trim()||setting.productCode!==setting.productCode.trim()||setting.productCode.length>128||seen.has(setting.productCode))throw Error('저장할 상품코드 또는 중복 항목을 확인해주세요.');
+      seen.add(setting.productCode);
+      for(const key of ['basePrice','basicDiscount','expectedRevision'])if(typeof setting[key]!=='number'||!Number.isSafeInteger(setting[key])||setting[key]<0)throw Error('판매가·기본할인·저장 버전은 0 이상의 정수여야 합니다.');
+      if(setting.expectedRevision>=Number.MAX_SAFE_INTEGER)throw Error('저장 버전이 허용 범위를 벗어납니다.');
+      if(setting.basicDiscount>setting.basePrice)throw Error('기본할인은 판매가를 초과할 수 없습니다.');
+      return {product_code:setting.productCode,base_price:setting.basePrice,basic_discount:setting.basicDiscount,expected_revision:setting.expectedRevision};
+    }).sort((a,b)=>a.product_code.localeCompare(b.product_code));
+    const id=requestId||global.crypto.randomUUID();
+    if(typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))throw Error('상품 판매가 저장 요청 ID를 확인해주세요.');
+    const {data,error}=await db.rpc('hub_product_price_settings_save_v1',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_settings:rows,p_request_id:id});
+    if(error)throw readableDatabaseError(error);
+    if(data?.contract_version!==1||data.source!==source||data.request_id!==id||typeof data.idempotent!=='boolean'||!Array.isArray(data.settings)||data.settings.length!==rows.length)throw Error('상품 판매가 저장 응답 형식 오류');
+    const saved=data.settings.map(row=>normalizeProductPriceSetting(row,source));
+    if(new Set(saved.map(row=>row.productCode)).size!==saved.length||saved.some(setting=>{const expected=rows.find(row=>row.product_code===setting.productCode);return !expected||setting.basePrice!==expected.base_price||setting.basicDiscount!==expected.basic_discount||setting.revision!==expected.expected_revision+1;}))throw Error('상품 판매가 저장 결과가 요청과 다릅니다. 다시 미리보기해주세요.');
+    return {saved:true,source,requestId:id,idempotent:data.idempotent===true,settings:saved};
+  }
+
   function canonicalExportDecisionEvidence(value) {
     if(Array.isArray(value))return value.map(canonicalExportDecisionEvidence);
     if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonicalExportDecisionEvidence(value[key])]));
@@ -5166,6 +5209,8 @@
     loadCarrierMatrixTargets,
     loadExportSkuDependencies,
     loadCurrentPriceDecisions,
+    loadProductPriceSettings,
+    saveProductPriceSettings,
     loadExportCurrentPriceDecisions,
     applyPriceDecision,
     loadPriceDecisionHistory,

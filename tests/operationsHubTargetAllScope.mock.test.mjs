@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import '../mockups/operations-hub/discount-price-math.js';
 import '../mockups/operations-hub/current-price-export.js';
+import '../mockups/operations-hub/product-price-adjustment.js';
 
 const app=fs.readFileSync('mockups/operations-hub/app.js','utf8');
 const start=app.indexOf('async function prepareChangedOnlyExport(');
@@ -16,7 +17,12 @@ const carrierRows=[
 ];
 
 async function run(mode,{ambiguous=false,download=false,expectedPlanFingerprint=null}={}){
- const file={name:'carrier.xlsx'},serialized=[],downloads=[];
+ const file=Object.assign(new Blob(['carrier fixture']),{name:'carrier.xlsx'}),serialized=[],downloads=[],settingReads=[];
+ const mappings=ambiguous?[
+  {sku:'S1',product_code:'P1',option_code:'O1'},
+  {sku:'SX',product_code:'P1',option_code:'O1'},
+  {sku:'S2',product_code:'P1',option_code:'O2'}
+ ]:[{sku:'S1',product_code:'P1',option_code:'O1'},{sku:'S2',product_code:'P1',option_code:'O2'}];
  const context={
   Date,Blob,setTimeout,performance:{now:()=>Date.now()},formatNumber:value=>String(value),CHANNEL_LABELS:{smartstore:'스마트스토어'},
   sellerExport:{
@@ -25,23 +31,32 @@ async function run(mode,{ambiguous=false,download=false,expectedPlanFingerprint=
   },
   liveData:{
    async downloadLatestSellerOriginals(){return new Map([['smartstore',[file]]]);},
-   async loadCarrierSellerMappings(){return {rows:ambiguous?[
-    {sku:'S1',product_code:'P1',option_code:'O1'},
-    {sku:'SX',product_code:'P1',option_code:'O1'},
-    {sku:'S2',product_code:'P1',option_code:'O2'}
-   ]:[
-    {sku:'S1',product_code:'P1',option_code:'O1'},
-    {sku:'S2',product_code:'P1',option_code:'O2'}
-   ]};},
+   async loadCarrierSellerMappings(){return {rows:mappings};},
    async loadCarrierMatrixTargets({skus}){return {rows:skus.map(sku=>sku==='S1'
     ?{sku,product_code:'P1',option_code:'O1',seller_stock:4,active_price_rule:false}
     :{sku,product_code:'P1',option_code:'O2',seller_stock:9,active_price_rule:false,price_draft:{price_base_after:3000,price_discounted_base_after:3000,price_option_after:0,price_final_after:3000,price_discount_terms_after:[]}})};},
-   async loadCurrentPriceDecisions(){return {rows:[],groups:[]};}
+   async loadCurrentPriceDecisions(){throw Error('Smartstore price export must use the export evidence reader');},
+   async loadExportCurrentPriceDecisions({source,skus,allowLargeGroups}){
+    assert.equal(source,'smartstore');assert.equal(allowLargeGroups,true);assert.ok(skus.includes('S1'));
+    const snapshots={seller_snapshot_id:'seller-v1',sellpia_snapshot_id:'sellpia-v1',sellpia_observed_at:'2026-10-22T00:00:00Z'};
+    const targets=carrierRows.map(row=>{
+     const memberSkus=mappings.filter(mapping=>mapping.option_code===row.option_code).map(mapping=>mapping.sku).sort();
+     return {sku:memberSkus[0],member_skus:memberSkus,seller_product_code:row.product_code,seller_option_code:row.option_code,
+      price:{base:row.base_price,discounted:row.discounted_base_price,option:row.option_price,final:row.final_price,terms:row.discount_terms},
+      source_row_no:row.source_row_no,source_valid:true,component_members:memberSkus.map((sku,index)=>({sku,component_qty:1,component_role:'primary',mapping_source:'explicit',listing_id:1,component_id:index+1}))};
+    });
+    const proof={source_channel:source,seller_product_code:'P1',mapping_fingerprint:'mapping-P1',snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at,sellpia_prices:Object.fromEntries(mappings.map(row=>[row.sku,1000])),targets};
+    return {rows:[],groups:[],proof_version:'sellpia-export-v2',absence_proofs:[{...proof,revision:0,mapping_valid:true}],carrier_proofs:[proof],snapshots};
+   },
+   async loadProductPriceSettings({source,productCodes}){assert.equal(source,'smartstore');settingReads.push([...productCodes]);return {contractVersion:1,source,settings:[]};},
+   async saveProductPriceSettings(){throw Error('export must not save product price settings');}
   },
-  window:{SystemV3SellerParsers:{async parseSellerFiles(){return {normalizedRows:carrierRows};}},HubCurrentPriceExport:globalThis.HubCurrentPriceExport,HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver}
+  window:{SystemV3SellerParsers:{async parseSellerFiles(){return {normalizedRows:carrierRows};}},HubCurrentPriceExport:globalThis.HubCurrentPriceExport,HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver,HubProductPriceAdjustment:globalThis.HubProductPriceAdjustment}
  };
  context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);vm.runInContext(source+'\nthis.prepare=prepareChangedOnlyExport;',context);
  const result=await context.prepare('smartstore',['S1'],{download,mode,expectedPlanFingerprint,includePrice:true,includeStock:true});
+ assert.ok(settingReads.length>0,'Smartstore price previews load setting absence as well as saved values');
+ assert.ok(settingReads.every(codes=>codes.length===1&&codes[0]==='P1'),'setting reads stay within the selected product context');
  return {result,serialized,downloads};
 }
 

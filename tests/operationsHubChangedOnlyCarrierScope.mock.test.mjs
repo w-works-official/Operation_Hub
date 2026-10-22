@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import '../mockups/operations-hub/discount-price-math.js';
 import '../mockups/operations-hub/current-price-export.js';
+import '../mockups/operations-hub/product-price-adjustment.js';
 
 const source=fs.readFileSync('mockups/operations-hub/app.js','utf8');
 const start=source.indexOf('async function prepareChangedOnlyExport(');
@@ -11,7 +13,7 @@ assert.ok(start>=0&&end>start);
 const functionSource=source.slice(start,end);
 
 test('changed-only export derives its authoritative scope from carrier identities, never a full Matrix snapshot',async()=>{
- const calls=[];let decisionReads=0;
+ const calls=[];let decisionReads=0,settingReads=0,settingWrites=0;
  const file={name:'actual-carrier.xlsx'};
  const carrierRows=[{product_code:'P1',option_code:'O1',source_row_no:2,stock:4,base_price:1000,discounted_base_price:1000,option_price:0,final_price:1000,discount_terms:[]}];
  const ctx={
@@ -22,11 +24,14 @@ test('changed-only export derives its authoritative scope from carrier identitie
    async loadCarrierSellerMappings({source,identities,onQuery}){calls.push(['mapping',source,identities.length]);onQuery({query:'carrier seller identity',scope_count:1,latency_ms:1,status:'ok'});return {rows:[{sku:'S1',product_code:'P1',option_code:'O1'}]};},
    async loadCarrierMatrixTargets({source,skus,onQuery}){calls.push(['targets',source,[...skus]]);onQuery({query:'hub_carrier_targets_read_v1',scope_count:1,latency_ms:2,status:'ok'});return {rows:[{sku:'S1',seller_stock:4,active_price_rule:false}]};},
    async loadCurrentPriceDecisions(){decisionReads++;return {rows:[],groups:[]};},
+   async loadProductPriceSettings(){settingReads++;throw Error('stock-only export must not read product price settings');},
+   async saveProductPriceSettings(){settingWrites++;throw Error('export must not save product price settings');},
    loadMatrixExportSnapshot(){throw Error('full Matrix snapshot must never be called');}
   },
   window:{
    SystemV3SellerParsers:{async parseSellerFiles(){return {normalizedRows:carrierRows};}},
    HubCurrentPriceExport:globalThis.HubCurrentPriceExport,
+   HubProductPriceAdjustment:globalThis.HubProductPriceAdjustment,
    HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver
   }
  };
@@ -41,6 +46,8 @@ test('changed-only export derives its authoritative scope from carrier identitie
  assert.deepEqual(reference,{carrier_rows:1,sku_count:1,query_count:1,changed:0});
  assert.equal(calls.filter(call=>call[0]==='targets').length,0,'stock-only preview does not read price targets');
  assert.equal(decisionReads,0,'stock-only preview never invokes the current-price-decision RPC');
+ assert.equal(settingReads,0,'stock-only preview never reads product price settings');
+ assert.equal(settingWrites,0,'a preview never saves product price settings');
 });
 
 test('carrier RPC migration splits direct SKU and seller identity probes without a broad OR scan',()=>{

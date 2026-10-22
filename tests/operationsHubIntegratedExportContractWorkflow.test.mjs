@@ -56,13 +56,16 @@ function harness({mappingRows=null,mappingDrift=false,templateError=false,failMa
   async recordStockExportAudit(value){timeline.push('audit');audit.push(value);return {id:'audit-1'};},
   async loadCarrierMatrixTargets(){priceCalls.push('targets');throw Error('price targets are forbidden in inventory path');},
   async loadCurrentPriceDecisions(){priceCalls.push('decisions');throw Error('price decisions are forbidden in inventory path');},
+  async loadExportCurrentPriceDecisions(){priceCalls.push('export-decisions');throw Error('export price decisions are forbidden in inventory path');},
+  async loadProductPriceSettings(){priceCalls.push('settings');throw Error('product price settings are forbidden in inventory path');},
+  async saveProductPriceSettings(){throw Error('exports must not save product price settings');},
   async loadSellpiaSourcePricesForExport(){priceCalls.push('source');throw Error('source prices are forbidden in inventory path');}
  };
  class TransportZip extends JSZip{file(name,value,...rest){return super.file(name,value instanceof Blob?value.arrayBuffer().then(buffer=>new Uint8Array(buffer)):value,...rest);}}
  const context={console,Blob,File:TestFile,JSZip:TransportZip,XLSX,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,TextEncoder,TextDecoder,Date,Math,Intl,crypto:globalThis.crypto,setTimeout,performance:{now:()=>Date.now()},CustomEvent:class{constructor(type,init){this.type=type;this.detail=init?.detail;}},dispatchEvent(){},liveData,sellerExportState:{running:false},formatNumber:String,CHANNEL_LABELS:{smartstore:'스마트스토어',makeshop:'메이크샵'},__systemV3InventoryBatchBusy:false,__systemV3DirectExportBusy:false};
  context.globalThis=context;context.window=context;context.refreshMatrixSkus=async skus=>{timeline.push('matrix-refresh');return skus;};
  context.assertMatrixChangesSaved??=()=>true;context.requireMatrixChangesSaved??=()=>true;vm.createContext(context);
- for(const name of ['sellpia-inventory-count','seller-source-parsers','seller-export-adapter','current-price-export','ably-inventory-export'])vm.runInContext(fs.readFileSync(path.join(repo,`mockups/operations-hub/${name}.js`),'utf8'),context,{filename:name+'.js'});
+ for(const name of ['sellpia-inventory-count','seller-source-parsers','seller-export-adapter','discount-price-math','current-price-export','product-price-adjustment','ably-inventory-export'])vm.runInContext(fs.readFileSync(path.join(repo,`mockups/operations-hub/${name}.js`),'utf8'),context,{filename:name+'.js'});
  context.sellerExport=context.SystemV3SellerExport;
  context.sellerExport={...context.sellerExport,downloadBlob(blob,name){timeline.push('download');downloads.push({blob,name});}};
  vm.runInContext('let inventoryBatchRecovery=null;'+extract('prepareChangedOnlyExport')+extract('preflightInventoryMappings',true)+extract('runInventoryBatch',true)+extract('runInventoryUpdateBatch',true)+extract('retryInventoryBatchExport',true)+';this.bridge={preflightInventoryMappings,runInventoryBatch,runInventoryUpdateBatch,retryInventoryBatchExport};',context);
@@ -92,13 +95,28 @@ test('integrated selected row count and applied change cell count remain indepen
 });
 
 test('integrated combined price and stock export honors both stock criteria and preserves uninstructed prices in reopened XLSX',async()=>{
- const h=harness();h.context.liveData.loadCarrierMatrixTargets=async()=>({rows:[]});h.context.liveData.loadCurrentPriceDecisions=async()=>({rows:[],groups:[]});
+ const h=harness(),settingReads=[];h.context.liveData.loadCarrierMatrixTargets=async()=>({rows:[]});
+ h.context.liveData.loadProductPriceSettings=async({source,productCodes})=>{settingReads.push([...productCodes]);return {contractVersion:1,source,settings:[]};};
+ h.context.liveData.loadExportCurrentPriceDecisions=async({source,skus,allowLargeGroups})=>{
+  assert.equal(allowLargeGroups,true);assert.equal(source,'smartstore');
+  const snapshots={seller_snapshot_id:'original-smartstore',sellpia_snapshot_id:'stock-before',sellpia_observed_at:'2026-10-22T00:00:00Z'},proofs=[];
+  for(const original of h.files.get(source)){
+   const parsed=await h.context.SystemV3SellerParsers.parseSellerFiles(source,[original],{price:true,inventory:true});
+   const row=parsed.normalizedRows[0],sku=row.product_code==='1001'?'S-A':'S-B';if(!skus.includes(sku))continue;
+   const target={sku,member_skus:[sku],seller_product_code:row.product_code,seller_option_code:row.option_code,source_row_no:row.source_row_no,source_valid:true,
+    price:{base:row.base_price,discounted:row.discounted_base_price,option:row.option_price,final:row.final_price,terms:row.discount_terms},component_members:[{sku,component_qty:1,component_role:'primary',mapping_source:'explicit',listing_id:row.product_code,component_id:row.option_code}]};
+   proofs.push({source_channel:source,seller_product_code:row.product_code,mapping_fingerprint:`mapping-${row.product_code}`,snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at,sellpia_prices:{[sku]:1000},targets:[target]});
+  }
+  return {rows:[],groups:[],proof_version:'sellpia-export-v2',absence_proofs:proofs.map(proof=>({...proof,revision:0,mapping_valid:true})),carrier_proofs:proofs,snapshots};
+ };
  for(const [stockSource,expectedStock] of [['stock',8],['available_stock',6]]){
   const result=await h.context.prepareChangedOnlyExport('smartstore',['S-A'],{download:false,mode:'target_all',includePrice:true,includeStock:true,stockSource});
   assert.equal(result.outputs.length,1);assert.equal(result.stockSource,stockSource);assert.equal(result.changedItems.length,1);assert.equal(result.changedItems[0].field_key,'sellpia_current_stock');
   const parsed=await h.context.SystemV3SellerParsers.parseSellerFiles('smartstore',[new TestFile([result.outputs[0].blob],result.outputs[0].file.name)],{price:true,inventory:true});
   assert.equal(parsed.normalizedRows[0].stock,expectedStock);assert.equal(parsed.normalizedRows[0].price,1000);
  }
+ assert.equal(settingReads.length,2);assert.ok(settingReads.every(codes=>codes.length===1&&codes[0]==='1001'));
+ assert.deepEqual(h.priceCalls,[],'the combined flow uses only its explicit readonly price fixtures');
 });
 
 test('integrated real MakeShop target_all retains physical continuation rows and counts data separately from English metadata',async()=>{

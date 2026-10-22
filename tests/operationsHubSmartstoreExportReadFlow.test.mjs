@@ -47,10 +47,14 @@ function evidence(parsed,skus){
 }
 
 async function harness(){
-  const source=workbook(),calls=[],downloads=[],tableReads=[],state={mutate:null,error:null,sourcePriceAtRead:null};
+  const source=workbook(),calls=[],downloads=[],tableReads=[],settingsReads=[],state={mutate:null,error:null,sourcePriceAtRead:null};
   let parsed;
   const db={
     async rpc(name,args){
+      if(name==='hub_product_price_settings_read_v1'){
+        settingsReads.push(plain(args));assert.equal(args.p_source,'smartstore');
+        return {data:{contract_version:1,source:'smartstore',settings:[]},error:null};
+      }
       assert.ok(['hub_price_decision_export_read_v2','hub_price_decision_export_read_v3'].includes(name),'preview and generation must use a bounded export read without calling the editor RPC');
       calls.push({name,args:plain(args)});
       if(state.error)return {data:null,error:state.error};
@@ -68,9 +72,9 @@ async function harness(){
   const value={console,Blob,File:TestFile,JSZip,XLSX,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,Date,Math,Intl,setTimeout,clearTimeout,URL,TextEncoder,TextDecoder,AbortController,AbortSignal,performance,
     formatNumber:String,CHANNEL_LABELS:{smartstore:'스마트스토어'},assertMatrixChangesSaved(){},fetch:async()=>{throw Error('network forbidden');},supabase:{createClient:()=>db}};
   value.window=value;value.globalThis=value;vm.createContext(value);
-  for(const name of ['discount-price-math','sellpia-inventory-count','seller-source-parsers','seller-export-adapter','current-price-export','data-service'])vm.runInContext(read(name),value,{filename:name+'.js'});
+  for(const name of ['discount-price-math','sellpia-inventory-count','seller-source-parsers','seller-export-adapter','current-price-export','product-price-adjustment','data-service'])vm.runInContext(read(name),value,{filename:name+'.js'});
   value.SystemV3Data.setOperationsHubSessionToken('test-session');
-  parsed=(await value.SystemV3SellerParsers.parseSellerFiles('smartstore',[source.file],{price:true,discount:true,inventory:false})).normalizedRows;
+  parsed=(await value.SystemV3SellerParsers.parseSellerFiles('smartstore',[source.file],{basic:true,price:true,discount:true,inventory:false})).normalizedRows;
   value.liveData={...value.SystemV3Data,
     async downloadLatestSellerOriginals(){return new Map([['smartstore',[source.file]]]);},
     async loadCarrierSellerMappings(){return {rows:mapping.map(row=>({...row}))};},
@@ -81,7 +85,7 @@ async function harness(){
   value.sellerExport={...value.SystemV3SellerExport,downloadBlob(blob,name){downloads.push({blob,name});}};
   vm.runInContext(prepare+'\nthis.prepare=prepareChangedOnlyExport;',value);
   const run=options=>value.prepare('smartstore',['A','C','D','E'],{mode:'target_all',priceMode:'sellpia_source',includePrice:true,includeStock:false,...options});
-  return {run,value,calls,downloads,tableReads,state,source,parsed};
+  return {run,value,calls,downloads,tableReads,settingsReads,state,source,parsed};
 }
 async function cells(blob){const book=XLSX.read(await blob.arrayBuffer(),{type:'array'});return XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]],{header:1,raw:true,defval:''});}
 
@@ -159,6 +163,7 @@ test('stock-only never reads dependencies even if a stale checkbox flag is passe
  const h=await harness();h.value.HubPriceDependencyService={prepare(){throw Error('dependency lookup forbidden');}};
  h.value.liveData.loadSellpiaStockSourcesForExport=async({skus})=>({snapshotId:'stock',bySku:new Map(skus.map(sku=>[sku,{sellpia_current_stock:5,sellpia_available_stock:5}]))});
  await h.value.prepare('smartstore',['A'],{mode:'target_all',includePrice:false,includeStock:true,stockSource:'stock',includeDependencies:true});
+ assert.equal(h.settingsReads.length,0,'price settings stay outside the stock-only workflow');
 });
 
 test('collection registration price is composed independently from inherited finals and preserves both negative and positive option deltas in actual XLSX',async()=>{
@@ -187,6 +192,8 @@ test('actual app, data service, parser and XLSX serializer preserve price preced
   const h=await harness(),before=Buffer.from(await h.source.file.arrayBuffer());
   const preview=await h.run({download:false});
   assert.equal(h.calls.length,1);assert.equal(h.downloads.length,0);
+  assert.equal(h.settingsReads.length,1,'the current price contract reads persisted preferences even when none exist');
+  assert.ok(preview.priceAdjustmentContext.groups.length>0);assert.ok(preview.priceAdjustmentContext.groups.every(group=>group.savedAdjustment===null));
   assert.equal(preview.scopeSummary.selectedSkuCount,4);assert.equal(preview.scopeSummary.unchangedOptionCount,1);
   assert.equal(preview.scopeSummary.blockedCount,1);assert.equal(preview.scopeSummary.outputRowCount,3);
   const output=await cells(preview.outputs[0].blob),byCode=new Map(output.slice(1).map(row=>[String(row[0]),row]));
@@ -201,6 +208,7 @@ test('actual app, data service, parser and XLSX serializer preserve price preced
   assert.ok(h.tableReads.flat().every(sku=>!['B','C','INVERSE'].includes(sku)),'only selected SKUs without current decisions require a raw price read');
   await h.run({download:true,expectedPlanFingerprint:preview.planFingerprint});
   assert.equal(h.calls.length,3,'generation rereads via the same optimized protocol and performs a fresh final proof read');
+  assert.equal(h.settingsReads.length,3,'generation binds setting absence in its fresh plan and final proof read');
   assert.equal(h.downloads.filter(entry=>entry.name.endsWith('.xlsx')).length,1);
   assert.deepEqual(Buffer.from(await h.source.file.arrayBuffer()),before,'the original XLSX is immutable');
 });

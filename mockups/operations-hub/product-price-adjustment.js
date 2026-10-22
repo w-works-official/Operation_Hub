@@ -174,5 +174,30 @@
   try{const ctx=context(group),draft=recommended(ctx);return {...build(ctx,draft),recommendedDraft:draft};}
   catch(error){return {valid:false,editable:false,errors:[error.message],blockedReason:error.message,reason:error.message,draft:null,recommendedDraft:null};}
  }
- global.HubProductPriceAdjustment=Object.freeze({analyze,inspect:analyze,validate,recommend,plan});
+ function basePriceOptions(group,options={}) {
+  const empty={valid:false,editable:false,basicDiscount:null,discrete:true,allowedBasePrices:[],candidates:[],minBasePrice:null,maxBasePrice:null};
+  let ctx,basicDiscount;
+  try{ctx=context(group);}catch(error){return {...empty,reason:'이 상품의 판매가 후보를 계산할 수 없습니다.',blockedReason:error.message,issues:[{code:'PRODUCT_NOT_EDITABLE',message:error.message}]};}
+  try{
+   if(!options||typeof options!=='object'||Array.isArray(options)||Object.keys(options).some(key=>key!=='basicDiscount'))throw Error('고정할 기본할인 금액을 확인해주세요.');
+   basicDiscount=integer(Object.hasOwn(options,'basicDiscount')?options.basicDiscount:ctx.basicDiscount,'기본할인 금액');
+  }catch(error){return {...empty,reason:'기본할인을 0원 이상 정수로 입력해주세요.',issues:[{code:'INVALID_BASIC_DISCOUNT',message:error.message}]};}
+  // With C fixed, the zero-option contract requires B-C to equal a fixed final.
+  // The complete set is therefore discrete: B=C+F. Its extrema are labels only;
+  // a price between them is not implicitly allowed. Check the extreme finals to
+  // cover every sibling in O(n log n), without rebuilding n rows per candidate.
+  const allowed=[],rejections=new Set();
+  for(const anchor of [...new Set(ctx.entries.map(entry=>entry.final))].sort((a,b)=>a-b)){
+   const basePrice=anchor+basicDiscount;
+   if(!Number.isSafeInteger(basePrice)){rejections.add('UNSAFE_BASE_PRICE');continue;}
+   if(Math.max(anchor-ctx.minFinal,ctx.maxFinal-anchor)>optionLimit(basePrice)){rejections.add('OPTION_BOUNDS');continue;}
+   if(ctx.hasOptions&&basePrice<2000&&ctx.minFinal<anchor){rejections.add('NEGATIVE_OPTION_BELOW_2000');continue;}
+   allowed.push(basePrice);
+  }
+  const valid=allowed.length>0;
+  const messages={UNSAFE_BASE_PRICE:'목표가와 기본할인의 합이 안전한 정수 범위를 초과합니다.',OPTION_BOUNDS:'전체 옵션가가 판매가의 허용범위에 들어야 합니다.',NEGATIVE_OPTION_BELOW_2000:'판매가 2,000원 미만에서는 음수 옵션가를 사용할 수 없습니다.'};
+  return {valid,editable:true,basicDiscount,discrete:true,allowedBasePrices:allowed,candidates:[...allowed],minBasePrice:allowed[0]??null,maxBasePrice:allowed.at(-1)??null,
+   reason:valid?'':'현재 할인액으로 가능한 판매가가 없습니다.',issues:valid?[]:[{code:'NO_ALLOWED_BASE_PRICE',message:'고정 최종가와 현재 기본할인을 유지할 수 있는 판매가 후보가 없습니다.'},...[...rejections].sort(compare).map(code=>({code,message:messages[code]}))]};
+ }
+ global.HubProductPriceAdjustment=Object.freeze({analyze,inspect:analyze,validate,recommend,plan,basePriceOptions,priceRange:basePriceOptions});
 })(typeof window==='undefined'?globalThis:window);

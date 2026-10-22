@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 import '../mockups/operations-hub/discount-price-math.js';
 import '../mockups/operations-hub/current-price-export.js';
+import '../mockups/operations-hub/product-price-adjustment.js';
 
 const api=globalThis.HubCurrentPriceExport;
 const plain=value=>JSON.parse(JSON.stringify(value));
@@ -104,7 +105,7 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
  const end=appSource.indexOf('\nwindow.SystemV3SellerExportBridge=',start);
  assert.ok(start>=0&&end>start);
  const functionSource=appSource.slice(start,end);
- const files=definitions.map(definition=>({name:definition.file}));
+ const files=definitions.map(definition=>Object.assign(new Blob([definition.file]),{name:definition.file}));
  const rowsByFile=new Map(definitions.map(definition=>{
   const row=carrier(definition.product,definition.option,2);
   row.raw_payload.source_file_name=definition.file;
@@ -113,7 +114,7 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
  const mappingByFile=new Map(definitions.map(definition=>[
   definition.file,[{sku:definition.sku,product_code:definition.product,option_code:definition.option}]
  ]));
- const prices=new Map([...new Set(definitions.map(definition=>definition.sku))].map((sku,index)=>[sku,5000+index*1000])),downloads=[],sourcePriceCalls=[];
+ const prices=new Map([...new Set(definitions.map(definition=>definition.sku))].map((sku,index)=>[sku,5000+index*1000])),downloads=[],sourcePriceCalls=[],settingReads=[];
  const context={
   Date,Blob,setTimeout,performance:{now:()=>Date.now()},formatNumber:value=>String(value),CHANNEL_LABELS:{smartstore:'스마트스토어'},
   sellerExport:{
@@ -133,7 +134,8 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
     });
     return {rows,groups};
    },
-   async loadExportCurrentPriceDecisions({source,skus}){
+   async loadExportCurrentPriceDecisions({source,skus,allowLargeGroups}){
+    assert.equal(allowLargeGroups,true,'all Smartstore price modes retain complete sibling evidence');
     const current=await this.loadCurrentPriceDecisions({source,skus});
     const snapshots={seller_snapshot_id:'seller-snapshot-current',sellpia_snapshot_id:'sellpia-snapshot-current',sellpia_observed_at:'2026-10-08T00:00:00Z'};
     const groups=current.groups.map(group=>({...group,snapshot_id:snapshots.seller_snapshot_id,sellpia_snapshot_id:snapshots.sellpia_snapshot_id,source_observed_at:snapshots.sellpia_observed_at,
@@ -162,11 +164,14 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
      return proof;
     });
     return {rows:current.rows,groups,proof_version:'sellpia-export-v2',absence_proofs,carrier_proofs,snapshots};
-   }
+   },
+   async loadProductPriceSettings({source,productCodes}){assert.equal(source,'smartstore');settingReads.push([...productCodes]);return {contractVersion:1,source,settings:[]};},
+   async saveProductPriceSettings(){throw Error('preview and generation must not save product price settings');}
   },
   window:{
    SystemV3SellerParsers:{async parseSellerFiles(source,[file]){return {normalizedRows:rowsByFile.get(file.name)};}},
    HubCurrentPriceExport:api,
+   HubProductPriceAdjustment:globalThis.HubProductPriceAdjustment,
    HubCurrentPriceDecisionResolver:globalThis.HubCurrentPriceDecisionResolver
   }
  };
@@ -175,6 +180,8 @@ async function runCrossFilePlan(definitions,{mode='changed_only',includeStock=fa
  const result=await context.prepare('smartstore',[...prices.keys()],{
   download:false,mode,priceMode:'sellpia_source',includePrice:true,includeStock
  });
+ assert.ok(settingReads.length>0,'price export reads product setting absence without writing it');
+ assert.ok(settingReads.every(codes=>codes.every(code=>definitions.some(definition=>definition.product===code))),'settings are bounded to the carrier product scope');
  return {...result,downloads,sourcePriceCalls,generate:options=>context.prepare('smartstore',[...prices.keys()],{download:true,mode,priceMode:'sellpia_source',includePrice:true,includeStock,...options})};
 }
 

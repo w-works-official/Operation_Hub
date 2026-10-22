@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
+import {webcrypto} from 'node:crypto';
 
 const require=createRequire(import.meta.url),XLSX=require('./vendor/xlsx-0.18.5.full.min.js'),JSZip=require('./vendor/jszip-3.10.1.min.js');
 const read=name=>fs.readFileSync(new URL(`../mockups/operations-hub/${name}.js`,import.meta.url),'utf8');
@@ -46,7 +47,8 @@ async function harness({siblingCount=218,splitSameProduct=false,duplicateAcrossF
     :[workbook('smartstore-one.xlsx',products.slice(0,2)),workbook('smartstore-two.xlsx',products.slice(2))];
   const mapping=products.flatMap(product=>product.options.map(option=>({sku:option.sku,product_code:product.productCode,option_code:option.option})));
   const rawPrices=Object.fromEntries([...mapping.map(row=>[row.sku,row.sku==='SELECTED'?3000:row.sku==='SECOND'?5500:products.flatMap(product=>product.options).find(option=>option.sku===row.sku).final]),['ROOT',3000]]);
-  const calls=[],downloads=[],sourceReads=[],graphReads=[],state={mutate:null,afterDecision:null,sourcePriceAtRead:null,graphVersion:'graph-1',currentDecision:false};
+  const calls=[],downloads=[],sourceReads=[],graphReads=[],settingsReads=[],settingsSaves=[],settings=new Map(),settingRequests=new Map(),state={mutate:null,afterDecision:null,sourcePriceAtRead:null,graphVersion:'graph-1',currentDecision:false,
+    beforeSettingsRead:null,afterSettingsRead:null,beforeSettingsSave:null,afterSettingsSave:null,settingsReadError:null,settingsSaveError:null,loseSettingsResponseOnce:false,settingsWrites:0};
   let parsed=[];
   function evidence(skus){
     const requested=new Set(skus),rows=[],groups=[],absence_proofs=[];
@@ -69,6 +71,27 @@ async function harness({siblingCount=218,splitSameProduct=false,duplicateAcrossF
   }
   const db={
     async rpc(name,args){
+      if(name==='hub_product_price_settings_read_v1'){
+        settingsReads.push(plain(args));state.beforeSettingsRead?.(settingsReads.length);
+        if(state.settingsReadError)return {data:null,error:{message:state.settingsReadError}};
+        const data={contract_version:1,source:'smartstore',settings:args.p_product_codes.filter(code=>settings.has(code)).map(code=>plain(settings.get(code)))};
+        state.afterSettingsRead?.(data,settingsReads.length);return {data,error:null};
+      }
+      if(name==='hub_product_price_settings_save_v1'){
+        settingsSaves.push(plain(args));
+        const previous=settingRequests.get(args.p_request_id),body=JSON.stringify([args.p_source,args.p_settings]);
+        if(previous)return previous.body===body?{data:{...plain(previous.data),idempotent:true},error:null}:{data:null,error:{message:'같은 요청 ID의 본문이 다릅니다.'}};
+        state.beforeSettingsSave?.(args,settingsSaves.length);
+        if(state.settingsSaveError)return {data:null,error:{message:state.settingsSaveError}};
+        // This is only the transport fixture. The production migration has its
+        // own SQL tests; reject the whole simulated request before any write.
+        if(args.p_settings.some(row=>row.expected_revision!==(settings.get(row.product_code)?.revision??0)))return {data:null,error:{code:'40001',message:'상품 판매가 저장 버전이 변경되었습니다.'}};
+        const saved=args.p_settings.map(row=>({source_channel:args.p_source,product_code:row.product_code,base_price:row.base_price,basic_discount:row.basic_discount,revision:row.expected_revision+1,updated_at:'2026-10-22T05:00:00.000Z'}));
+        for(const row of saved)settings.set(row.product_code,plain(row));state.settingsWrites+=saved.length;
+        const data={contract_version:1,source:args.p_source,request_id:args.p_request_id,idempotent:false,settings:saved};settingRequests.set(args.p_request_id,{body,data:plain(data)});state.afterSettingsSave?.(saved);
+        if(state.loseSettingsResponseOnce){state.loseSettingsResponseOnce=false;return {data:null,error:{message:'fixture lost committed settings response'}};}
+        return {data,error:null};
+      }
       if(name==='hub_export_sku_dependencies_read_v1'){
         graphReads.push(plain(args));
         if(args.p_expected_version&&args.p_expected_version!==state.graphVersion)return {data:null,error:{message:'dependency graph changed'}};
@@ -86,14 +109,14 @@ async function harness({siblingCount=218,splitSameProduct=false,duplicateAcrossF
       }};
     },storage:new Proxy({},{get(){throw Error('storage writes and downloads are forbidden in this fixture');}})
   };
-  const value={console,Blob,File:TestFile,JSZip,XLSX,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,Date,Math,Intl,setTimeout,clearTimeout,URL,TextEncoder,TextDecoder,AbortController,AbortSignal,performance,
+  const value={console,Blob,File:TestFile,JSZip,XLSX,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,Date,Math,Intl,setTimeout,clearTimeout,URL,TextEncoder,TextDecoder,AbortController,AbortSignal,performance,crypto:webcrypto,
     CustomEvent:class CustomEvent{constructor(type,init){this.type=type;this.detail=init?.detail;}},dispatchEvent(){},formatNumber:String,CHANNEL_LABELS:{smartstore:'스마트스토어'},assertMatrixChangesSaved(){},fetch:async()=>{throw Error('network forbidden');},supabase:{createClient:()=>db}};
   value.window=value;value.globalThis=value;vm.createContext(value);
   for(const name of ['discount-price-math','sellpia-inventory-count','seller-source-parsers','seller-export-adapter','rule-registry','current-price-export','product-price-adjustment','data-service','price-dependency-export','price-dependency-service'])vm.runInContext(read(name),value,{filename:name+'.js'});
   value.SystemV3Data.setOperationsHubSessionToken('test-session');
   parsed=(await value.SystemV3SellerParsers.parseSellerFiles('smartstore',sources.map(source=>source.file),{basic:true,price:true,discount:true,inventory:true})).normalizedRows;
   const matrixTargets=async({skus})=>({rows:skus.map(sku=>({sku,active_price_rule:['SELECTED','SECOND','ROOT'].includes(sku),current_effective_price:['SELECTED','SECOND','ROOT'].includes(sku)?{
-    platformBase:sku==='SECOND'?5000:10000,platformDiscount:sku==='SECOND'?0:3000,platformOption:sku==='SECOND'?500:-4000,platformFinal:rawPrices[sku],platformTerms:sku==='SECOND'?[]:[basic(3000)],versions:[{id:'fixture-current-rule',version:1}]
+    platformBase:sku==='SECOND'?5000:10000,platformDiscount:sku==='SECOND'?0:3000,platformOption:rawPrices[sku]-(sku==='SECOND'?5000:7000),platformFinal:rawPrices[sku],platformTerms:sku==='SECOND'?[]:[basic(3000)],versions:[{id:'fixture-current-rule',version:1}]
   }:null}))});
   value.SystemV3Data={...value.SystemV3Data,loadCarrierMatrixTargets:matrixTargets};
   value.liveData={...value.SystemV3Data,
@@ -106,8 +129,17 @@ async function harness({siblingCount=218,splitSameProduct=false,duplicateAcrossF
   vm.runInContext(prepare+'\nthis.prepare=prepareChangedOnlyExport;',value);
   vm.runInContext(bridge,value);
   const run=options=>value.prepare('smartstore',['SELECTED','SECOND'],{mode:'full_original',priceMode:'sellpia_source',includePrice:true,includeStock:false,...options});
-  return {value,run,sources,parsed,mapping,rawPrices,siblings,calls,sourceReads,graphReads,downloads,state};
+  return {value,run,sources,parsed,mapping,rawPrices,siblings,calls,sourceReads,graphReads,downloads,state,settings,settingsReads,settingsSaves};
 }
+
+function savedSetting(h,{code=productCode,basePrice=9000,basicDiscount=2000,revision=1,updatedAt='2026-10-22T04:00:00.000Z'}={}){
+  const row={source_channel:'smartstore',product_code:code,base_price:basePrice,basic_discount:basicDiscount,revision,updated_at:updatedAt};
+  h.settings.set(code,row);return row;
+}
+const groupFor=result=>result.priceAdjustmentContext.groups.find(group=>group.productCode===productCode);
+const saveOptions=(preview,options={})=>({source:'smartstore',skus:['SELECTED','SECOND'],mode:'full_original',priceMode:'sellpia_source',includePrice:true,includeStock:false,
+  productPriceAdjustments:[draft()],changedProductCodes:[productCode],expectedPlanFingerprint:preview.planFingerprint,expectedContextVersion:preview.priceAdjustmentContext.versionKey,
+  requestId:'00000000-0000-4000-8000-000000000003',...options});
 
 async function cells(blob){const book=XLSX.read(await blob.arrayBuffer(),{type:'array'});return XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]],{header:1,raw:true,defval:''});}
 async function worksheet(blob){const zip=await JSZip.loadAsync(await blob.arrayBuffer());return {zip,xml:await zip.file('xl/worksheets/sheet1.xml').async('string')};}
@@ -318,4 +350,132 @@ test('stock-only and out-of-scope or invalid adjustment drafts fail before publi
   await assert.rejects(h.run({productPriceAdjustments:[draft(),draft()]}),/중복/);
   await assert.rejects(h.run({productPriceAdjustments:[{...draft(),source:'makeshop'}]}),/판매처|상품코드/);
   assert.equal(h.downloads.length,0);
+});
+
+test('saved product amounts are loaded automatically in every price mode and re-encode the latest fixed finals without another save',async()=>{
+  for(const mode of ['raw','rules','dependency']){
+    const h=await harness({siblingCount:2}),setting=savedSetting(h,{revision:3}),before=plain(setting),options={priceMode:mode==='rules'?'rules':'sellpia_source',includeDependencies:mode==='dependency'};
+    const initial=await h.run(options),group=groupFor(initial);
+    assert.equal(group.savedAdjustmentValid,true);assert.equal(group.savedAdjustment.revision,3);assert.deepEqual(plain(group.appliedDraft),draft());
+    assert.ok(h.settingsReads.every(read=>read.p_source==='smartstore'&&read.p_product_codes.includes(productCode)));
+    assert.deepEqual([...h.settingsReads[0].p_product_codes].sort(),plain(initial.priceAdjustmentContext.groups.map(group=>group.productCode)).sort(),'absence as well as existing revisions is loaded for the entire current product scope');
+    let output=(await cells(initial.outputs.find(output=>output.file.name==='smartstore-one.xlsx').blob)).find(row=>String(row[0])===productCode);
+    assert.equal(Number(output[5]),9000);assert.equal(Number(output[57]),2000);
+    assert.deepEqual(String(output[17]).split('\n').map(value=>7000+Number(value)),[3000,...h.siblings.map(row=>row.final)]);
+    h.rawPrices.SELECTED=3100;h.rawPrices.ROOT=3100;
+    const refreshed=await h.run(options);assert.notEqual(refreshed.planFingerprint,initial.planFingerprint);
+    assert.equal(groupFor(refreshed).savedAdjustmentValid,true,JSON.stringify({mode,editable:groupFor(refreshed).editable,blockedReason:groupFor(refreshed).blockedReason,savedAdjustmentReason:groupFor(refreshed).savedAdjustmentReason}));
+    output=(await cells(refreshed.outputs.find(output=>output.file.name==='smartstore-one.xlsx').blob)).find(row=>String(row[0])===productCode);
+    assert.deepEqual(String(output[17]).split('\n').map(value=>7000+Number(value)),[3100,...h.siblings.map(row=>row.final)]);
+    await assertProtected(h,refreshed);await h.run({...options,download:true,expectedPlanFingerprint:refreshed.planFingerprint});
+    assert.equal(h.downloads.filter(output=>output.name.endsWith('.xlsx')).length,2);assert.deepEqual(h.settings.get(productCode),before);
+    assert.equal(h.settingsSaves.length,0);assert.equal(h.state.settingsWrites,0);
+  }
+});
+
+test('an invalid saved setting stays visibly blocked without a raw fallback, while an explicit valid draft takes precedence without silently saving',async()=>{
+  const h=await harness({siblingCount:2}),invalid=savedSetting(h,{basicDiscount:1000}),before=plain(invalid),preview=await h.run(),group=groupFor(preview);
+  assert.equal(group.savedAdjustmentValid,false);assert.equal(group.needsAdjustment,true);assert.match(group.savedAdjustmentReason,/저장값|재조정/);
+  const blockedRows=preview.plans.flatMap(plan=>plan.preview).filter(row=>row.product_code===productCode);
+  assert.equal(blockedRows.length,1+h.siblings.length);assert.ok(blockedRows.every(row=>row.status==='blocked'));
+  await assert.rejects(h.run({download:true,expectedPlanFingerprint:preview.planFingerprint}),/저장|조정/);assert.equal(h.downloads.length,0);
+  const explicit=await h.run({productPriceAdjustments:[draft()]});assert.deepEqual(plain(groupFor(explicit).appliedDraft),draft());
+  await h.run({productPriceAdjustments:[draft()],download:true,expectedPlanFingerprint:explicit.planFingerprint});
+  assert.equal(h.downloads.filter(output=>output.name.endsWith('.xlsx')).length,2);assert.deepEqual(h.settings.get(productCode),before);
+  assert.equal(h.settingsSaves.length,0);assert.equal(h.state.settingsWrites,0);
+});
+
+test('setting absence, value, revision and deletion are all bound into previews, including a setting changing only during XLSX serialization',async()=>{
+  for(const change of ['added','value','revision','removed','during_serialization']){
+    const h=await harness({siblingCount:2}),options={productPriceAdjustments:[draft()]};
+    if(change!=='added')savedSetting(h);
+    const preview=await h.run(options);
+    const mutate=()=>change==='removed'?h.settings.delete(productCode):savedSetting(h,{basePrice:change==='value'?9100:9000,basicDiscount:change==='value'?2100:2000,revision:change==='added'?1:2});
+    if(change==='during_serialization'){
+      const transform=h.value.sellerExport.transformSellerFile;
+      h.value.sellerExport.transformSellerFile=async(...args)=>{const result=await transform(...args);mutate();return result;};
+    }else mutate();
+    await assert.rejects(h.run({...options,download:true,expectedPlanFingerprint:preview.planFingerprint}),/변경|미리보기/);
+    assert.equal(h.downloads.length,0,`${change}: the saved-setting proof must be checked before any file is downloaded`);assert.equal(h.settingsSaves.length,0);
+  }
+});
+
+test('saved-setting reads fail closed when the API or its response is unavailable',async()=>{
+  for(const missing of [false,true]){
+    const h=await harness({siblingCount:2});
+    if(missing)delete h.value.liveData.loadProductPriceSettings;else h.state.settingsReadError='fixture settings read failed';
+    await assert.rejects(h.run({productPriceAdjustments:[draft()]}),/조회 기능|settings read failed/);assert.equal(h.downloads.length,0);assert.equal(h.settingsSaves.length,0);
+  }
+});
+
+test('missing price-adjustment modules or required methods reject before original parsing, settings reads or any download',async()=>{
+  for(const missing of ['module','analyze','plan','validate']){
+    const h=await harness({siblingCount:2});savedSetting(h);let sourceLoads=0,sourceParses=0;
+    const parse=h.value.SystemV3SellerParsers.parseSellerFiles;
+    h.value.SystemV3SellerParsers={...h.value.SystemV3SellerParsers,async parseSellerFiles(...args){sourceParses++;return parse(...args);}};
+    h.value.liveData.downloadLatestSellerOriginals=async()=>{sourceLoads++;return new Map([['smartstore',h.sources.map(row=>row.file)]]);};
+    vm.runInContext(missing==='module'?'HubProductPriceAdjustment=undefined':`HubProductPriceAdjustment={...HubProductPriceAdjustment,${missing}:undefined}`,h.value);
+    for(const download of [false,true])await assert.rejects(h.run({download,expectedPlanFingerprint:'unused'}),/가격 조정|모듈|새로고침/);
+    assert.equal(sourceLoads,0,`${missing}: the required module is checked before downloading originals`);assert.equal(sourceParses,0);
+    assert.equal(h.settingsReads.length,0);assert.equal(h.calls.length,0);assert.equal(h.sourceReads.length,0);assert.equal(h.downloads.length,0);assert.equal(h.settingsSaves.length,0);
+  }
+});
+
+test('explicit save writes only changed products once with the previously read revision, then returns a fresh saved context for later automatic exports',async()=>{
+  const h=await harness({siblingCount:2});savedSetting(h,{basePrice:10000,basicDiscount:3000,revision:2});
+  const other=savedSetting(h,{code:'8005434565',basePrice:5500,basicDiscount:0,revision:5}),otherBefore=plain(other),rawBefore=plain(h.rawPrices);
+  const preview=await h.run({productPriceAdjustments:[draft()]}),result=await h.value.SystemV3SellerExportBridge.saveProductPriceAdjustments(saveOptions(preview));
+  assert.equal(result.saved,true);assert.notEqual(result.previewFailed,true);assert.equal(h.settingsSaves.length,1);assert.equal(h.state.settingsWrites,1);
+  assert.deepEqual(h.settingsSaves[0].p_settings,[{product_code:productCode,base_price:9000,basic_discount:2000,expected_revision:2}]);
+  assert.equal(h.settingsSaves[0].p_request_id,'00000000-0000-4000-8000-000000000003');assert.deepEqual(h.settings.get('8005434565'),otherBefore);
+  assert.equal(groupFor(result).savedAdjustment.revision,3);assert.equal(groupFor(result).savedAdjustmentValid,true);assert.deepEqual(plain(groupFor(result).appliedDraft),draft());
+  assert.notEqual(result.planFingerprint,preview.planFingerprint,'the newly committed setting revision needs its own fresh preview proof');
+  assert.ok(Array.isArray(result.savedAdjustments));assert.equal(result.savedAdjustments.length,1);assert.equal(result.savedAdjustments[0].productCode,productCode);
+  const loadedAgain=await h.run();assert.deepEqual(plain(groupFor(loadedAgain).appliedDraft),draft());
+  assert.equal(h.settingsSaves.length,1);assert.deepEqual(h.rawPrices,rawBefore);assert.equal(h.downloads.length,0,'saving a setting never downloads or changes a seller original');
+});
+
+test('stale preview, context, source inputs, settings revisions and canceled save requests never reach the setting writer',async()=>{
+  for(const change of ['preview','context','source','revision','canceled']){
+    const h=await harness({siblingCount:2}),preview=await h.run({productPriceAdjustments:[draft()]}),options=saveOptions(preview);
+    if(change==='preview')options.expectedPlanFingerprint+='stale';
+    if(change==='context')options.expectedContextVersion+='stale';
+    if(change==='source')h.rawPrices.SELECTED=3100;
+    if(change==='revision')savedSetting(h,{basePrice:9000,basicDiscount:2000,revision:1});
+    if(change==='canceled')options.isCurrent=()=>false;
+    await assert.rejects(h.value.SystemV3SellerExportBridge.saveProductPriceAdjustments(options),/미리보기|변경|취소/);
+    assert.equal(h.settingsSaves.length,0,`${change}: reject before the write RPC`);assert.equal(h.state.settingsWrites,0);assert.equal(h.downloads.length,0);
+  }
+});
+
+test('an atomic setting conflict leaves existing values untouched, and a post-save preview failure reports the durable save without retrying the write',async()=>{
+  const conflict=await harness({siblingCount:2}),preview=await conflict.run({productPriceAdjustments:[draft()]});
+  conflict.state.beforeSettingsSave=()=>savedSetting(conflict,{basePrice:10000,basicDiscount:3000,revision:1});
+  await assert.rejects(conflict.value.SystemV3SellerExportBridge.saveProductPriceAdjustments(saveOptions(preview)),/버전|변경/);
+  assert.equal(conflict.settingsSaves.length,2);assert.deepEqual(conflict.settingsSaves[1],conflict.settingsSaves[0],'the one retry must preserve the exact atomic request');assert.equal(conflict.state.settingsWrites,0);assert.equal(conflict.settings.get(productCode).base_price,10000);assert.equal(conflict.downloads.length,0);
+  const h=await harness({siblingCount:2}),before=await h.run({productPriceAdjustments:[draft()]});
+  h.state.afterSettingsSave=()=>{h.state.settingsReadError='post-save preview fixture failed';};
+  const result=await h.value.SystemV3SellerExportBridge.saveProductPriceAdjustments(saveOptions(before));
+  assert.equal(result.saved,true);assert.equal(result.previewFailed,true);assert.match(result.message,/post-save preview fixture failed/);
+  assert.ok(Array.isArray(result.savedAdjustments));assert.equal(result.savedAdjustments.length,1);assert.equal(h.settings.get(productCode).base_price,9000);
+  assert.equal(h.settingsSaves.length,1);assert.equal(h.state.settingsWrites,1);assert.equal(h.downloads.length,0);
+});
+
+test('a lost committed save response retries the identical request once and advances its revision only once',async()=>{
+  const h=await harness({siblingCount:2}),preview=await h.run({productPriceAdjustments:[draft()]});h.state.loseSettingsResponseOnce=true;
+  const result=await h.value.SystemV3SellerExportBridge.saveProductPriceAdjustments(saveOptions(preview));
+  assert.equal(result.saved,true);assert.notEqual(result.previewFailed,true);assert.equal(h.settingsSaves.length,2);assert.deepEqual(h.settingsSaves[1],h.settingsSaves[0]);
+  assert.equal(h.state.settingsWrites,1);assert.equal(h.settings.get(productCode).revision,1);assert.equal(groupFor(result).savedAdjustment.revision,1);assert.equal(h.downloads.length,0);
+});
+
+test('a saved setting changing while the stock audit is pending blocks both combined price-and-stock downloads',async()=>{
+  const h=await harness({siblingCount:2});savedSetting(h,{revision:1});
+  h.value.liveData.loadSellpiaStockSourcesForExport=async({skus})=>({snapshotId:'stock-snapshot-1',bySku:new Map(skus.map(sku=>[sku,{sku,stock:3,available_stock:3,sellpia_current_stock:3,sellpia_available_stock:3}]))});
+  const options={includePrice:true,includeStock:true,stockSource:'stock'},preview=await h.run(options);let auditCalls=0;
+  h.value.liveData.recordStockExportAudit=async()=>{
+    auditCalls++;savedSetting(h,{basePrice:9100,basicDiscount:2100,revision:2});return {export_batch_id:'fixture-stock-audit'};
+  };
+  await assert.rejects(h.run({...options,download:true,expectedPlanFingerprint:preview.planFingerprint}),/저장된 상품 판매가|저장.*변경/);
+  assert.equal(auditCalls,1,'the drift happens after the asynchronous stock audit starts');assert.equal(h.settings.get(productCode).revision,2);
+  assert.equal(h.downloads.length,0,'the final saved-setting read must complete after the audit and before either native file download');assert.equal(h.settingsSaves.length,0);
 });

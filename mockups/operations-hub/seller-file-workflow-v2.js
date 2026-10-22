@@ -13,12 +13,17 @@
  const safeName=v=>String(v||'file').replace(/[\\/:*?"<>|]+/g,'_').trim().slice(0,120)||'file';
 
  const standardUiJobs=new Map(),standardLastActions=new Map(),standardRequests=new Map(),standardBusy=new Map();
- const productPriceDrafts=new Map(),productPriceContexts=new Map();
+ const productPriceDrafts=new Map(),productPriceContexts=new Map(),productPriceRecentlySaved=new Map(),productPriceAwaitingPreview=new Set();
  let productPriceModal=null;
  const productPriceDraftList=source=>[...(productPriceDrafts.get(source)||[])].map(draft=>({...draft}));
  const adjustmentHelperGroup=group=>({source:'smartstore',productCode:String(group.productCode),rows:group.helperRows||[]});
  const adjustmentInput=value=>String(value??'').trim()!==''&&/^\d+$/.test(String(value).trim())?Number(value):NaN;
  const adjustmentError=error=>typeof error==='string'?error:error?.message||String(error||'가격 구성을 확인해주세요.');
+ function adjustmentRequestId(){
+  if(global.crypto.randomUUID)return global.crypto.randomUUID();
+  const bytes=global.crypto.getRandomValues(new Uint8Array(16));bytes[6]=bytes[6]&15|64;bytes[8]=bytes[8]&63|128;
+  const hex=[...bytes].map(value=>value.toString(16).padStart(2,'0')).join('');return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+ }
  function adjustmentContextKey(context){
   return String(context?.versionKey||context?.contextKey||JSON.stringify((context?.groups||[]).map(group=>({productCode:group.productCode,fileNames:group.fileNames,current:group.current,rows:group.helperRows,editable:group.editable,blockedReason:group.blockedReason})).sort((a,b)=>String(a.productCode).localeCompare(String(b.productCode)))));
  }
@@ -30,15 +35,16 @@
  }
  function closeProductPriceAdjustment({invalidate=false}={}){
   const modal=productPriceModal;if(!modal)return;
+  if(modal.phase==='saving')return;
   if(invalidate&&modal.applying)invalidateStandardRequest(modal.source);
   if(invalidate&&modal.applying&&state.sourcePricePreviews.has(modal.source))setSellerPanel(modal.source,'preview');
   productPriceModal=null;
   if(modal.dialog.open)modal.dialog.close();
-  modal.dialog.remove();lockAdjustmentGeneration(modal.source,false);
+  modal.dialog.remove();lockAdjustmentGeneration(modal.source,productPriceAwaitingPreview.has(modal.source));
   modal.trigger?.isConnected&&modal.trigger.focus();
  }
  function clearProductPriceAdjustments(source){
-  productPriceDrafts.delete(source);productPriceContexts.delete(source);
+  productPriceDrafts.delete(source);productPriceContexts.delete(source);productPriceRecentlySaved.delete(source);
   if(productPriceModal?.source===source)closeProductPriceAdjustment({invalidate:true});
  }
  function appendProductPriceAdjustment(source,result,mode,scopeKey){
@@ -47,11 +53,28 @@
   if(!el||!context?.groups?.length){productPriceContexts.delete(source);return;}
   productPriceContexts.set(source,{context,mode,scopeKey,key:adjustmentContextKey(context)});
   el.querySelector('[data-product-price-adjustment-entry]')?.remove();
-  const needs=context.groups.filter(group=>group.needsAdjustment).length,applied=productPriceDraftList(source).length;
-  el.insertAdjacentHTML('beforeend',`<div class="product-price-adjustment-entry" data-product-price-adjustment-entry><div><b>상품별 가격 구성</b><small>전체 ${n(context.groups.length)}상품 · 조정 필요 ${n(needs)}상품${applied?` · 이번 내보내기 수정안 ${n(applied)}상품`:''}</small></div><button class="btn" type="button" data-product-price-adjustment-open="${source}">상품별 가격 조정</button></div>`);
+  const needs=context.groups.filter(group=>group.needsAdjustment).length,saved=context.groups.filter(group=>group.savedAdjustment).length,recent=context.groups.filter(group=>productPriceRecentlySaved.get(source)?.get(String(group.productCode))===String(group.savedAdjustment?.revision)).length;
+  el.insertAdjacentHTML('beforeend',`<div class="product-price-adjustment-entry" data-product-price-adjustment-entry><div><b>상품별 가격 구성</b><small>전체 ${n(context.groups.length)}상품 · 조정 필요 ${n(needs)}상품${recent?` · 저장 완료 ${n(recent)}상품`:saved?` · 저장값 불러옴 ${n(saved)}상품`:''}</small></div><button class="btn" type="button" data-product-price-adjustment-open="${source}">상품별 가격 조정</button></div>`);
+ }
+ function assertAdjustmentAccepted(result,drafts,{saved=false}={}){
+  if(!result?.planFingerprint)throw Error('최신 가격 미리보기의 검증 결과가 없습니다.');
+  for(const draft of drafts){
+   const group=result.priceAdjustmentContext?.groups?.find(item=>String(item.productCode)===String(draft.productCode)),accepted=group?.appliedDraft;
+   if(group?.editable===false||!accepted||Number(accepted.basePrice)!==draft.basePrice||Number(accepted.basicDiscount)!==draft.basicDiscount)throw Error('최신 미리보기에서 가격 조정값을 확인하지 못했습니다.');
+   if(saved&&(!group.savedAdjustment||group.savedAdjustmentValid===false||Number(group.savedAdjustment.basePrice)!==draft.basePrice||Number(group.savedAdjustment.basicDiscount)!==draft.basicDiscount))throw Error('저장된 가격 조정값을 확인하지 못했습니다.');
+  }
+ }
+ function savedAdjustmentPreviewFailed(source,modal,result){
+  productPriceDrafts.delete(source);productPriceContexts.delete(source);state.sourcePricePreviews.delete(source);productPriceAwaitingPreview.add(source);
+  modal.phase='complete';modal.applying=false;closeProductPriceAdjustment();
+  const outcome=result?.saveOutcomeUnknown?'저장 결과 확인 필요':'저장 완료';
+  standardResult(source,`${outcome} · XLSX 생성 전에 미리보기를 다시 실행해주세요.`,'success');
+  const message=result?.errorMessage||result?.previewError||result?.message;
+  if(message)document.querySelector(`[data-standard-result="${source}"]`)?.insertAdjacentHTML('beforeend',`<details class="product-price-adjustment-details"><summary>상세 확인</summary><p>${esc(message)}</p></details>`);
+  setStatus(`${outcome} · 미리보기 다시 필요`,'success');return result;
  }
  function adjustmentDraft(modal,group){
-  const draft=modal.working.get(String(group.productCode))||group.appliedDraft||group.current||{};
+  const draft=modal.working.get(String(group.productCode))||group.appliedDraft||group.savedAdjustment||group.current||{};
   return {source:modal.source,productCode:String(group.productCode),basePrice:adjustmentInput(draft.basePrice),basicDiscount:adjustmentInput(draft.basicDiscount)};
  }
  function validateAdjustment(modal,group){
@@ -59,35 +82,64 @@
   try{return global.HubProductPriceAdjustment.validate(adjustmentHelperGroup(group),adjustmentDraft(modal,group));}
   catch(error){return {valid:false,errors:[adjustmentError(error)],rows:[]};}
  }
+ function adjustmentSaveState(modal,group){
+  if(modal.touched.has(String(group.productCode)))return '미저장 변경';
+  if(group.savedAdjustmentValid===false)return '저장값 불러옴';
+  if(productPriceRecentlySaved.get(modal.source)?.get(String(group.productCode))===String(group.savedAdjustment?.revision))return '저장 완료';
+  return group.savedAdjustment?'저장값 불러옴':'저장된 조정값 없음';
+ }
+ function adjustmentIssueLabel(result){
+  if(result.valid)return '검증 통과';
+  const text=(result.errors||[]).map(adjustmentError).join(' ');
+  return /0원/.test(text)?'0원 옵션 필요':/옵션가|허용범위/.test(text)?'가능 판매가 확인':/할인/.test(text)?'할인 입력 확인':/정수|기준가|판매가/.test(text)?'판매가 입력 확인':'검증 상세 확인';
+ }
+ function adjustmentDetails(modal,messages=[]){
+  const details=modal.dialog.querySelector('[data-adjustment-details]'),list=modal.dialog.querySelector('[data-adjustment-errors]'),errors=[...new Set(messages.map(adjustmentError).filter(Boolean))];
+  details.hidden=!errors.length;list.innerHTML=errors.map(message=>`<li>${esc(message)}</li>`).join('');
+ }
+ function setAdjustmentPhase(modal,phase){
+  modal.phase=phase;modal.applying=phase==='validating'||phase==='saving';modal.dialog.setAttribute('aria-busy',String(modal.applying));
+  for(const node of modal.dialog.querySelectorAll('input,select,button'))node.disabled=modal.applying&&(phase==='saving'||!node.matches('[data-adjustment-cancel]'));
+  const status=modal.dialog.querySelector('[data-adjustment-validation]');status.dataset.state='pending';status.textContent=phase==='saving'?'저장 중 · 잠시 기다려주세요.':'최신 가격 확인 중';
+ }
  function renderAdjustmentList(modal){
   const query=modal.search.trim().toLocaleLowerCase(),all=modal.context.groups||[],needs=all.filter(group=>group.needsAdjustment).length;
   for(const button of modal.dialog.querySelectorAll('[data-adjustment-filter]')){const filter=button.dataset.adjustmentFilter;button.setAttribute('aria-pressed',String(filter===modal.filter));button.textContent=`${filter==='all'?'전체':filter==='needs'?'조정 필요':'정상'} ${n(filter==='all'?all.length:filter==='needs'?needs:all.length-needs)}`;}
   const groups=all.filter(group=>(modal.filter==='all'||Boolean(group.needsAdjustment)===(modal.filter==='needs'))&&(!query||[group.productCode,group.productName,...(group.rows||[]).map(row=>row.sku)].join(' ').toLocaleLowerCase().includes(query))),list=modal.dialog.querySelector('[data-adjustment-products]'),scroll=list.scrollTop;
-  list.innerHTML=groups.map(group=>`<button type="button" class="product-price-adjustment-product" data-adjustment-product="${esc(group.productCode)}" aria-current="${String(group.productCode)===modal.selected?'true':'false'}"><span><b>${esc(group.productCode)}</b><small>${esc(group.productName||'상품명 없음')}</small></span><span>${n(group.rows?.length||group.helperRows?.length)}옵션<small>${modal.touched.has(String(group.productCode))?'수정안 작성':group.appliedDraft?'수정안 적용됨':group.needsAdjustment?'조정 필요':'정상'}${group.editable===false?' · 조정 불가':''}</small></span></button>`).join('')||'<p class="product-price-adjustment-empty">검색 조건에 맞는 상품이 없습니다.</p>';
+  list.innerHTML=groups.map(group=>`<button type="button" class="product-price-adjustment-product" data-adjustment-product="${esc(group.productCode)}" aria-current="${String(group.productCode)===modal.selected?'true':'false'}"><span><b>${esc(group.productCode)}</b><small>${esc(group.productName||'상품명 없음')}</small></span><span>${n(group.rows?.length||group.helperRows?.length)}옵션<small>${modal.touched.has(String(group.productCode))?'미저장 변경':group.savedAdjustment?adjustmentSaveState(modal,group):group.needsAdjustment?'조정 필요':'정상'}${group.editable===false?' · 조정 불가':''}</small></span></button>`).join('')||'<p class="product-price-adjustment-empty">검색 조건에 맞는 상품이 없습니다.</p>';
   list.scrollTop=scroll;
  }
  function updateAdjustmentValidation(modal,group){
   const result=validateAdjustment(modal,group),dialog=modal.dialog,draft=adjustmentDraft(modal,group),limit=Number.isSafeInteger(draft.basePrice)?Math.floor(draft.basePrice*.5/10)*10:null;
   dialog.querySelector('[data-adjustment-discounted]').value=Number.isSafeInteger(result.discountedBasePrice)?n(result.discountedBasePrice):'확인 필요';
   const status=dialog.querySelector('[data-adjustment-validation]');status.dataset.state=result.valid?'valid':'invalid';
-  status.textContent=result.valid?(modal.touched.has(String(group.productCode))?'수정안 검증 통과 · 내보내기 미리보기에는 아직 미반영':'현재 가격 구성 검증 통과 · 수정 후 이번 내보내기에만 적용할 수 있습니다.'):(result.errors||['가격 구성을 확인해주세요.']).map(adjustmentError).join(' · ');
+  status.textContent=`${adjustmentSaveState(modal,group)} · ${group.editable===false?'조정 불가':adjustmentIssueLabel(result)}`;
+  let range;
+  try{const method=global.HubProductPriceAdjustment.basePriceOptions||global.HubProductPriceAdjustment.priceRange;range=method?.(adjustmentHelperGroup(group),{basicDiscount:draft.basicDiscount});}catch(error){range={valid:false,reason:adjustmentError(error)};}
+  const candidates=range?.allowedBasePrices||range?.candidates||[],allowed=candidates.filter(Number.isSafeInteger);
+  dialog.querySelector('[data-adjustment-range]').textContent=group.editable===false?'판매가 조정 불가':allowed.length===1?`가능 판매가 ${n(allowed[0])}원`:allowed.length?`판매가 후보 범위 ${n(allowed[0])}원 ~ ${n(allowed.at(-1))}원`:'유효한 판매가 없음';
+  dialog.querySelector('[data-adjustment-range-hint]').textContent=allowed.length?`가능 판매가 ${n(allowed.length)}개 · 목록의 후보값만 선택할 수 있습니다.`:'할인 금액과 목표 최종가를 확인해주세요.';
+  const select=dialog.querySelector('[data-adjustment-candidates]');select.innerHTML=`<option value="">가능 판매가 선택${allowed.length?` (${n(allowed.length)}개)`:''}</option>${allowed.map(value=>`<option value="${value}">${n(value)}원</option>`).join('')}`;select.disabled=modal.applying||group.editable===false||!allowed.length;select.value=allowed.includes(draft.basePrice)?String(draft.basePrice):'';
+  adjustmentDetails(modal,[...(group.editable===false?[group.blockedReason]:[]),...(result.errors||[]),...(!allowed.length&&range?.reason?[range.reason]:[]),...(group.savedAdjustmentValid===false?[group.savedAdjustmentReason]:[])]);
   const calculated=result.rows||[],rows=group.rows||[];
   dialog.querySelector('[data-adjustment-options]').innerHTML=rows.map((row,index)=>{const option=calculated[index]?.optionPrice??(Number.isSafeInteger(result.discountedBasePrice)&&Number.isSafeInteger(row.targetFinal)?row.targetFinal-result.discountedBasePrice:null),safe=Number.isSafeInteger(option)&&limit!==null&&Math.abs(option)<=limit;return `<tr class="${safe?'':'product-price-adjustment-option-error'}"><td>${esc(row.sku||'미연결')}<small>${esc(row.optionCode||'단일')} ${esc(row.optionName||'')}</small></td><td>${Number.isSafeInteger(row.targetFinal)?`${n(row.targetFinal)}원`:'확인 불가'}<small>${row.parentSku?`상위 ${esc(row.parentSku)} 최종가 그대로`:row.preserved?'미선택 옵션 최종가 보존':'선택한 가격 기준의 최종가'}</small></td><td>${Number.isSafeInteger(option)?`${n(option)}원`:'—'}</td><td>${limit===null?'입력 확인':safe?'허용범위 충족':`±${n(limit)}원 초과`}</td></tr>`;}).join('');
-  const candidates=[...modal.working.keys()].map(code=>modal.context.groups.find(item=>String(item.productCode)===code));
-  dialog.querySelector('[data-adjustment-apply]').disabled=modal.applying||!modal.touched.size||candidates.some(item=>!item||!validateAdjustment(modal,item).valid);
+  const changed=[...modal.touched].map(code=>modal.context.groups.find(item=>String(item.productCode)===code));
+  dialog.querySelector('[data-adjustment-apply]').disabled=modal.applying||!modal.touched.size||changed.some(item=>!item||!validateAdjustment(modal,item).valid);
  }
  function renderAdjustmentEditor(modal){
   const group=modal.context.groups.find(item=>String(item.productCode)===modal.selected),editor=modal.dialog.querySelector('[data-adjustment-editor]');
   if(!group){editor.innerHTML='<p>조정할 상품을 선택해주세요.</p>';return;}
   const draft=adjustmentDraft(modal,group),locked=group.editable===false;
-  editor.innerHTML=`<header><div><h3>${esc(group.productCode)} <span>${esc(group.productName||'')}</span></h3><p>상품 공통 등록가·즉시할인을 조정하고 모든 옵션가를 다시 계산합니다.</p></div><button class="btn" type="button" data-adjustment-recommend ${locked?'disabled':''}>추천값 채우기</button></header>${locked?`<p class="product-price-adjustment-locked" role="note">${esc(group.blockedReason||'이 상품은 조정할 수 없습니다.')}</p>`:''}<div class="product-price-adjustment-fields"><label>공통 등록 판매가<input data-adjustment-base type="number" min="0" step="1" value="${Number.isSafeInteger(draft.basePrice)?draft.basePrice:''}" ${locked?'disabled':''}></label><span>−</span><label>기본 즉시할인<input data-adjustment-discount type="number" min="0" step="1" value="${Number.isSafeInteger(draft.basicDiscount)?draft.basicDiscount:''}" ${locked?'disabled':''}></label><span>=</span><label>할인 후 기준가<input data-adjustment-discounted readonly aria-readonly="true"></label></div><p class="product-price-adjustment-fixed">목표 최종가는 고정됩니다. 상위에서 가져온 가격과 미선택 옵션의 최종가는 유지하고, 옵션가만 자동 계산합니다.</p><p data-adjustment-validation role="status" aria-live="polite"></p><div class="product-price-adjustment-options-wrap"><table><thead><tr><th>SKU / 옵션</th><th>목표 최종가 · 읽기 전용</th><th>자동 계산 옵션가</th><th>허용범위</th></tr></thead><tbody data-adjustment-options></tbody></table></div>`;
+  editor.innerHTML=`<header><div><h3>${esc(group.productCode)} <span>${esc(group.productName||'')}</span></h3><p>상품 공통 등록가·즉시할인을 조정하고 모든 옵션가를 다시 계산합니다.</p></div><button class="btn" type="button" data-adjustment-recommend ${locked?'disabled':''}>추천값 채우기</button></header>${locked?'<p class="product-price-adjustment-locked" role="note">이 상품은 가격 구성을 조정할 수 없습니다.</p>':''}<div class="product-price-adjustment-fields"><label>공통 등록 판매가<input data-adjustment-base type="number" min="0" step="1" value="${Number.isSafeInteger(draft.basePrice)?draft.basePrice:''}" ${locked?'disabled':''}></label><span>−</span><label>기본 즉시할인<input data-adjustment-discount type="number" min="0" step="1" value="${Number.isSafeInteger(draft.basicDiscount)?draft.basicDiscount:''}" ${locked?'disabled':''}></label><span>=</span><label>할인 후 기준가<input data-adjustment-discounted readonly aria-readonly="true"></label></div><div class="product-price-adjustment-range"><div><b data-adjustment-range></b><small data-adjustment-range-hint></small></div><label>가능 판매가<select data-adjustment-candidates aria-label="가능 판매가"></select></label></div><p class="product-price-adjustment-fixed">목표 최종가는 고정됩니다. 상위에서 가져온 가격과 미선택 옵션의 최종가는 유지하고, 옵션가만 자동 계산합니다.</p><p data-adjustment-validation role="status" aria-live="polite"></p><details class="product-price-adjustment-details" data-adjustment-details hidden><summary>검증 상세</summary><ul data-adjustment-errors></ul></details><div class="product-price-adjustment-options-wrap"><table><thead><tr><th>SKU / 옵션</th><th>목표 최종가 · 읽기 전용</th><th>자동 계산 옵션가</th><th>허용범위</th></tr></thead><tbody data-adjustment-options></tbody></table></div>`;
   for(const input of editor.querySelectorAll('[data-adjustment-base],[data-adjustment-discount]'))input.oninput=()=>{
-   modal.working.set(String(group.productCode),{source:modal.source,productCode:String(group.productCode),basePrice:editor.querySelector('[data-adjustment-base]').value,basicDiscount:editor.querySelector('[data-adjustment-discount]').value});modal.touched.add(String(group.productCode));
+   const code=String(group.productCode),next={source:modal.source,productCode:code,basePrice:editor.querySelector('[data-adjustment-base]').value,basicDiscount:editor.querySelector('[data-adjustment-discount]').value},initial=group.appliedDraft||group.savedAdjustment||group.current||{};
+   modal.working.set(code,next);if(adjustmentInput(next.basePrice)===adjustmentInput(initial.basePrice)&&adjustmentInput(next.basicDiscount)===adjustmentInput(initial.basicDiscount)){modal.touched.delete(code);if(!group.appliedDraft)modal.working.delete(code);}else modal.touched.add(code);
    renderAdjustmentList(modal);updateAdjustmentValidation(modal,group);
   };
+  editor.querySelector('[data-adjustment-candidates]').onchange=event=>{if(!event.target.value)return;editor.querySelector('[data-adjustment-base]').value=event.target.value;editor.querySelector('[data-adjustment-base]').dispatchEvent(new Event('input',{bubbles:true}));};
   editor.querySelector('[data-adjustment-recommend]').onclick=()=>{
    try{const result=global.HubProductPriceAdjustment.recommend(adjustmentHelperGroup(group)),recommended=result.draft||group.recommendedDraft;if(!result.valid||!recommended)throw Error((result.errors||['추천값을 계산할 수 없습니다.']).map(adjustmentError).join(' · '));modal.working.set(String(group.productCode),{...recommended,source:modal.source,productCode:String(group.productCode)});modal.touched.add(String(group.productCode));renderAdjustmentList(modal);renderAdjustmentEditor(modal);}
-   catch(error){modal.dialog.querySelector('[data-adjustment-validation]').textContent=adjustmentError(error);}
+   catch(error){const status=modal.dialog.querySelector('[data-adjustment-validation]');status.dataset.state='invalid';status.textContent='추천값 없음 · 검증 상세 확인';adjustmentDetails(modal,[adjustmentError(error)]);}
   };
   updateAdjustmentValidation(modal,group);
  }
@@ -96,9 +148,9 @@
   const saved=productPriceContexts.get(source);if(!saved||!state.sourcePricePreviews.has(source))return;
   if(!global.HubProductPriceAdjustment?.validate||!global.HubProductPriceAdjustment?.recommend){standardResult(source,'상품별 가격 조정 모듈을 불러오지 못했습니다. 새로고침 후 다시 확인해주세요.','error');return;}
   const dialog=document.createElement('dialog');dialog.className='product-price-adjustment-dialog';dialog.setAttribute('aria-labelledby','product-price-adjustment-title');
-  dialog.innerHTML=`<div class="product-price-adjustment-shell"><header class="product-price-adjustment-head"><div><h2 id="product-price-adjustment-title">상품별 가격 조정</h2><p>스마트스토어 · 상품 공통 판매가를 조정해 옵션가 허용범위를 확인합니다.</p></div><button class="btn" type="button" data-adjustment-cancel aria-label="상품별 가격 조정 닫기">닫기</button></header><div class="product-price-adjustment-body"><aside><div class="product-price-adjustment-filters" aria-label="상품 상태"><button type="button" data-adjustment-filter="all">전체</button><button type="button" data-adjustment-filter="needs">조정 필요</button><button type="button" data-adjustment-filter="normal">정상</button></div><label class="product-price-adjustment-search">상품 검색<input type="search" data-adjustment-search placeholder="상품코드 · 상품명 · SKU"></label><div data-adjustment-products></div></aside><section data-adjustment-editor></section></div><footer><p>이번 내보내기에만 적용 · DB 가격·가격태그·원본 파일은 변경하지 않습니다.</p><div><button class="btn" type="button" data-adjustment-cancel>취소</button><button class="btn primary" type="button" data-adjustment-apply>적용 후 다시 미리보기</button></div></footer></div>`;
-  const groups=saved.context.groups,initial=groups.find(group=>group.appliedDraft)||groups.find(group=>group.needsAdjustment&&group.editable!==false)||groups.find(group=>group.editable!==false)||groups[0];
-  const working=new Map(productPriceDraftList(source).map(draft=>[String(draft.productCode),draft])),modal={source,dialog,trigger,context:saved.context,key:saved.key,mode:saved.mode,scopeKey:saved.scopeKey,working,touched:new Set(),filter:'all',search:'',selected:String(initial.productCode),applying:false};
+  dialog.innerHTML=`<div class="product-price-adjustment-shell"><header class="product-price-adjustment-head"><div><h2 id="product-price-adjustment-title">상품별 가격 조정</h2><p>스마트스토어 · 저장한 공통 판매가·할인을 다음 내보내기에도 불러옵니다.</p></div><button class="btn" type="button" data-adjustment-cancel aria-label="상품별 가격 조정 닫기">닫기</button></header><div class="product-price-adjustment-body"><aside><div class="product-price-adjustment-filters" aria-label="상품 상태"><button type="button" data-adjustment-filter="all">전체</button><button type="button" data-adjustment-filter="needs">조정 필요</button><button type="button" data-adjustment-filter="normal">정상</button></div><label class="product-price-adjustment-search">상품 검색<input type="search" data-adjustment-search placeholder="상품코드 · 상품명 · SKU"></label><div data-adjustment-products></div></aside><section data-adjustment-editor></section></div><footer><p>상품별 조정값을 저장합니다. 원본 파일과 가격태그는 변경하지 않습니다.</p><div><button class="btn" type="button" data-adjustment-cancel>취소</button><button class="btn primary" type="button" data-adjustment-apply>저장 후 다시 미리보기</button></div></footer></div>`;
+  const groups=saved.context.groups,initial=groups.find(group=>group.appliedDraft||group.savedAdjustment)||groups.find(group=>group.needsAdjustment&&group.editable!==false)||groups.find(group=>group.editable!==false)||groups[0];
+  const working=new Map(productPriceDraftList(source).map(draft=>[String(draft.productCode),draft])),modal={source,dialog,trigger,context:saved.context,key:saved.key,mode:saved.mode,scopeKey:saved.scopeKey,working,touched:new Set(),filter:'all',search:'',selected:String(initial.productCode),applying:false,phase:'editing',saved:false};
   productPriceModal=modal;document.body.append(dialog);lockAdjustmentGeneration(source,true);
   dialog.querySelectorAll('[data-adjustment-cancel]').forEach(button=>button.onclick=()=>closeProductPriceAdjustment({invalidate:true}));dialog.addEventListener('cancel',event=>{event.preventDefault();closeProductPriceAdjustment({invalidate:true});});
   dialog.querySelector('[data-adjustment-search]').oninput=event=>{modal.search=event.target.value;renderAdjustmentList(modal);};
@@ -107,11 +159,11 @@
   dialog.querySelector('[data-adjustment-apply]').onclick=async()=>{
    if(modal.applying)return;const candidates=[...modal.working.keys()].map(code=>modal.context.groups.find(group=>String(group.productCode)===code));
    if(!modal.touched.size||candidates.some(group=>!group||!validateAdjustment(modal,group).valid))return;
-   const drafts=candidates.map(group=>adjustmentDraft(modal,group));modal.applying=true;
-   for(const node of dialog.querySelectorAll('input,button:not([data-adjustment-cancel])'))node.disabled=true;
-   dialog.setAttribute('aria-busy','true');dialog.querySelector('[data-adjustment-validation]').textContent='최신 원본과 현재 가격을 다시 검증하고 있습니다.';
+   const drafts=candidates.map(group=>adjustmentDraft(modal,group)),saveKey=JSON.stringify(drafts);
+   if(modal.saveRequestKey!==saveKey){modal.saveRequestKey=saveKey;modal.saveRequestId=adjustmentRequestId();}
+   setAdjustmentPhase(modal,'validating');
    try{await previewStandard(source,modal.mode,{candidateAdjustments:drafts,adjustmentModal:modal});if(productPriceModal===modal)closeProductPriceAdjustment();}
-   catch(error){if(productPriceModal!==modal)return;modal.applying=false;setSellerPanel(source,'preview');dialog.removeAttribute('aria-busy');for(const node of dialog.querySelectorAll('input,button:not([data-adjustment-cancel])'))node.disabled=false;renderAdjustmentEditor(modal);const status=dialog.querySelector('[data-adjustment-validation]');status.dataset.state='invalid';status.textContent=`적용할 수 없습니다: ${adjustmentError(error)}`;}
+   catch(error){if(productPriceModal!==modal)return;modal.phase='editing';modal.applying=false;if(!productPriceContexts.has(source)){productPriceAwaitingPreview.add(source);closeProductPriceAdjustment();standardResult(source,'설정이 변경되어 저장하지 못했습니다. 미리보기를 다시 실행해주세요.','error');return;}setSellerPanel(source,'preview');dialog.removeAttribute('aria-busy');for(const node of dialog.querySelectorAll('input,select,button'))node.disabled=false;renderAdjustmentEditor(modal);const status=dialog.querySelector('[data-adjustment-validation]');status.dataset.state='invalid';status.textContent='저장하지 못했습니다 · 이전 저장값 유지';adjustmentDetails(modal,[adjustmentError(error)]);}
   };
   renderAdjustmentList(modal);renderAdjustmentEditor(modal);dialog.showModal();
  }
@@ -159,14 +211,14 @@
  }
  function syncDirectExportBusy(){global.__systemV3DirectExportBusy=standardBusy.size>0;syncExportPresetLock();}
  function beginStandardRequest(source,kind){
-  if(standardBusy.has(source)||productPriceModal?.source===source&&kind.includes('run'))return null;
+  if(standardBusy.has(source)||(productPriceModal?.source===source||productPriceAwaitingPreview.has(source))&&kind.includes('run'))return null;
   const token=(standardRequests.get(source)||0)+1;standardRequests.set(source,token);standardBusy.set(source,{token,kind});
   lockStandardGeneration(source,true);syncDirectExportBusy();return token;
  }
  function isStandardRequestCurrent(source,token){return standardRequests.get(source)===token&&standardBusy.get(source)?.token===token;}
  function finishStandardRequest(source,token){
   if(standardBusy.get(source)?.token!==token)return;
-  standardBusy.delete(source);lockStandardGeneration(source,false);syncDirectExportBusy();
+  standardBusy.delete(source);lockStandardGeneration(source,false);lockAdjustmentGeneration(source,productPriceModal?.source===source||productPriceAwaitingPreview.has(source));syncDirectExportBusy();
  }
  function invalidateStandardRequest(source){
   standardRequests.set(source,(standardRequests.get(source)||0)+1);
@@ -657,25 +709,36 @@ async function previewStandard(source,mode=null,{candidateAdjustments=null,adjus
    const adjusting=Array.isArray(candidateAdjustments),bridge=global.SystemV3SellerExportBridge;if(!bridge){if(adjusting)throw Error('직접 내보내기 연결 모듈을 불러오지 못했습니다.');standardResult(source,'직접 내보내기 연결 모듈을 불러오지 못했습니다. 새로고침해주세요.','error');return;}
    const request=beginStandardRequest(source,adjusting?'adjustment_preview':'preview');if(request===null){if(adjusting)throw Error('진행 중인 작업이 끝난 뒤 다시 시도해주세요.');return;}
   const selection=standardSelection(source);mode=mode||(selection.outputMode||'target_all');
-   const previousContext=productPriceContexts.get(source),productPriceAdjustments=adjusting?candidateAdjustments.map(draft=>({...draft})):productPriceDraftList(source);
+   const previousContext=productPriceContexts.get(source),productPriceAdjustments=adjusting?candidateAdjustments.map(draft=>({...draft})):[];
    if(!adjusting){state.sourcePricePreviews.delete(source);standardResult(source,'선택 범위의 현재 가격·재고와 원본 위치를 검증하는 중…');standardProgress(source,3,'변경사항 조회','선택 범위의 현재 매트릭스 값과 최신 원본을 비교합니다.');}
   try{
    const skus=await directScopeSkus(source);if(!isStandardRequestCurrent(source,request))return;
    const scopeKey=skus?JSON.stringify([...skus].sort()):'ALL',isCurrent=()=>isStandardRequestCurrent(source,request);
-   const result=selection.stockOnly
+   let result=selection.stockOnly
      ?await bridge.previewStockOnly({source,skus,includeDependencies:false,stockSource:selection.stockSource,mode,productPriceAdjustments:[],isCurrent})
     :selection.priceOnly
        ?await bridge.previewPriceOnly({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,mode,productPriceAdjustments,isCurrent})
        :mode==='full_original'?await bridge.previewFullOriginal({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,productPriceAdjustments,isCurrent}):mode==='target_all'?await bridge.previewTargetAll({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,productPriceAdjustments,isCurrent}):await bridge.previewChangedOnly({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,mode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,productPriceAdjustments,isCurrent});
    if(!isCurrent())return;
     if(adjusting&&productPriceModal!==adjustmentModal)return;
-    if(productPriceAdjustments.length&&previousContext&&adjustmentContextKey(result.priceAdjustmentContext)!==previousContext.key){clearProductPriceAdjustments(source);state.sourcePricePreviews.delete(source);standardResult(source,'원본·연결·목표 가격이 변경되어 상품 가격 수정안을 해제했습니다. 미리보기를 다시 실행해주세요.','error');throw Error('원본·연결·목표 가격이 변경되었습니다. 미리보기를 다시 실행해주세요.');}
+    const expectedContextKey=adjusting?adjustmentModal.key:previousContext?.key;
+    if(productPriceAdjustments.length&&expectedContextKey&&adjustmentContextKey(result.priceAdjustmentContext)!==expectedContextKey){clearProductPriceAdjustments(source);state.sourcePricePreviews.delete(source);standardResult(source,'원본·연결·목표 가격이 변경되어 상품 가격 수정안을 해제했습니다. 미리보기를 다시 실행해주세요.','error');throw Error('원본·연결·목표 가격이 변경되었습니다. 미리보기를 다시 실행해주세요.');}
     if(adjusting){
-     if(!result.planFingerprint)throw Error('최신 가격 미리보기의 검증 결과가 없습니다. 다시 실행해주세요.');
-     for(const draft of productPriceAdjustments){const group=result.priceAdjustmentContext?.groups?.find(item=>String(item.productCode)===String(draft.productCode)),accepted=group?.appliedDraft;if(group?.editable===false||!accepted||Number(accepted.basePrice)!==draft.basePrice||Number(accepted.basicDiscount)!==draft.basicDiscount)throw Error(`${draft.productCode}: 최신 미리보기에서 가격 수정안을 적용하지 못했습니다.`);}
-     productPriceDrafts.set(source,productPriceAdjustments.map(draft=>({...draft})));
+     assertAdjustmentAccepted(result,productPriceAdjustments);
+     if(typeof bridge.saveProductPriceAdjustments!=='function')throw Error('상품별 가격 저장 기능을 불러오지 못했습니다. 새로고침 후 다시 확인해주세요.');
+     if(!isCurrent()||productPriceModal!==adjustmentModal)return;
+     setAdjustmentPhase(adjustmentModal,'saving');
+     const saved=await bridge.saveProductPriceAdjustments({source,skus,mode,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,productPriceAdjustments,changedProductCodes:[...adjustmentModal.touched],requestId:adjustmentModal.saveRequestId,expectedPlanFingerprint:result.planFingerprint,expectedContextVersion:result.priceAdjustmentContext.versionKey,isCurrent});
+     if(!isCurrent()||productPriceModal!==adjustmentModal){if(productPriceModal===adjustmentModal){if(saved?.saved===true)return savedAdjustmentPreviewFailed(source,adjustmentModal,saved);throw Error('요청 설정이 변경되어 저장을 완료하지 못했습니다.');}return;}
+     if(saved?.saved!==true)throw Error('가격 조정값을 저장하지 못했습니다.');
+     adjustmentModal.saved=true;const recent=productPriceRecentlySaved.get(source)||new Map();for(const code of adjustmentModal.touched){const record=saved.priceAdjustmentContext?.groups?.find(group=>String(group.productCode)===code)?.savedAdjustment||saved.savedAdjustments?.find(item=>String(item.productCode||item.product_code)===code);if(record)recent.set(code,String(record.revision));}productPriceRecentlySaved.set(source,recent);
+     if(saved.previewFailed)return savedAdjustmentPreviewFailed(source,adjustmentModal,saved);
+     try{assertAdjustmentAccepted(saved,productPriceAdjustments,{saved:true});}catch(error){return savedAdjustmentPreviewFailed(source,adjustmentModal,{...saved,errorMessage:adjustmentError(error)});}
+     result=saved;adjustmentModal.phase='complete';adjustmentModal.applying=false;
     }
-    const adjustmentsKey=JSON.stringify(productPriceAdjustments);
+    const acceptedAdjustments=source==='smartstore'&&result.priceAdjustmentContext?(result.priceAdjustmentContext.groups||[]).filter(group=>group.appliedDraft).map(group=>({source,productCode:String(group.productCode),basePrice:Number(group.appliedDraft.basePrice),basicDiscount:Number(group.appliedDraft.basicDiscount)})):productPriceAdjustments;
+    productPriceDrafts.set(source,acceptedAdjustments);productPriceAwaitingPreview.delete(source);
+    const adjustmentsKey=JSON.stringify(acceptedAdjustments);
    const stock=document.querySelector('[data-matrix-stock-status="'+source+'"]');if(stock){stock.className='export-role-status matrix-stock-state ready';stock.textContent='carrier 대상 '+n(result.diagnostics?.sku_count)+' SKU · DB 조회 '+n(result.diagnostics?.query_count)+'회 · 전체 snapshot 없음';}
     if(selection.stockOnly){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,includeDependencies:selection.includeDependencies,adjustmentsKey,kind:'stock_only'});renderStockOnlyPreview(source,result);}
     else if(selection.priceMode==='sellpia_source'){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,includeDependencies:selection.includeDependencies,adjustmentsKey,kind:'sellpia_source'});renderSourcePricePreview(source,result);}
@@ -684,7 +747,7 @@ async function previewStandard(source,mode=null,{candidateAdjustments=null,adjus
     appendProductPriceAdjustment(source,result,mode,scopeKey);
    setStatus((source==='smartstore'?'스마트스토어':'메이크샵')+(mode==='target_all'?' 대상 전체 미리보기 완료':mode==='full_original'?' 전체 원본 미리보기 완료':' 변경분 미리보기 완료'),'success');
     return result;
-   }catch(error){if(!isStandardRequestCurrent(source,request))return;if(adjusting)throw error;standardResult(source,error?.message||String(error),'error');setStatus('미리보기 실패: '+(error?.message||error),'error');}
+   }catch(error){if(adjusting&&productPriceModal===adjustmentModal&&error?.saveOutcomeUnknown)return savedAdjustmentPreviewFailed(source,adjustmentModal,error);if(!isStandardRequestCurrent(source,request)&&!(adjusting&&productPriceModal===adjustmentModal&&adjustmentModal.phase==='saving'))return;if(adjusting)throw error;standardResult(source,error?.message||String(error),'error');setStatus('미리보기 실패: '+(error?.message||error),'error');}
   finally{finishStandardRequest(source,request);}
 }
 

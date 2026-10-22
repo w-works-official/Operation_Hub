@@ -8953,13 +8953,15 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
   if(stockSource&&!['stock','available_stock'].includes(stockSource))throw Error('재고 내보내기 기준을 확인해주세요.');
   if(stockSource&&!includeStock)throw Error('재고 기준은 재고를 내보낼 때만 선택할 수 있습니다.');
   if(priceMode==='sellpia_source'&&includePrice&&(!['smartstore','makeshop'].includes(source)||!Array.isArray(skus)||!skus.length))throw Error('셀피아 판매가 기준은 스마트스토어·메이크샵의 태그 또는 SKU 범위에서만 사용할 수 있습니다.');
+  if(source==='smartstore'&&includePrice&&!['analyze','plan','validate'].every(method=>typeof window.HubProductPriceAdjustment?.[method]==='function'))throw Error('상품별 가격 조정 모듈을 불러오지 못했습니다. 새로고침 후 다시 확인해주세요.');
   if(!Array.isArray(productPriceAdjustments))throw Error('상품별 가격 조정 형식이 올바르지 않습니다.');
   const adjustmentDrafts=productPriceAdjustments.map(draft=>({...draft,basePrice:typeof draft?.basePrice==='string'&&/^\d+$/.test(draft.basePrice)?Number(draft.basePrice):draft?.basePrice,basicDiscount:typeof draft?.basicDiscount==='string'&&/^\d+$/.test(draft.basicDiscount)?Number(draft.basicDiscount):draft?.basicDiscount}));
   if(adjustmentDrafts.length&&(source!=='smartstore'||!includePrice||!window.HubProductPriceAdjustment))throw Error('상품별 가격 조정은 스마트스토어 가격 미리보기에서만 사용할 수 있습니다.');
   if(adjustmentDrafts.some(draft=>draft.source!=='smartstore'||typeof draft.productCode!=='string'||!draft.productCode.trim())||new Set(adjustmentDrafts.map(draft=>draft.productCode)).size!==adjustmentDrafts.length)throw Error('상품별 가격 조정의 판매처·상품코드 또는 중복 항목을 확인해주세요.');
-  const adjustmentEnabled=source==='smartstore'&&includePrice&&Boolean(window.HubProductPriceAdjustment);
+  const adjustmentEnabled=source==='smartstore'&&includePrice;
   const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
-  const adjustmentDraftProof=adjustmentDrafts.length?JSON.stringify(canonical([...adjustmentDrafts].sort((a,b)=>a.productCode.localeCompare(b.productCode)))):'';
+  let adjustmentDraftProof=adjustmentDrafts.length?JSON.stringify(canonical([...adjustmentDrafts].sort((a,b)=>a.productCode.localeCompare(b.productCode)))):'',adjustmentSettingsProof='',adjustmentSettingCodes=[];
+  const settingProof=(settings,codes)=>JSON.stringify(canonical([...codes].sort().map(productCode=>[productCode,(settings||[]).find(setting=>setting.productCode===productCode)||null])));
   const originalFileProof=async file=>{const bytes=new Uint8Array(await file.arrayBuffer());let first=2166136261,second=2246822519;for(const byte of bytes){first=Math.imul(first^byte,16777619);second=Math.imul(second^byte,3266489917);}return [file.name,bytes.length,(first>>>0).toString(16).padStart(8,'0')+(second>>>0).toString(16).padStart(8,'0')];};
   const targetProof=rows=>JSON.stringify(canonical((rows||[]).map(row=>({sku:row.sku,target:window.HubCurrentPriceExport.matrixPriceTarget(row)})).sort((a,b)=>String(a.sku).localeCompare(String(b.sku)))));
   const decisionReadMode=includePrice&&(source==='smartstore'&&priceMode==='sellpia_source'||includeDependencies||adjustmentEnabled)?'sellpia_export':'editor';
@@ -9070,13 +9072,21 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
     adjustmentGroups.push(...fileAdjustmentGroups);
     const serialize=async(completeGroups=[])=>{
     if(adjustmentEnabled)plan=window.HubCurrentPriceExport.applyProductPriceAdjustments(source,file.name,plan,fileAdjustmentGroups,adjustmentDrafts,completeGroups);
+    const invalidSaved=new Map(completeGroups.filter(group=>group.savedAdjustment&&!group.savedAdjustmentValid&&!group.appliedDraft).map(group=>[group.productCode,group.savedAdjustmentReason||'저장값 재조정 필요']));
+    if(invalidSaved.size){
+      const rejected=(plan.operations||[]).filter(item=>invalidSaved.has(String(item.seller_product_code)));
+      const operations=(plan.operations||[]).filter(item=>!invalidSaved.has(String(item.seller_product_code)));
+      const preview=(plan.preview||[]).map(row=>invalidSaved.has(String(row.product_code))?{...row,status:'blocked',changed:false,disposition:'blocked',reason:'저장된 판매가·할인으로 최신 최종가를 유지할 수 없습니다. 상품별 가격 조정에서 확인해주세요.',price_state:{code:'saved_adjustment_invalid',safe:false,label:'저장값 재조정 필요'}}:row);
+      const excludedItems=[...(plan.excludedItems||[]),...rejected.map(item=>({item,reason:'저장값 재조정 필요'}))];
+      plan={...plan,operations,items:operations,preview,excludedItems,summary:{...plan.summary,changed:preview.filter(row=>row.changed).length,blocked:preview.filter(row=>row.status==='blocked').length}};
+    }
     plan.current_price_decision_proof=currentDecisionProof;
     if(requested){
       const selectedByIdentity=new Map();
       for(const row of mappingRows){const key=identityKey(row);selectedByIdentity.set(key,Boolean(selectedByIdentity.get(key)||row.export_scope_selected));}
       for(const row of plan.preview||[])row.export_scope_selected=Boolean(selectedByIdentity.get(identityKey(row)));
     }else for(const row of plan.preview||[])row.export_scope_selected=true;
-    plan.version_token=window.HubCurrentPriceExport.planVersionToken({source,fileName:file.name,snapshotId:stockSources?.snapshotId||null,preview:plan.preview,operations:plan.operations,currentPriceDecisionProof:currentDecisionProof+(dependencies?dependencies.proof:''),productPriceAdjustmentProof:adjustmentDraftProof+(plan.product_price_adjustment_proof||''),stockSource,includeStock,includePrice,outputMode:mode,scopeSkus:requested?[...requested].sort():null});
+    plan.version_token=window.HubCurrentPriceExport.planVersionToken({source,fileName:file.name,snapshotId:stockSources?.snapshotId||null,preview:plan.preview,operations:plan.operations,currentPriceDecisionProof:currentDecisionProof+(dependencies?dependencies.proof:''),productPriceAdjustmentProof:adjustmentDraftProof+adjustmentSettingsProof+(plan.product_price_adjustment_proof||''),stockSource,includeStock,includePrice,outputMode:mode,scopeSkus:requested?[...requested].sort():null});
     timings.plan_ms+=Math.round(clock()-mark);plans.push(plan);skipped.push(...plan.excludedItems);
     const fileItems=(plan.operations||[]).map(item=>({...item}));
     const selectedSafeRows=(plan.preview||[]).filter(row=>row.export_scope_selected&&row.status!=='blocked');
@@ -9126,7 +9136,7 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
         fileItems.splice(0,fileItems.length,...fileItems.filter(item=>!failedProducts.has(String(item.seller_product_code||''))));
         plan.operations=fileItems;plan.items=fileItems;
         plan.summary.blocked=(plan.preview||[]).filter(row=>row.status==='blocked').length;
-      plan.version_token=window.HubCurrentPriceExport.planVersionToken({source,fileName:file.name,snapshotId:stockSources?.snapshotId||null,preview:plan.preview,operations:fileItems,currentPriceDecisionProof:currentDecisionProof+(dependencies?dependencies.proof:''),productPriceAdjustmentProof:adjustmentDraftProof+(plan.product_price_adjustment_proof||''),stockSource,includeStock,includePrice,outputMode:mode,scopeSkus:requested?[...requested].sort():null});
+      plan.version_token=window.HubCurrentPriceExport.planVersionToken({source,fileName:file.name,snapshotId:stockSources?.snapshotId||null,preview:plan.preview,operations:fileItems,currentPriceDecisionProof:currentDecisionProof+(dependencies?dependencies.proof:''),productPriceAdjustmentProof:adjustmentDraftProof+adjustmentSettingsProof+(plan.product_price_adjustment_proof||''),stockSource,includeStock,includePrice,outputMode:mode,scopeSkus:requested?[...requested].sort():null});
       }else skipped.push(...transformed.skippedItems);
       const blocked=new Set(transformed.skippedItems.map(entry=>Number(entry.item?.export_item_id))),safe=priceMode==='sellpia_source'?fileItems:fileItems.filter(item=>!blocked.has(Number(item.export_item_id))).map(item=>({...item}));
       onProgress?.(`엑셀 차단 상품 원본 유지·정상 상품 재검증 중 · 정상 ${formatNumber(safe.length)}건`);
@@ -9161,10 +9171,28 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
   let priceAdjustmentContext=null;
   if(adjustmentEnabled){
     const groups=window.HubCurrentPriceExport.mergeProductPriceAdjustmentGroups(adjustmentGroups);
-    for(const draft of adjustmentDrafts){const group=groups.find(group=>group.productCode===draft.productCode);if(!group)throw Error(`${draft.productCode}: 현재 내보내기 범위에 없는 상품별 가격 조정입니다.`);if(!group.editable)throw Error(`${draft.productCode}: ${group.blockedReason}`);const applied=window.HubProductPriceAdjustment.plan({source,productCode:group.productCode,rows:group.helperRows,draft});group.appliedDraft=applied.draft;group.needsAdjustment=false;group.reason='이번 내보내기 수정안 적용 · 목표 최종가 유지';}
+    if(typeof liveData.loadProductPriceSettings!=='function')throw Error('저장된 상품 판매가 조회 기능이 없습니다. 새로고침 후 다시 확인해주세요.');
+    adjustmentSettingCodes=groups.map(group=>group.productCode);
+    const stored=await liveData.loadProductPriceSettings({source,productCodes:adjustmentSettingCodes,onQuery});assertCurrent();
+    adjustmentSettingsProof=settingProof(stored.settings,adjustmentSettingCodes);
+    for(const group of groups){
+      const setting=(stored.settings||[]).find(row=>row.productCode===group.productCode);
+      group.savedAdjustment=setting?{...setting}:null;group.savedAdjustmentValid=!setting;group.savedAdjustmentReason='';
+      if(setting){
+        const draft={source,productCode:group.productCode,basePrice:setting.basePrice,basicDiscount:setting.basicDiscount};
+        const checked=window.HubProductPriceAdjustment.validate({source,productCode:group.productCode,rows:group.helperRows,blockedReason:group.editable===false?group.blockedReason:null},draft);
+        group.savedAdjustmentValid=checked.valid===true;
+        if(!checked.valid){group.needsAdjustment=true;group.savedAdjustmentReason='저장값 재조정 필요';group.reason=group.savedAdjustmentReason;}
+        if(checked.valid&&!adjustmentDrafts.some(candidate=>candidate.productCode===group.productCode))adjustmentDrafts.push(draft);
+      }
+    }
+    for(const draft of adjustmentDrafts){const group=groups.find(group=>group.productCode===draft.productCode);if(!group)throw Error(`${draft.productCode}: 현재 내보내기 범위에 없는 상품별 가격 조정입니다.`);if(!group.editable)throw Error(`${draft.productCode}: ${group.blockedReason}`);const applied=window.HubProductPriceAdjustment.plan({source,productCode:group.productCode,rows:group.helperRows,draft});group.appliedDraft=applied.draft;group.needsAdjustment=false;group.reason=group.savedAdjustment&&group.savedAdjustment.basePrice===draft.basePrice&&group.savedAdjustment.basicDiscount===draft.basicDiscount?'저장값 불러옴 · 최신 최종가 검증 완료':'미저장 수정안 · 최신 최종가 검증 완료';}
+    adjustmentDraftProof=adjustmentDrafts.length?JSON.stringify(canonical([...adjustmentDrafts].sort((a,b)=>a.productCode.localeCompare(b.productCode)))):'';
+    if(download&&groups.some(group=>group.savedAdjustment&&!group.savedAdjustmentValid&&!group.appliedDraft))throw Error('저장된 판매가·할인으로 최신 최종가를 유지할 수 없는 상품이 있습니다. 상품별 가격 조정 후 다시 미리보기해주세요.');
     for(const serialize of pendingSerializations)await serialize(groups);
-    const versionKey=window.HubCurrentPriceExport.planVersionToken({source,fileName:'product-price-adjustments',preview:[],operations:[],includePrice:true,includeStock:false,currentPriceDecisionProof:JSON.stringify(canonical({originals:adjustmentOriginalProofs,decisions:currentPriceDecisionProofs,dependencies:dependencies?.proof||'',sourcePrices:[...sourcePriceProofs],targets:adjustmentTargetRequests,priceMode,mode,skus:requested?[...requested].sort():null,groups:groups.map(group=>({productCode:group.productCode,rows:group.helperRows,editable:group.editable,blockedReason:group.blockedReason}))}))});
-    priceAdjustmentContext={source,versionKey,groups};
+    const upstreamVersionKey=window.HubCurrentPriceExport.planVersionToken({source,fileName:'product-price-adjustments',preview:[],operations:[],includePrice:true,includeStock:false,currentPriceDecisionProof:JSON.stringify(canonical({originals:adjustmentOriginalProofs,decisions:currentPriceDecisionProofs,dependencies:dependencies?.proof||'',sourcePrices:[...sourcePriceProofs],targets:adjustmentTargetRequests,priceMode,mode,skus:requested?[...requested].sort():null,groups:groups.map(group=>({productCode:group.productCode,rows:group.helperRows,editable:group.editable,blockedReason:group.blockedReason}))}))});
+    const versionKey=window.HubCurrentPriceExport.planVersionToken({source,fileName:'saved-product-price-adjustments',preview:[],operations:[],includePrice:true,includeStock:false,currentPriceDecisionProof:upstreamVersionKey,productPriceAdjustmentProof:adjustmentSettingsProof});
+    priceAdjustmentContext={source,versionKey,upstreamVersionKey,settingsProof:adjustmentSettingsProof,groups};
   }
   const selectedRows=plans.flatMap(plan=>(plan.preview||[]).filter(row=>row.export_scope_selected&&row.status!=='blocked').map(row=>({...row,file_name:plan.file_name})));
   const scopeSummary={selectedSkuCount:requested?requested.size:matchedSelectedSkus.size||matchedSkuCount,matchedOptionCount:selectedRows.length,changedOptionCount:plans.reduce((sum,plan)=>sum+(plan.preview||[]).filter(row=>row.export_scope_selected&&row.changed).length,0),unchangedOptionCount:plans.reduce((sum,plan)=>sum+(plan.preview||[]).filter(row=>row.export_scope_selected&&row.status==='ready'&&!row.changed).length,0),unmatchedSkuCount:requested?[...requested].filter(sku=>!matchedSelectedSkus.has(sku)).length:0,blockedCount:plans.reduce((sum,plan)=>sum+(plan.preview||[]).filter(row=>row.export_scope_selected&&row.status==='blocked').length,0),preservedCount:plans.reduce((sum,plan)=>sum+(plan.preview||[]).filter(row=>row.export_scope_selected&&(row.status==='warn_keep_original'||row.shared_price_warning)).length,0),outputRowCount:outputs.reduce((sum,output)=>sum+Number(output.outputRowCount||0),0)};
@@ -9199,6 +9227,7 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
       const manifest=outputs.map(output=>({source_channel:source,source_file_name:output.file.name,item_count:output.appliedItems.length,stock_source:stockSource}));
       exportAudit=await liveData.recordStockExportAudit({batchId:crypto.randomUUID(),sources:[source],stockSource,itemCount:outputs.reduce((sum,output)=>sum+output.appliedItems.length,0),manifest});
     }
+    if(adjustmentEnabled){const current=await liveData.loadProductPriceSettings({source,productCodes:adjustmentSettingCodes,onQuery});if(settingProof(current.settings,adjustmentSettingCodes)!==adjustmentSettingsProof)throw Error('파일 생성 중 저장된 상품 판매가·할인이 변경됐습니다. 다시 미리보기해주세요.');}
     for(const output of outputs){
       assertCurrent();
       assertMatrixChangesSaved('판매처 파일 저장');
@@ -9568,6 +9597,40 @@ window.SystemV3SellerExportBridge={
       detail:document.getElementById('seller-export-preview-detail')?.textContent||'',
       selectedSkus:[...sellerExportState.selectedSkus]
     };
+  },
+  async saveProductPriceAdjustments({source,skus=null,mode='changed_only',priceMode='rules',includePrice=true,includeStock=false,stockSource=null,includeDependencies=false,productPriceAdjustments=[],changedProductCodes=[],expectedPlanFingerprint=null,expectedContextVersion=null,isCurrent=null,requestId=null}={}){
+    if(source!=='smartstore'||!includePrice||typeof liveData.saveProductPriceSettings!=='function')throw Error('스마트스토어 가격 조정 저장 기능을 확인해주세요.');
+    if(window.__systemV3ProductPriceSettingsSaving)throw Error('상품 판매가를 저장하고 있습니다. 잠시 후 다시 확인해주세요.');
+    if(!Array.isArray(changedProductCodes)||!changedProductCodes.length||changedProductCodes.length>500||changedProductCodes.some(code=>typeof code!=='string'||!code.trim()||code!==code.trim())||new Set(changedProductCodes).size!==changedProductCodes.length)throw Error('저장할 상품을 확인해주세요.');
+    if(!expectedPlanFingerprint||!expectedContextVersion)throw Error('판매가 수정안을 다시 미리보기한 뒤 저장해주세요.');
+    const assertCurrent=()=>{if(isCurrent&&!isCurrent())throw Error('저장 요청이 취소되었거나 설정이 변경됐습니다.');};
+    const options={download:false,mode,priceMode,includePrice,includeStock,stockSource,includeDependencies,productPriceAdjustments,isCurrent,onProgress:detail=>reportSellerExportProgress(source,detail)};
+    window.__systemV3ProductPriceSettingsSaving=true;
+    try{
+      assertCurrent();
+      const checked=await prepareChangedOnlyExport(source,skus,options);assertCurrent();
+      if(checked.planFingerprint!==expectedPlanFingerprint||checked.priceAdjustmentContext?.versionKey!==expectedContextVersion)throw Error('저장 전에 원본·목표 가격·저장값이 변경됐습니다. 다시 미리보기해주세요.');
+      const settings=changedProductCodes.map(productCode=>{
+        const group=checked.priceAdjustmentContext.groups.find(group=>group.productCode===productCode),draft=productPriceAdjustments.find(draft=>draft.productCode===productCode);
+        if(!group?.editable||!draft||!group.appliedDraft||Number(draft.basePrice)!==group.appliedDraft.basePrice||Number(draft.basicDiscount)!==group.appliedDraft.basicDiscount)throw Error('검증을 통과한 상품 가격 수정안만 저장할 수 있습니다.');
+        return {productCode,basePrice:group.appliedDraft.basePrice,basicDiscount:group.appliedDraft.basicDiscount,expectedRevision:group.savedAdjustment?.revision||0};
+      });
+      const id=requestId||window.crypto.randomUUID();assertCurrent();
+      let persisted;
+      try{persisted=await liveData.saveProductPriceSettings({source,settings,requestId:id});}
+      catch(firstError){
+        // The same atomic request can be safely replayed if its response was lost.
+        try{persisted=await liveData.saveProductPriceSettings({source,settings,requestId:id});}
+        catch(error){const failure=Error(error?.message||firstError?.message||'상품 판매가 저장을 확인하지 못했습니다. 다시 미리보기해주세요.');failure.saveOutcomeUnknown=true;throw failure;}
+      }
+      const savedAdjustments=persisted.settings;
+      try{
+        assertCurrent();
+        const latest=await prepareChangedOnlyExport(source,skus,{...options,productPriceAdjustments:[]});assertCurrent();
+        for(const saved of savedAdjustments){const group=latest.priceAdjustmentContext?.groups.find(group=>group.productCode===saved.productCode);if(!group?.savedAdjustment||group.savedAdjustment.revision!==saved.revision||group.savedAdjustment.basePrice!==saved.basePrice||group.savedAdjustment.basicDiscount!==saved.basicDiscount||!group.appliedDraft)throw Error('저장 후 상품 가격 또는 원본이 변경됐습니다. 다시 미리보기해주세요.');}
+        return {...latest,saved:true,savedAdjustments};
+      }catch(error){return {source,saved:true,previewFailed:true,savedAdjustments,message:error?.message||'저장은 완료됐지만 최신 미리보기를 확인하지 못했습니다. 다시 미리보기해주세요.'};}
+    }finally{window.__systemV3ProductPriceSettingsSaving=false;}
   },
   async previewFullOriginal({source,skus=null,priceMode='rules',includePrice=true,includeStock=true,stockSource=null,includeDependencies=false,isCurrent=null,productPriceAdjustments=[]}={}){
     const result=await prepareFullOriginalExport(source,skus,{download:false,priceMode,includePrice,includeStock,stockSource,includeDependencies,isCurrent,productPriceAdjustments,onProgress:detail=>reportSellerExportProgress(source,detail)});
