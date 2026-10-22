@@ -81,5 +81,7 @@
   "operationsHubPriceDependencyService.test.mjs",
   "operationsHubExportSkuDependenciesSql.test.mjs",
   "operationsHubStockDependencyExport.test.mjs",
-  "operationsHubPriceDecisionExportLargeGroupsSql.test.mjs"
+  "operationsHubPriceDecisionExportLargeGroupsSql.test.mjs",
+  "operationsHubProductPriceAdjustment.test.mjs",
+  "operationsHubProductPriceAdjustmentFlow.test.mjs"
 ]

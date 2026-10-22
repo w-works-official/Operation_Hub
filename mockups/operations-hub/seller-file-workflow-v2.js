@@ -13,6 +13,108 @@
  const safeName=v=>String(v||'file').replace(/[\\/:*?"<>|]+/g,'_').trim().slice(0,120)||'file';
 
  const standardUiJobs=new Map(),standardLastActions=new Map(),standardRequests=new Map(),standardBusy=new Map();
+ const productPriceDrafts=new Map(),productPriceContexts=new Map();
+ let productPriceModal=null;
+ const productPriceDraftList=source=>[...(productPriceDrafts.get(source)||[])].map(draft=>({...draft}));
+ const adjustmentHelperGroup=group=>({source:'smartstore',productCode:String(group.productCode),rows:group.helperRows||[]});
+ const adjustmentInput=value=>String(value??'').trim()!==''&&/^\d+$/.test(String(value).trim())?Number(value):NaN;
+ const adjustmentError=error=>typeof error==='string'?error:error?.message||String(error||'가격 구성을 확인해주세요.');
+ function adjustmentContextKey(context){
+  return String(context?.versionKey||context?.contextKey||JSON.stringify((context?.groups||[]).map(group=>({productCode:group.productCode,fileNames:group.fileNames,current:group.current,rows:group.helperRows,editable:group.editable,blockedReason:group.blockedReason})).sort((a,b)=>String(a.productCode).localeCompare(String(b.productCode)))));
+ }
+ function lockAdjustmentGeneration(source,locked){
+  for(const button of document.querySelectorAll(`[data-standard-run="${source}"],[data-standard-full-run="${source}"],[data-standard-carrier-run="${source}"]`)){
+   if(locked){if(!button.hasAttribute('data-adjustment-disabled-before'))button.dataset.adjustmentDisabledBefore=String(button.disabled);button.disabled=true;}
+   else if(button.hasAttribute('data-adjustment-disabled-before')){button.disabled=button.dataset.adjustmentDisabledBefore==='true';delete button.dataset.adjustmentDisabledBefore;}
+  }
+ }
+ function closeProductPriceAdjustment({invalidate=false}={}){
+  const modal=productPriceModal;if(!modal)return;
+  if(invalidate&&modal.applying)invalidateStandardRequest(modal.source);
+  if(invalidate&&modal.applying&&state.sourcePricePreviews.has(modal.source))setSellerPanel(modal.source,'preview');
+  productPriceModal=null;
+  if(modal.dialog.open)modal.dialog.close();
+  modal.dialog.remove();lockAdjustmentGeneration(modal.source,false);
+  modal.trigger?.isConnected&&modal.trigger.focus();
+ }
+ function clearProductPriceAdjustments(source){
+  productPriceDrafts.delete(source);productPriceContexts.delete(source);
+  if(productPriceModal?.source===source)closeProductPriceAdjustment({invalidate:true});
+ }
+ function appendProductPriceAdjustment(source,result,mode,scopeKey){
+  if(source!=='smartstore')return;
+  const context=result.priceAdjustmentContext,el=document.querySelector(`[data-standard-result="${source}"]`);
+  if(!el||!context?.groups?.length){productPriceContexts.delete(source);return;}
+  productPriceContexts.set(source,{context,mode,scopeKey,key:adjustmentContextKey(context)});
+  el.querySelector('[data-product-price-adjustment-entry]')?.remove();
+  const needs=context.groups.filter(group=>group.needsAdjustment).length,applied=productPriceDraftList(source).length;
+  el.insertAdjacentHTML('beforeend',`<div class="product-price-adjustment-entry" data-product-price-adjustment-entry><div><b>상품별 가격 구성</b><small>전체 ${n(context.groups.length)}상품 · 조정 필요 ${n(needs)}상품${applied?` · 이번 내보내기 수정안 ${n(applied)}상품`:''}</small></div><button class="btn" type="button" data-product-price-adjustment-open="${source}">상품별 가격 조정</button></div>`);
+ }
+ function adjustmentDraft(modal,group){
+  const draft=modal.working.get(String(group.productCode))||group.appliedDraft||group.current||{};
+  return {source:modal.source,productCode:String(group.productCode),basePrice:adjustmentInput(draft.basePrice),basicDiscount:adjustmentInput(draft.basicDiscount)};
+ }
+ function validateAdjustment(modal,group){
+  if(group.editable===false)return {valid:false,errors:[group.blockedReason||'이 상품의 가격 구성은 조정할 수 없습니다.'],rows:[]};
+  try{return global.HubProductPriceAdjustment.validate(adjustmentHelperGroup(group),adjustmentDraft(modal,group));}
+  catch(error){return {valid:false,errors:[adjustmentError(error)],rows:[]};}
+ }
+ function renderAdjustmentList(modal){
+  const query=modal.search.trim().toLocaleLowerCase(),all=modal.context.groups||[],needs=all.filter(group=>group.needsAdjustment).length;
+  for(const button of modal.dialog.querySelectorAll('[data-adjustment-filter]')){const filter=button.dataset.adjustmentFilter;button.setAttribute('aria-pressed',String(filter===modal.filter));button.textContent=`${filter==='all'?'전체':filter==='needs'?'조정 필요':'정상'} ${n(filter==='all'?all.length:filter==='needs'?needs:all.length-needs)}`;}
+  const groups=all.filter(group=>(modal.filter==='all'||Boolean(group.needsAdjustment)===(modal.filter==='needs'))&&(!query||[group.productCode,group.productName,...(group.rows||[]).map(row=>row.sku)].join(' ').toLocaleLowerCase().includes(query))),list=modal.dialog.querySelector('[data-adjustment-products]'),scroll=list.scrollTop;
+  list.innerHTML=groups.map(group=>`<button type="button" class="product-price-adjustment-product" data-adjustment-product="${esc(group.productCode)}" aria-current="${String(group.productCode)===modal.selected?'true':'false'}"><span><b>${esc(group.productCode)}</b><small>${esc(group.productName||'상품명 없음')}</small></span><span>${n(group.rows?.length||group.helperRows?.length)}옵션<small>${modal.touched.has(String(group.productCode))?'수정안 작성':group.appliedDraft?'수정안 적용됨':group.needsAdjustment?'조정 필요':'정상'}${group.editable===false?' · 조정 불가':''}</small></span></button>`).join('')||'<p class="product-price-adjustment-empty">검색 조건에 맞는 상품이 없습니다.</p>';
+  list.scrollTop=scroll;
+ }
+ function updateAdjustmentValidation(modal,group){
+  const result=validateAdjustment(modal,group),dialog=modal.dialog,draft=adjustmentDraft(modal,group),limit=Number.isSafeInteger(draft.basePrice)?Math.floor(draft.basePrice*.5/10)*10:null;
+  dialog.querySelector('[data-adjustment-discounted]').value=Number.isSafeInteger(result.discountedBasePrice)?n(result.discountedBasePrice):'확인 필요';
+  const status=dialog.querySelector('[data-adjustment-validation]');status.dataset.state=result.valid?'valid':'invalid';
+  status.textContent=result.valid?(modal.touched.has(String(group.productCode))?'수정안 검증 통과 · 내보내기 미리보기에는 아직 미반영':'현재 가격 구성 검증 통과 · 수정 후 이번 내보내기에만 적용할 수 있습니다.'):(result.errors||['가격 구성을 확인해주세요.']).map(adjustmentError).join(' · ');
+  const calculated=result.rows||[],rows=group.rows||[];
+  dialog.querySelector('[data-adjustment-options]').innerHTML=rows.map((row,index)=>{const option=calculated[index]?.optionPrice??(Number.isSafeInteger(result.discountedBasePrice)&&Number.isSafeInteger(row.targetFinal)?row.targetFinal-result.discountedBasePrice:null),safe=Number.isSafeInteger(option)&&limit!==null&&Math.abs(option)<=limit;return `<tr class="${safe?'':'product-price-adjustment-option-error'}"><td>${esc(row.sku||'미연결')}<small>${esc(row.optionCode||'단일')} ${esc(row.optionName||'')}</small></td><td>${Number.isSafeInteger(row.targetFinal)?`${n(row.targetFinal)}원`:'확인 불가'}<small>${row.parentSku?`상위 ${esc(row.parentSku)} 최종가 그대로`:row.preserved?'미선택 옵션 최종가 보존':'선택한 가격 기준의 최종가'}</small></td><td>${Number.isSafeInteger(option)?`${n(option)}원`:'—'}</td><td>${limit===null?'입력 확인':safe?'허용범위 충족':`±${n(limit)}원 초과`}</td></tr>`;}).join('');
+  const candidates=[...modal.working.keys()].map(code=>modal.context.groups.find(item=>String(item.productCode)===code));
+  dialog.querySelector('[data-adjustment-apply]').disabled=modal.applying||!modal.touched.size||candidates.some(item=>!item||!validateAdjustment(modal,item).valid);
+ }
+ function renderAdjustmentEditor(modal){
+  const group=modal.context.groups.find(item=>String(item.productCode)===modal.selected),editor=modal.dialog.querySelector('[data-adjustment-editor]');
+  if(!group){editor.innerHTML='<p>조정할 상품을 선택해주세요.</p>';return;}
+  const draft=adjustmentDraft(modal,group),locked=group.editable===false;
+  editor.innerHTML=`<header><div><h3>${esc(group.productCode)} <span>${esc(group.productName||'')}</span></h3><p>상품 공통 등록가·즉시할인을 조정하고 모든 옵션가를 다시 계산합니다.</p></div><button class="btn" type="button" data-adjustment-recommend ${locked?'disabled':''}>추천값 채우기</button></header>${locked?`<p class="product-price-adjustment-locked" role="note">${esc(group.blockedReason||'이 상품은 조정할 수 없습니다.')}</p>`:''}<div class="product-price-adjustment-fields"><label>공통 등록 판매가<input data-adjustment-base type="number" min="0" step="1" value="${Number.isSafeInteger(draft.basePrice)?draft.basePrice:''}" ${locked?'disabled':''}></label><span>−</span><label>기본 즉시할인<input data-adjustment-discount type="number" min="0" step="1" value="${Number.isSafeInteger(draft.basicDiscount)?draft.basicDiscount:''}" ${locked?'disabled':''}></label><span>=</span><label>할인 후 기준가<input data-adjustment-discounted readonly aria-readonly="true"></label></div><p class="product-price-adjustment-fixed">목표 최종가는 고정됩니다. 상위에서 가져온 가격과 미선택 옵션의 최종가는 유지하고, 옵션가만 자동 계산합니다.</p><p data-adjustment-validation role="status" aria-live="polite"></p><div class="product-price-adjustment-options-wrap"><table><thead><tr><th>SKU / 옵션</th><th>목표 최종가 · 읽기 전용</th><th>자동 계산 옵션가</th><th>허용범위</th></tr></thead><tbody data-adjustment-options></tbody></table></div>`;
+  for(const input of editor.querySelectorAll('[data-adjustment-base],[data-adjustment-discount]'))input.oninput=()=>{
+   modal.working.set(String(group.productCode),{source:modal.source,productCode:String(group.productCode),basePrice:editor.querySelector('[data-adjustment-base]').value,basicDiscount:editor.querySelector('[data-adjustment-discount]').value});modal.touched.add(String(group.productCode));
+   renderAdjustmentList(modal);updateAdjustmentValidation(modal,group);
+  };
+  editor.querySelector('[data-adjustment-recommend]').onclick=()=>{
+   try{const result=global.HubProductPriceAdjustment.recommend(adjustmentHelperGroup(group)),recommended=result.draft||group.recommendedDraft;if(!result.valid||!recommended)throw Error((result.errors||['추천값을 계산할 수 없습니다.']).map(adjustmentError).join(' · '));modal.working.set(String(group.productCode),{...recommended,source:modal.source,productCode:String(group.productCode)});modal.touched.add(String(group.productCode));renderAdjustmentList(modal);renderAdjustmentEditor(modal);}
+   catch(error){modal.dialog.querySelector('[data-adjustment-validation]').textContent=adjustmentError(error);}
+  };
+  updateAdjustmentValidation(modal,group);
+ }
+ function openProductPriceAdjustment(source,trigger){
+  if(source!=='smartstore'||standardBusy.has(source)||productPriceModal)return;
+  const saved=productPriceContexts.get(source);if(!saved||!state.sourcePricePreviews.has(source))return;
+  if(!global.HubProductPriceAdjustment?.validate||!global.HubProductPriceAdjustment?.recommend){standardResult(source,'상품별 가격 조정 모듈을 불러오지 못했습니다. 새로고침 후 다시 확인해주세요.','error');return;}
+  const dialog=document.createElement('dialog');dialog.className='product-price-adjustment-dialog';dialog.setAttribute('aria-labelledby','product-price-adjustment-title');
+  dialog.innerHTML=`<div class="product-price-adjustment-shell"><header class="product-price-adjustment-head"><div><h2 id="product-price-adjustment-title">상품별 가격 조정</h2><p>스마트스토어 · 상품 공통 판매가를 조정해 옵션가 허용범위를 확인합니다.</p></div><button class="btn" type="button" data-adjustment-cancel aria-label="상품별 가격 조정 닫기">닫기</button></header><div class="product-price-adjustment-body"><aside><div class="product-price-adjustment-filters" aria-label="상품 상태"><button type="button" data-adjustment-filter="all">전체</button><button type="button" data-adjustment-filter="needs">조정 필요</button><button type="button" data-adjustment-filter="normal">정상</button></div><label class="product-price-adjustment-search">상품 검색<input type="search" data-adjustment-search placeholder="상품코드 · 상품명 · SKU"></label><div data-adjustment-products></div></aside><section data-adjustment-editor></section></div><footer><p>이번 내보내기에만 적용 · DB 가격·가격태그·원본 파일은 변경하지 않습니다.</p><div><button class="btn" type="button" data-adjustment-cancel>취소</button><button class="btn primary" type="button" data-adjustment-apply>적용 후 다시 미리보기</button></div></footer></div>`;
+  const groups=saved.context.groups,initial=groups.find(group=>group.appliedDraft)||groups.find(group=>group.needsAdjustment&&group.editable!==false)||groups.find(group=>group.editable!==false)||groups[0];
+  const working=new Map(productPriceDraftList(source).map(draft=>[String(draft.productCode),draft])),modal={source,dialog,trigger,context:saved.context,key:saved.key,mode:saved.mode,scopeKey:saved.scopeKey,working,touched:new Set(),filter:'all',search:'',selected:String(initial.productCode),applying:false};
+  productPriceModal=modal;document.body.append(dialog);lockAdjustmentGeneration(source,true);
+  dialog.querySelectorAll('[data-adjustment-cancel]').forEach(button=>button.onclick=()=>closeProductPriceAdjustment({invalidate:true}));dialog.addEventListener('cancel',event=>{event.preventDefault();closeProductPriceAdjustment({invalidate:true});});
+  dialog.querySelector('[data-adjustment-search]').oninput=event=>{modal.search=event.target.value;renderAdjustmentList(modal);};
+  dialog.querySelector('[data-adjustment-products]').onclick=event=>{const button=event.target.closest('[data-adjustment-product]');if(!button)return;modal.selected=button.dataset.adjustmentProduct;renderAdjustmentList(modal);renderAdjustmentEditor(modal);};
+  for(const button of dialog.querySelectorAll('[data-adjustment-filter]'))button.onclick=()=>{modal.filter=button.dataset.adjustmentFilter;renderAdjustmentList(modal);};
+  dialog.querySelector('[data-adjustment-apply]').onclick=async()=>{
+   if(modal.applying)return;const candidates=[...modal.working.keys()].map(code=>modal.context.groups.find(group=>String(group.productCode)===code));
+   if(!modal.touched.size||candidates.some(group=>!group||!validateAdjustment(modal,group).valid))return;
+   const drafts=candidates.map(group=>adjustmentDraft(modal,group));modal.applying=true;
+   for(const node of dialog.querySelectorAll('input,button:not([data-adjustment-cancel])'))node.disabled=true;
+   dialog.setAttribute('aria-busy','true');dialog.querySelector('[data-adjustment-validation]').textContent='최신 원본과 현재 가격을 다시 검증하고 있습니다.';
+   try{await previewStandard(source,modal.mode,{candidateAdjustments:drafts,adjustmentModal:modal});if(productPriceModal===modal)closeProductPriceAdjustment();}
+   catch(error){if(productPriceModal!==modal)return;modal.applying=false;setSellerPanel(source,'preview');dialog.removeAttribute('aria-busy');for(const node of dialog.querySelectorAll('input,button:not([data-adjustment-cancel])'))node.disabled=false;renderAdjustmentEditor(modal);const status=dialog.querySelector('[data-adjustment-validation]');status.dataset.state='invalid';status.textContent=`적용할 수 없습니다: ${adjustmentError(error)}`;}
+  };
+  renderAdjustmentList(modal);renderAdjustmentEditor(modal);dialog.showModal();
+ }
  function sellerPanel(source){return document.querySelector(`[data-seller-panel="${source}"]`);}
  function setSellerPanel(source,phase,message=''){
   const panel=sellerPanel(source);if(!panel)return;
@@ -28,6 +130,7 @@
   }
  }
  function resetSeller(source){
+  clearProductPriceAdjustments(source);
   if(source==='ably'){
    state.ablyJob?.cancel(false);state.ablyJob=null;state.preview=null;state.carrierFiles.clear();state.activeAblyCarrierRole=null;renderExportStatuses();
   }else{
@@ -56,7 +159,7 @@
  }
  function syncDirectExportBusy(){global.__systemV3DirectExportBusy=standardBusy.size>0;syncExportPresetLock();}
  function beginStandardRequest(source,kind){
-  if(standardBusy.has(source))return null;
+  if(standardBusy.has(source)||productPriceModal?.source===source&&kind.includes('run'))return null;
   const token=(standardRequests.get(source)||0)+1;standardRequests.set(source,token);standardBusy.set(source,{token,kind});
   lockStandardGeneration(source,true);syncDirectExportBusy();return token;
  }
@@ -157,6 +260,7 @@ function bindSellerScope(section,source){
   const mode=section.querySelector(`[data-seller-scope-mode="${source}"]`),manual=section.querySelector(`[data-seller-scope-manual="${source}"]`),tag=section.querySelector(`[data-seller-scope-tag="${source}"]`);
   if(!mode)return;
   const invalidate=message=>{
+   clearProductPriceAdjustments(source);
    state.sourcePricePreviews.delete(source);state.standardCarrierPlans.delete(source);state.standardCarrierViews.delete(source);
    if(source!=='ably')invalidateStandardRequest(source);
    if(source==='ably'){if(state.ablyJob?.running)state.ablyJob.cancel(false);state.preview=null;const status=document.querySelector('[data-ably-action-status]');if(status){status.className='export-role-status';status.textContent=message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.';}setSellerPanel('ably','idle',message||'선택 범위 또는 내보내기 설정이 바뀌었습니다. 미리보기를 다시 실행하세요.');}
@@ -410,8 +514,9 @@ function appendDependencySummary(source,result){
   section.querySelectorAll('[data-standard-full-run]').forEach(btn=>btn.onclick=()=>{const source=btn.dataset.standardFullRun;standardLastActions.set(source,()=>runStandard(source,'full_original'));void runStandard(source,'full_original');});
   section.querySelectorAll('[data-standard-preview]').forEach(btn=>btn.onclick=()=>{const source=btn.dataset.standardPreview;standardLastActions.set(source,()=>previewStandard(source));void previewStandard(source);});
   section.querySelectorAll('[data-standard-run]').forEach(btn=>btn.onclick=()=>{const source=btn.dataset.standardRun;standardLastActions.set(source,()=>runStandard(source));void runStandard(source);});
+  section.addEventListener('click',event=>{const button=event.target.closest('[data-product-price-adjustment-open]');if(button)openProductPriceAdjustment(button.dataset.productPriceAdjustmentOpen,button);});
   section.querySelectorAll('[data-standard-carrier-pick]').forEach(btn=>btn.onclick=()=>section.querySelector(`[data-standard-carrier-input="${btn.dataset.standardCarrierPick}"]`)?.click());
-  section.querySelectorAll('[data-standard-carrier-input]').forEach(input=>input.onchange=()=>{const file=input.files?.[0];if(file){state.standardCarrierFiles.set(input.dataset.standardCarrierInput,file);void previewStandardCarrier(input.dataset.standardCarrierInput,file);}input.value='';});
+  section.querySelectorAll('[data-standard-carrier-input]').forEach(input=>input.onchange=()=>{const file=input.files?.[0];if(file){clearProductPriceAdjustments(input.dataset.standardCarrierInput);state.standardCarrierFiles.set(input.dataset.standardCarrierInput,file);void previewStandardCarrier(input.dataset.standardCarrierInput,file);}input.value='';});
   section.querySelectorAll('[data-standard-carrier-run]').forEach(btn=>btn.onclick=()=>void runStandardCarrier(btn.dataset.standardCarrierRun));
   section.querySelectorAll('[data-standard-recalculate]').forEach(btn=>btn.onclick=()=>void recalculateStandardScope(btn.dataset.standardRecalculate));
   section.querySelector('[data-page-upload-ably]').onclick=()=>{document.querySelector('.nav-item[data-page="upload"]')?.click();setTimeout(()=>{const source=document.getElementById('source-select');if(source){source.value='ably';source.dispatchEvent(new Event('change',{bubbles:true}));}},80);};
@@ -548,29 +653,38 @@ function appendDependencySummary(source,result){
   el.innerHTML=`<b>재고-only 미리보기 · 기준 ${result.stockSource==='stock'?'재고':'가용재고'}</b><small class="seller-scope-summary">${esc(formatScopeSummary(result.scopeSummary))}</small><div class="transformation-plan-summary"><span>전체 ${n(rows.length)}행</span><span>재고 변경 ${n(changed)}행</span><span>변경 없음 ${n(rows.length-changed-blocked-warned)}행</span><span>원본 유지 경고 ${n(warned)}행</span><span>차단 ${n(blocked)}행</span><span>가격 변경 0행</span></div><p>선택한 Sellpia ${result.stockSource==='stock'?'재고':'가용재고'}를 판매처 재고 셀에만 반영합니다.${result.stockSource==='available_stock'?' 가용재고가 음수이면 DB 원값은 유지하고 판매처에는 0으로 내보냅니다.':''} 판매가·옵션가·상품명·옵션명과 나머지 원본 셀은 유지됩니다.</p><div class="transformation-plan-table-wrap"><table class="transformation-plan-table"><thead><tr><th>행 / SKU</th><th>판매처 기존 재고</th><th>내보낼 재고</th><th>기준</th><th>상태</th></tr></thead><tbody>${shown.map(row=>`<tr class="${row.status==='blocked'?'export-row-blocker':row.status==='warn_keep_original'?'export-row-warning':row.diff?.stock?.changed?'export-row-change':'export-row-unchanged'}"><td>${esc(row.source_row_no??'—')} / ${esc(row.sku||'—')}</td><td>${esc(row.diff?.stock?.before??'—')}</td><td>${esc(row.diff?.stock?.after??row.diff?.stock?.before??'—')}</td><td>${result.stockSource==='stock'?'재고':row.diff?.stock?.clamped_to_zero?`가용재고 ${esc(row.diff.stock.source_raw)} → 판매처 0`:'가용재고'}</td><td>${row.status==='blocked'?'차단':row.status==='warn_keep_original'?'원본 유지 경고':row.diff?.stock?.changed?'변경':'변경 없음'}${row.reason?` · ${esc(row.reason)}`:''}</td></tr>`).join('')}</tbody></table></div>${rows.length>shown.length?`<small>첫 ${n(shown.length)}행 표시 · 전체 ${n(rows.length)}행은 생성 전에 같은 fingerprint로 재검증</small>`:''}`;
  }
 
-async function previewStandard(source,mode=null){
-  const bridge=global.SystemV3SellerExportBridge;if(!bridge){standardResult(source,'직접 내보내기 연결 모듈을 불러오지 못했습니다. 새로고침해주세요.','error');return;}
-  const request=beginStandardRequest(source,'preview');if(request===null)return;
+async function previewStandard(source,mode=null,{candidateAdjustments=null,adjustmentModal=null}={}){
+   const adjusting=Array.isArray(candidateAdjustments),bridge=global.SystemV3SellerExportBridge;if(!bridge){if(adjusting)throw Error('직접 내보내기 연결 모듈을 불러오지 못했습니다.');standardResult(source,'직접 내보내기 연결 모듈을 불러오지 못했습니다. 새로고침해주세요.','error');return;}
+   const request=beginStandardRequest(source,adjusting?'adjustment_preview':'preview');if(request===null){if(adjusting)throw Error('진행 중인 작업이 끝난 뒤 다시 시도해주세요.');return;}
   const selection=standardSelection(source);mode=mode||(selection.outputMode||'target_all');
-  state.sourcePricePreviews.delete(source);
-  standardResult(source,'선택 범위의 현재 가격·재고와 원본 위치를 검증하는 중…');
-  standardProgress(source,3,'변경사항 조회','선택 범위의 현재 매트릭스 값과 최신 원본을 비교합니다.');
+   const previousContext=productPriceContexts.get(source),productPriceAdjustments=adjusting?candidateAdjustments.map(draft=>({...draft})):productPriceDraftList(source);
+   if(!adjusting){state.sourcePricePreviews.delete(source);standardResult(source,'선택 범위의 현재 가격·재고와 원본 위치를 검증하는 중…');standardProgress(source,3,'변경사항 조회','선택 범위의 현재 매트릭스 값과 최신 원본을 비교합니다.');}
   try{
    const skus=await directScopeSkus(source);if(!isStandardRequestCurrent(source,request))return;
    const scopeKey=skus?JSON.stringify([...skus].sort()):'ALL',isCurrent=()=>isStandardRequestCurrent(source,request);
    const result=selection.stockOnly
-    ?await bridge.previewStockOnly({source,skus,includeDependencies:false,stockSource:selection.stockSource,mode,isCurrent})
+     ?await bridge.previewStockOnly({source,skus,includeDependencies:false,stockSource:selection.stockSource,mode,productPriceAdjustments:[],isCurrent})
     :selection.priceOnly
-      ?await bridge.previewPriceOnly({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,mode,isCurrent})
-      :mode==='full_original'?await bridge.previewFullOriginal({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,isCurrent}):mode==='target_all'?await bridge.previewTargetAll({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,isCurrent}):await bridge.previewChangedOnly({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,mode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,isCurrent});
+       ?await bridge.previewPriceOnly({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,mode,productPriceAdjustments,isCurrent})
+       :mode==='full_original'?await bridge.previewFullOriginal({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,productPriceAdjustments,isCurrent}):mode==='target_all'?await bridge.previewTargetAll({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,productPriceAdjustments,isCurrent}):await bridge.previewChangedOnly({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,mode,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,productPriceAdjustments,isCurrent});
    if(!isCurrent())return;
+    if(adjusting&&productPriceModal!==adjustmentModal)return;
+    if(productPriceAdjustments.length&&previousContext&&adjustmentContextKey(result.priceAdjustmentContext)!==previousContext.key){clearProductPriceAdjustments(source);state.sourcePricePreviews.delete(source);standardResult(source,'원본·연결·목표 가격이 변경되어 상품 가격 수정안을 해제했습니다. 미리보기를 다시 실행해주세요.','error');throw Error('원본·연결·목표 가격이 변경되었습니다. 미리보기를 다시 실행해주세요.');}
+    if(adjusting){
+     if(!result.planFingerprint)throw Error('최신 가격 미리보기의 검증 결과가 없습니다. 다시 실행해주세요.');
+     for(const draft of productPriceAdjustments){const group=result.priceAdjustmentContext?.groups?.find(item=>String(item.productCode)===String(draft.productCode)),accepted=group?.appliedDraft;if(group?.editable===false||!accepted||Number(accepted.basePrice)!==draft.basePrice||Number(accepted.basicDiscount)!==draft.basicDiscount)throw Error(`${draft.productCode}: 최신 미리보기에서 가격 수정안을 적용하지 못했습니다.`);}
+     productPriceDrafts.set(source,productPriceAdjustments.map(draft=>({...draft})));
+    }
+    const adjustmentsKey=JSON.stringify(productPriceAdjustments);
    const stock=document.querySelector('[data-matrix-stock-status="'+source+'"]');if(stock){stock.className='export-role-status matrix-stock-state ready';stock.textContent='carrier 대상 '+n(result.diagnostics?.sku_count)+' SKU · DB 조회 '+n(result.diagnostics?.query_count)+'회 · 전체 snapshot 없음';}
-   if(selection.stockOnly){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,includeDependencies:selection.includeDependencies,kind:'stock_only'});renderStockOnlyPreview(source,result);}
-   else if(selection.priceMode==='sellpia_source'){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,includeDependencies:selection.includeDependencies,kind:'sellpia_source'});renderSourcePricePreview(source,result);}
-   else{state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,includeDependencies:selection.includeDependencies,kind:'price'});standardResult(source,[`파일에 담을 상품 ${mode==='full_original'?'원본 전체 행 유지':mode==='target_all'?'선택한 SKU 모두':'변경된 상품만'}`,formatScopeSummary(result.scopeSummary),result.count,result.detail,selection.priceOnly?'재고 변경 0건 · 판매처 원본 재고 보존':`재고 기준 ${selection.stockSource==='stock'?'재고':'가용재고'}`,'현재 가격 결정과 최신 매핑을 생성 직전에 다시 검증합니다.'].filter(Boolean).join(' · '),'success');}
+    if(selection.stockOnly){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,includeDependencies:selection.includeDependencies,adjustmentsKey,kind:'stock_only'});renderStockOnlyPreview(source,result);}
+    else if(selection.priceMode==='sellpia_source'){state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,includeDependencies:selection.includeDependencies,adjustmentsKey,kind:'sellpia_source'});renderSourcePricePreview(source,result);}
+    else{state.sourcePricePreviews.set(source,{mode,scope:scopeKey,fingerprint:result.planFingerprint,stockSource:selection.stockSource,includeDependencies:selection.includeDependencies,adjustmentsKey,kind:'price'});standardResult(source,[`파일에 담을 상품 ${mode==='full_original'?'원본 전체 행 유지':mode==='target_all'?'선택한 SKU 모두':'변경된 상품만'}`,formatScopeSummary(result.scopeSummary),result.count,result.detail,selection.priceOnly?'재고 변경 0건 · 판매처 원본 재고 보존':`재고 기준 ${selection.stockSource==='stock'?'재고':'가용재고'}`,'현재 가격 결정과 최신 매핑을 생성 직전에 다시 검증합니다.'].filter(Boolean).join(' · '),'success');}
    appendDependencySummary(source,result);
+    appendProductPriceAdjustment(source,result,mode,scopeKey);
    setStatus((source==='smartstore'?'스마트스토어':'메이크샵')+(mode==='target_all'?' 대상 전체 미리보기 완료':mode==='full_original'?' 전체 원본 미리보기 완료':' 변경분 미리보기 완료'),'success');
-  }catch(error){if(!isStandardRequestCurrent(source,request))return;standardResult(source,error?.message||String(error),'error');setStatus('미리보기 실패: '+(error?.message||error),'error');}
+    return result;
+   }catch(error){if(!isStandardRequestCurrent(source,request))return;if(adjusting)throw error;standardResult(source,error?.message||String(error),'error');setStatus('미리보기 실패: '+(error?.message||error),'error');}
   finally{finishStandardRequest(source,request);}
 }
 
@@ -581,14 +695,14 @@ async function runStandard(source,mode=null){
   standardProgress(source,3,'파일 생성 준비','현재 매트릭스 표시값과 최신 원본 위치를 읽습니다.');standardResult(source,'미리보기 계약을 재검증하고 파일을 생성하는 중…');setStatus('판매처 파일 생성 중…');
   try{
    const skus=await directScopeSkus(source);if(!isStandardRequestCurrent(source,requestToken))return;
-   const scopeKey=skus?JSON.stringify([...skus].sort()):'ALL',preview=state.sourcePricePreviews.get(source);
+    const scopeKey=skus?JSON.stringify([...skus].sort()):'ALL',preview=state.sourcePricePreviews.get(source),productPriceAdjustments=productPriceDraftList(source);
    const needsPreview=selection.stockOnly||selection.includePrice;
-   if(needsPreview&&(!preview||preview.mode!==mode||preview.scope!==scopeKey||!preview.fingerprint||selection.stockOnly&&(preview.kind!=='stock_only'||preview.stockSource!==selection.stockSource)||selection.includePrice&&!selection.stockOnly&&(preview.kind!==(selection.priceMode==='sellpia_source'?'sellpia_source':'price')||preview.stockSource!==selection.stockSource||preview.includeDependencies!==selection.includeDependencies)))throw Error(selection.stockOnly?'같은 범위와 재고 기준의 미리보기를 먼저 확인해주세요.':'같은 범위와 가격 모드의 가격 미리보기를 먼저 확인해주세요.');
-   const isCurrent=()=>isStandardRequestCurrent(source,requestToken),request={source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,expectedPlanFingerprint:needsPreview?preview.fingerprint:null,isCurrent};
+    if(needsPreview&&(!preview||preview.mode!==mode||preview.scope!==scopeKey||!preview.fingerprint||preview.adjustmentsKey!==JSON.stringify(productPriceAdjustments)||selection.stockOnly&&(preview.kind!=='stock_only'||preview.stockSource!==selection.stockSource)||selection.includePrice&&!selection.stockOnly&&(preview.kind!==(selection.priceMode==='sellpia_source'?'sellpia_source':'price')||preview.stockSource!==selection.stockSource||preview.includeDependencies!==selection.includeDependencies)))throw Error(selection.stockOnly?'같은 범위와 재고 기준의 미리보기를 먼저 확인해주세요.':'같은 범위와 가격 모드의 가격 미리보기를 먼저 확인해주세요.');
+    const isCurrent=()=>isStandardRequestCurrent(source,requestToken),request={source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,includePrice:selection.includePrice,includeStock:selection.includeStock,stockSource:selection.stockSource,productPriceAdjustments,expectedPlanFingerprint:needsPreview?preview.fingerprint:null,isCurrent};
    const result=selection.stockOnly
-    ?await bridge.runStockOnly({source,skus,includeDependencies:false,stockSource:selection.stockSource,mode,expectedPlanFingerprint:preview.fingerprint,isCurrent})
+     ?await bridge.runStockOnly({source,skus,includeDependencies:false,stockSource:selection.stockSource,mode,productPriceAdjustments:[],expectedPlanFingerprint:preview.fingerprint,isCurrent})
     :selection.priceOnly
-      ?await bridge.runPriceOnly({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,mode,expectedPlanFingerprint:needsPreview?preview.fingerprint:null,isCurrent})
+       ?await bridge.runPriceOnly({source,skus,priceMode:selection.priceMode,includeDependencies:selection.includeDependencies,mode,productPriceAdjustments,expectedPlanFingerprint:needsPreview?preview.fingerprint:null,isCurrent})
     :mode==='full_original'?await bridge.runFullOriginal(request):mode==='target_all'?await bridge.runTargetAll(request):await bridge.runChangedOnly({...request,mode});
    if(!isCurrent())return;
    if(needsPreview)state.sourcePricePreviews.delete(source);
@@ -1011,7 +1125,15 @@ async function runStandard(source,mode=null){
   }
  }
 
- function tick(){ensureUpload();ensureExport();renameLegacyExportUi();}
+ function invalidateProductPriceContexts(message){
+  for(const source of [...new Set([...productPriceContexts.keys(),...productPriceDrafts.keys()])]){
+   clearProductPriceAdjustments(source);state.sourcePricePreviews.delete(source);invalidateStandardRequest(source);
+   if(message)setSellerPanel(source,'idle',message);
+  }
+ }
+ global.addEventListener('hub-matrix-source-reloaded',()=>invalidateProductPriceContexts('원본이 갱신되어 상품 가격 수정안을 해제했습니다. 미리보기를 다시 실행해주세요.'));
+ global.addEventListener('operations-hub-auth-required',()=>invalidateProductPriceContexts());
+ function tick(){if(document.body?.classList.contains('operations-auth-locked'))invalidateProductPriceContexts();ensureUpload();ensureExport();renameLegacyExportUi();}
  const observer=new MutationObserver(()=>queueMicrotask(tick));observer.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class']});
  global.addEventListener('load',tick);tick();
 })(window);
