@@ -6,7 +6,7 @@
  async function parentPrices(source,skus,priceMode,onQuery){
   if(!skus.length)return new Map();
   const D=data(),R=g.HubCurrentPriceDecisionResolver;
-  const response=await D.loadCurrentPriceDecisions({source,skus});
+  const response=await D.loadExportCurrentPriceDecisions({source,skus,allowLargeGroups:true,onQuery});
   const decisions=R.normalize(response,{source,skus});
   R.validateGroups(decisions);
   const prices=new Map(),remaining=[];

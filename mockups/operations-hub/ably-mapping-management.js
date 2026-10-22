@@ -2,7 +2,7 @@
   'use strict';
 
   const STATE_VALUES = ['verified','review','conflict'];
-  const POLICY_VALUES = ['shared','individual','excluded','review'];
+  const POLICY_VALUES = ['shared','excluded','review'];
   const HEADER_ALIASES = {
     product: ['상품 번호','상품번호','상품코드'],
     option: ['옵션 번호','옵션번호','옵션코드'],
@@ -123,7 +123,7 @@
     if(!data?.loadAblyInventoryMappings||!data?.importAblyInventoryMappings||!data?.updateAblyInventoryMapping){
       container.innerHTML='<p role="status">에이블리 매핑 저장 RPC가 준비되지 않았습니다.</p>';return;
     }
-    container.innerHTML=`<div class="ably-mapping-toolbar"><label>에이블리 원본 파일 <input type="file" id="ably-map-file" accept=".xlsx,.xls"></label><button type="button" id="ably-map-preview">미리보기</button><button type="button" id="ably-map-import" disabled>후보 저장</button><button type="button" id="ably-map-refresh">목록 새로고침</button></div><p id="ably-map-status" role="status">파일을 선택하면 서버 쓰기 없이 미리보기합니다. 저장은 후보 레코드만 추가하며 기존 수정값과 연결 억제를 변경하지 않습니다.</p><p id="ably-map-summary"></p><label>매핑 검색 <input type="search" id="ably-map-search" placeholder="상품 번호, 옵션 번호, 솔루션 코드, SKU, 상태"></label><p id="ably-map-list-count"></p><div style="max-height:420px;overflow:auto"><table><thead><tr><th>상품 번호 (A)</th><th>옵션 번호 (H)</th><th>솔루션 코드 (J, 원문)</th><th>후보 SKU</th><th>원본 재고 N</th><th>상태</th><th>검토 사유</th><th></th></tr></thead><tbody id="ably-map-rows"></tbody></table></div><dialog id="ably-map-edit-dialog"><form id="ably-map-edit-form"><h3>에이블리 매핑 확인</h3><p id="ably-map-edit-identity"></p><label>연결된 Sellpia SKU <input id="ably-map-edit-sku" required></label><label>매핑 상태 <select id="ably-map-edit-state"><option value="verified">연결 확인됨</option><option value="review">검토 필요</option><option value="conflict">충돌</option></select></label><label>재고 정책 <select id="ably-map-edit-policy"><option value="shared">공유 재고 사용</option><option value="individual">개별 수량 사용</option><option value="excluded">재고 자동 반영 제외</option><option value="review">재고 정책 검토</option></select></label><label>개별 재고 수량 <input id="ably-map-edit-stock" type="number" min="0" step="1"></label><label><input id="ably-map-edit-active" type="checkbox"> 내보내기 대상 사용</label><label>수정 사유 <textarea id="ably-map-edit-reason" required rows="3"></textarea></label><div><button type="button" id="ably-map-edit-cancel">취소</button><button type="submit">수정 저장</button></div></form></dialog>`;
+    container.innerHTML=`<div class="ably-mapping-toolbar"><label>에이블리 원본 파일 <input type="file" id="ably-map-file" accept=".xlsx,.xls"></label><button type="button" id="ably-map-preview">미리보기</button><button type="button" id="ably-map-import" disabled>후보 저장</button><button type="button" id="ably-map-refresh">목록 새로고침</button></div><p id="ably-map-status" role="status">파일을 선택하면 서버 쓰기 없이 미리보기합니다. 저장은 후보 레코드만 추가하며 기존 수정값과 연결 억제를 변경하지 않습니다.</p><p id="ably-map-summary"></p><label>매핑 검색 <input type="search" id="ably-map-search" placeholder="상품 번호, 옵션 번호, 솔루션 코드, SKU, 상태"></label><p id="ably-map-list-count"></p><div style="max-height:420px;overflow:auto"><table><thead><tr><th>상품 번호 (A)</th><th>옵션 번호 (H)</th><th>솔루션 코드 (J, 원문)</th><th>후보 SKU</th><th>원본 재고 N</th><th>상태</th><th>검토 사유</th><th></th></tr></thead><tbody id="ably-map-rows"></tbody></table></div><dialog id="ably-map-edit-dialog"><form id="ably-map-edit-form"><h3>에이블리 매핑 확인</h3><p id="ably-map-edit-identity"></p><label>연결된 Sellpia SKU <input id="ably-map-edit-sku" required></label><label>매핑 상태 <select id="ably-map-edit-state"><option value="verified">연결 확인됨</option><option value="review">검토 필요</option><option value="conflict">충돌</option></select></label><label>재고 정책 <select id="ably-map-edit-policy"><option value="shared">공유 재고 사용</option><option value="excluded">재고 자동 반영 제외</option><option value="review">재고 정책 검토</option></select></label><p id="ably-map-edit-policy-note">재고 파일은 다른 판매처와 같은 Sellpia 재고·가용재고 기준을 사용합니다. 이전 개별 수량은 내보내기에 사용하지 않습니다.</p><label><input id="ably-map-edit-active" type="checkbox"> 내보내기 대상 사용</label><label>수정 사유 <textarea id="ably-map-edit-reason" required rows="3"></textarea></label><div><button type="button" id="ably-map-edit-cancel">취소</button><button type="submit">수정 저장</button></div></form></dialog>`;
     const $=selector=>container.querySelector(selector),status=$('#ably-map-status'),rowsBody=$('#ably-map-rows');
     let workbook=null,sourceFile=null,current=[],renderedRows=[],allRows=[],editingRow=null,previewRevision=0,importing=false;
     const load=async()=>{
@@ -188,8 +188,11 @@
       $('#ably-map-edit-identity').textContent=`상품 ${editingRow.product_code} · 옵션 ${editingRow.option_code} · 원문 코드 ${editingRow.solution_code}`;
       $('#ably-map-edit-sku').value=editingRow.sellpia_sku_code||editingRow.candidate_sku_code||'';
       $('#ably-map-edit-state').value=STATE_VALUES.includes(editingRow.mapping_state)?editingRow.mapping_state:'review';
-      $('#ably-map-edit-policy').value=POLICY_VALUES.includes(editingRow.stock_policy)?editingRow.stock_policy:'review';
-      $('#ably-map-edit-stock').value=editingRow.individual_stock??'';
+      const saved=current.find(row=>identityKey(row.product_code,row.option_code)===identityKey(editingRow.product_code,editingRow.option_code))||editingRow;
+      const legacyIndividual=saved.stock_policy==='individual';
+      $('#ably-map-edit-policy').value=legacyIndividual?'shared':POLICY_VALUES.includes(saved.stock_policy)?saved.stock_policy:'review';
+      $('#ably-map-edit-policy option[value="shared"]').textContent=legacyIndividual?'공유 재고 사용 (이전 개별설정 유지)':'공유 재고 사용';
+      $('#ably-map-edit-policy-note').textContent=legacyIndividual?'내보내기에는 Sellpia 재고 기준을 사용합니다. 수정 저장 시 이전 개별 설정의 정책·수량 기록을 유지합니다. 제외·검토로 변경하면 이전 값은 감사 이력에 남습니다.':'재고 파일은 다른 판매처와 같은 Sellpia 재고·가용재고 기준을 사용합니다. 이전 개별 수량은 내보내기에 사용하지 않습니다.';
       $('#ably-map-edit-active').checked=Boolean(editingRow.is_active);
       $('#ably-map-edit-reason').value='';
       const dialog=$('#ably-map-edit-dialog');if(dialog.showModal)dialog.showModal();else dialog.setAttribute('open','');
@@ -197,12 +200,16 @@
     $('#ably-map-edit-cancel').addEventListener('click',()=>$('#ably-map-edit-dialog').close?.());
     $('#ably-map-edit-form').addEventListener('submit',async event=>{
       event.preventDefault();if(!editingRow)return;
-      const qtyText=$('#ably-map-edit-stock').value.trim(),qty=qtyText===''?null:intOrNull(qtyText);
-      if(qtyText!==''&&qty===null){status.textContent='개별 재고 수량을 정수로 입력하세요.';return;}
+      const policy=$('#ably-map-edit-policy').value;
+      if(!POLICY_VALUES.includes(policy)){status.textContent='재고 정책을 다시 선택해주세요.';return;}
+      const saved=current.find(row=>identityKey(row.product_code,row.option_code)===identityKey(editingRow.product_code,editingRow.option_code))||editingRow;
+      const retainedIndividual=policy==='shared'&&saved.stock_policy==='individual';
+      const stockPolicy=retainedIndividual?'individual':policy;
+      const individualStock=retainedIndividual?saved.individual_stock:null;
       const button=$('#ably-map-edit-form').querySelector('[type="submit"]');button.disabled=true;
       try{
         await data.updateAblyInventoryMapping({...editingRow,sellpia_sku_code:$('#ably-map-edit-sku').value.trim(),mapping_state:$('#ably-map-edit-state').value,
-          stock_policy:$('#ably-map-edit-policy').value,individual_stock:qty,is_active:$('#ably-map-edit-active').checked,reason:$('#ably-map-edit-reason').value.trim()});
+          stock_policy:stockPolicy,individual_stock:individualStock,is_active:$('#ably-map-edit-active').checked,reason:$('#ably-map-edit-reason').value.trim()});
         $('#ably-map-edit-dialog').close?.();await load();renderList(current);status.textContent='매핑 변경을 감사 이력과 함께 저장했습니다.';
       }catch(error){status.textContent=error?.message||String(error);}finally{button.disabled=false;}
     });

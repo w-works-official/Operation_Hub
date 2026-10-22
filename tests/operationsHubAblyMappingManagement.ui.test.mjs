@@ -79,3 +79,86 @@ test('Ably mapping panel invalidates stale previews and imports the selected fil
     assert.deepEqual(errors,[]);
   }finally{await browser.close();}
 });
+
+test('Ably mapping hides individual input, preserves legacy policy and quantity, and sends null for non-individual policies',async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.setContent('<!doctype html><div id="ably-mapping-management"></div>');
+  await page.evaluate(()=>{
+   window.mappingRows=[{product_code:'LEGACY',option_code:'1',solution_code:'sellpia_L-1',sellpia_sku_code:'L-1',mapping_state:'verified',stock_policy:'individual',individual_stock:17,is_active:true},{product_code:'SHARED',option_code:'2',solution_code:'sellpia_S-2',sellpia_sku_code:'S-2',mapping_state:'verified',stock_policy:'shared',individual_stock:null,is_active:true},{product_code:'ZERO',option_code:'3',solution_code:'sellpia_Z-3',sellpia_sku_code:'Z-3',mapping_state:'verified',stock_policy:'individual',individual_stock:0,is_active:true}];
+   window.mappingWrites=[];
+   window.SystemV3Data={
+    loadAblyInventoryMappings:async()=>({rows:structuredClone(mappingRows)}),
+    importAblyInventoryMappings:async()=>{throw Error('unexpected import');},
+    updateAblyInventoryMapping:async row=>{
+     if(row.stock_policy==='individual'&&(!Number.isInteger(row.individual_stock)||row.individual_stock<0))throw Error('individual policy requires a nonnegative quantity');
+     if(row.stock_policy!=='individual'&&row.individual_stock!==null)throw Error('non-individual policy requires null quantity');
+     if(row.is_active&&(row.mapping_state!=='verified'||!['shared','individual'].includes(row.stock_policy)))throw Error('active mapping requires verified shared or individual policy');
+     mappingWrites.push(structuredClone(row));mappingRows[mappingRows.findIndex(saved=>saved.product_code===row.product_code&&saved.option_code===row.option_code)]={...row};return row;
+    }
+   };
+  });
+  await page.addScriptTag({path:modulePath});await page.waitForSelector('[data-edit-index="0"]');
+  assert.equal(await page.locator('#ably-map-edit-stock').count(),0,'manual quantity editor is removed');
+  assert.deepEqual(await page.locator('#ably-map-edit-policy option').evaluateAll(nodes=>nodes.map(node=>node.value)),['shared','excluded','review']);
+  await page.locator('[data-edit-index="0"]').click();
+  assert.equal(await page.locator('#ably-map-edit-policy').inputValue(),'shared');
+  assert.match(await page.locator('#ably-map-edit-policy option[value="shared"]').textContent(),/이전 개별설정/);
+  assert.match(await page.locator('#ably-map-edit-policy-note').innerText(),/수정 저장 시 이전 개별 설정의 정책·수량 기록을 유지/);
+  assert.equal(await page.evaluate(()=>mappingWrites.length),0,'opening a legacy record must not write or normalize it');
+  await page.locator('#ably-map-edit-cancel').click();assert.equal(await page.evaluate(()=>mappingRows[0].stock_policy),'individual');
+  await page.locator('[data-edit-index="0"]').click();await page.locator('#ably-map-edit-reason').fill('공유 기준 사용');
+  await page.locator('#ably-map-edit-form button[type="submit"]').click();await page.waitForFunction(()=>mappingWrites.length===1&&!document.querySelector('#ably-map-edit-dialog').open);
+  assert.deepEqual(await page.evaluate(()=>[mappingWrites[0].stock_policy,mappingWrites[0].individual_stock]),['individual',17]);
+  await page.locator('[data-edit-index="1"]').click();
+  assert.doesNotMatch(await page.locator('#ably-map-edit-policy option[value="shared"]').textContent(),/이전 개별설정/,'legacy label does not leak to another record');
+  await page.locator('#ably-map-edit-reason').fill('공유 정책의 다른 값 수정');
+  await page.locator('#ably-map-edit-form button[type="submit"]').click();await page.waitForFunction(()=>mappingWrites.length===2);
+  assert.deepEqual(await page.evaluate(()=>[mappingWrites[1].stock_policy,mappingWrites[1].individual_stock]),['shared',null]);
+  await page.waitForFunction(()=>!document.querySelector('#ably-map-edit-dialog').open);
+  await page.locator('[data-edit-index="2"]').click();await page.locator('#ably-map-edit-reason').fill('기존 0 수량 기록 보존');
+  await page.locator('#ably-map-edit-form button[type="submit"]').click();await page.waitForFunction(()=>mappingWrites.length===3&&!document.querySelector('#ably-map-edit-dialog').open);
+  assert.deepEqual(await page.evaluate(()=>[mappingWrites[2].stock_policy,mappingWrites[2].individual_stock]),['individual',0],'zero remains a historical quantity instead of being replaced by null');
+  for(const policy of ['excluded','review']){
+   const index=policy==='excluded'?0:2;
+   await page.locator(`[data-edit-index="${index}"]`).click();await page.locator('#ably-map-edit-policy').selectOption(policy);await page.locator('#ably-map-edit-active').uncheck();await page.locator('#ably-map-edit-reason').fill(`${policy} 정책으로 명시 변경`);
+   await page.locator('#ably-map-edit-form button[type="submit"]').click();await page.waitForFunction(count=>mappingWrites.length===count&&!document.querySelector('#ably-map-edit-dialog').open,policy==='excluded'?4:5);
+  }
+  assert.deepEqual(await page.evaluate(()=>mappingWrites.slice(3).map(row=>[row.stock_policy,row.individual_stock,row.is_active])),[['excluded',null,false],['review',null,false]],'explicit excluded/review changes obey the real RPC null-quantity constraint');
+  assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});
+
+test('editing a file-preview mapping retains the historical quantity from its saved seller identity',async()=>{
+ const browser=await chromium.launch(browserOptions);
+ try{
+  const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.setContent('<!doctype html><div id="ably-mapping-management"></div>');
+  await page.evaluate(header=>{
+   window.mappingWrites=[];
+   const saved={product_code:'P',option_code:'O',solution_code:'sellpia_SKU',sellpia_sku_code:'SKU',mapping_state:'verified',stock_policy:'individual',individual_stock:42,is_active:true};
+   window.XLSX={read:()=>({SheetNames:['sheet'],Sheets:{sheet:{}}}),utils:{sheet_to_json:()=>[header,['P','O','','sellpia_SKU',10,0]]}};
+   window.SystemV3Data={
+    loadAblyInventoryMappings:async()=>({rows:[{...saved}]}),
+    loadAblyInventoryMappingContext:async()=>({manualMappings:[saved],matrixStock:{SKU:10},suppressions:[]}),
+    importAblyInventoryMappings:async()=>{throw Error('unexpected import');},
+    updateAblyInventoryMapping:async row=>{
+     if(row.stock_policy==='individual'&&(!Number.isInteger(row.individual_stock)||row.individual_stock<0))throw Error('individual policy requires a nonnegative quantity');
+     if(row.stock_policy!=='individual'&&row.individual_stock!==null)throw Error('non-individual policy requires null quantity');
+     mappingWrites.push(structuredClone(row));return row;
+    }
+   };
+  },header);
+  await page.addScriptTag({path:modulePath});await page.waitForSelector('[data-edit-index="0"]');
+  await page.locator('#ably-map-file').setInputFiles({name:'preview.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('fixture')});
+  await page.locator('#ably-map-preview').click();await page.waitForFunction(()=>document.querySelector('#ably-map-status').textContent.includes('미리보기 완료'));
+  await page.locator('[data-edit-index="0"]').click();
+  assert.match(await page.locator('#ably-map-edit-policy option[value="shared"]').textContent(),/이전 개별설정 유지/,'file preview resolves historical policy by saved seller identity');
+  assert.equal(await page.locator('#ably-map-edit-policy').inputValue(),'shared');
+  await page.locator('#ably-map-edit-active').check();await page.locator('#ably-map-edit-reason').fill('파일 후보 연결 확인');
+  await page.locator('#ably-map-edit-form button[type="submit"]').click();await page.waitForFunction(()=>mappingWrites.length===1);
+  assert.equal(await page.evaluate(()=>mappingWrites[0].individual_stock),42,'preview rows omit the historical field, so retain it by exact product/option identity');
+  assert.equal(await page.evaluate(()=>mappingWrites[0].stock_policy),'individual');assert.deepEqual(errors,[]);
+ }finally{await browser.close();}
+});

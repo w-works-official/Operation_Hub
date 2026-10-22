@@ -212,10 +212,11 @@ function appendDependencySummary(source,result){
  el.querySelector('[data-dependency-summary]')?.remove();el.insertAdjacentHTML('beforeend',dependencySummaryMarkup(result));
 }
 
- async function loadCurrentPriceDecisionState(source,skus){
+ async function loadCurrentPriceDecisionState(source,skus,{allowLargeGroups=false}={}){
   const resolver=global.HubCurrentPriceDecisionResolver;
-  if(!resolver||!D()?.loadCurrentPriceDecisions)throw Error('현재 가격 결정 조회 모듈을 불러오지 못했습니다.');
-  const response=await D().loadCurrentPriceDecisions({source,skus});
+  const method=allowLargeGroups?'loadExportCurrentPriceDecisions':'loadCurrentPriceDecisions';
+  if(!resolver||typeof D()?.[method]!=='function')throw Error('현재 가격 결정 조회 모듈을 불러오지 못했습니다.');
+  const response=allowLargeGroups?await D().loadExportCurrentPriceDecisions({source,skus,allowLargeGroups:true}):await D().loadCurrentPriceDecisions({source,skus});
   const decisions=resolver.normalize(response,{source,skus});
   return {decisions,proof:resolver.proof(decisions)};
  }
@@ -765,7 +766,7 @@ async function runStandard(source,mode=null){
     }
     const safetySkus=[...new Set(safetyRows.map(item=>item.resolution?.sku).filter(Boolean))];
     job.phaseTo('targets',0,safetySkus.length);
-    const currentDecisionState=stockOnly?{decisions:new Map(),proof:''}:await loadCurrentPriceDecisionState('ably',safetySkus);
+    const currentDecisionState=stockOnly?{decisions:new Map(),proof:''}:await loadCurrentPriceDecisionState('ably',safetySkus,{allowLargeGroups:selection.includeDependencies});
     const decisionMappings=safetyRows.map(item=>({sku:item.resolution?.sku,seller_product_code:item.seller_product_code||item.product_code,seller_option_code:item.seller_option_code??item.option_code??''}));
     if(!stockOnly)global.HubCurrentPriceDecisionResolver.attach(decisionMappings,currentDecisionState.decisions,{source:'ably'});
    const sellpiaSourceSkus=!stockOnly&&priceMode==='sellpia_source'?[...new Set(chosen.filter(item=>!dependencyPriceFor(item.resolution.sku)&&!global.HubCurrentPriceDecisionResolver.decisionForMapping(currentDecisionState.decisions,
@@ -985,7 +986,7 @@ async function runStandard(source,mode=null){
     await D().recordStockExportAudit({batchId:global.crypto.randomUUID(),sources:['ably'],stockSource:p.stockSource,itemCount,manifest:[{source_channel:'ably',source_file_name:p.file.name,item_count:itemCount,stock_source:p.stockSource,role:p.role}]});
    }
    if(!p.stockOnly){
-    const finalDecisionState=await loadCurrentPriceDecisionState('ably',p.currentPriceDecisionSkus||[]);
+    const finalDecisionState=await loadCurrentPriceDecisionState('ably',p.currentPriceDecisionSkus||[],{allowLargeGroups:p.includeDependencies===true});
     global.HubCurrentPriceDecisionResolver.assertProof(p.currentPriceDecisionProof,finalDecisionState.proof);
    }
    if(p.dependencyPlan)await global.HubPriceDependencyService.verify(p.dependencyPlan);

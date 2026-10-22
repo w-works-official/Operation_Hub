@@ -4,6 +4,9 @@
 .inventory-stock-source legend{padding:0 5px}
 .inventory-stock-source label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:#52647a}
 .inventory-stock-source input{margin:0;accent-color:#2f6fec}
+.inventory-stock-dependency{display:flex;align-items:flex-start;gap:10px;min-width:0;padding:14px 16px;border:1px solid #d9e4f2;border-radius:9px;background:#fbfcfe;color:#294b78;font-size:13px;font-weight:800;line-height:1.5;cursor:pointer}
+.inventory-stock-dependency input{flex:none;width:16px;height:16px;margin:2px 0 0;accent-color:#2f6fec}.inventory-stock-dependency span{min-width:0;overflow-wrap:anywhere}.inventory-stock-dependency small{display:block;margin-top:4px;color:#68778c;font-size:12px;font-weight:400;line-height:1.5}
+.inventory-stock-dependency:has(input:checked){border-color:#6797ef;background:#edf4ff}.inventory-stock-dependency:has(input:focus-visible){outline:3px solid #83adff;outline-offset:2px}.inventory-stock-dependency:has(input:disabled){opacity:.6;cursor:not-allowed}
 .inventory-file-picker{display:grid;gap:10px}
 .inventory-file-picker input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;clip-path:inset(50%)}
 .inventory-dropzone{min-height:110px;padding:22px;display:grid;align-content:center;justify-items:center;gap:8px;border:2px dashed #9bb2d0;border-radius:12px;background:#f7faff;color:#294b78;text-align:center;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}

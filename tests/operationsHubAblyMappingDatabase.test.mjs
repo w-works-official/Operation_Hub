@@ -104,3 +104,34 @@ test('reimporting a changed literal J value deactivates and reviews without rewr
   assert.equal(row.individual_stock,2);
   assert.equal(row.is_active,false);
 });
+
+test('real mapping RPC preserves legacy quantity with individual policy and records explicit policy retirement in history',async()=>{
+  const save=async(policy,quantity,active,reason)=>(await db.query(
+    `select public.update_operations_hub_ably_mapping_v1('test-session','P5','1','SKU-4-1','verified',$1,$2,$3,$4) as result`,
+    [policy,quantity,active,reason]
+  )).rows[0].result;
+  await assert.rejects(()=>save('individual',null,true,'invalid missing legacy quantity'),error=>error.code==='22023');
+  for(const quantity of [0,17]){
+    await save('individual',quantity,true,`seed legacy quantity ${quantity}`);
+    const retained=await save('individual',quantity,true,`metadata edit keeps legacy quantity ${quantity}`);
+    assert.equal(retained.stock_policy,'individual');
+    assert.equal(retained.individual_stock,quantity);
+    for(const policy of ['shared','excluded','review']){
+      await assert.rejects(()=>save(policy,quantity,false,'invalid non-individual with retained quantity'),error=>error.code==='22023');
+      await assert.rejects(()=>db.query(`update public.operations_hub_ably_inventory_mappings set stock_policy=$1,is_active=false where product_code='P5' and option_code='1'`,[policy]),error=>error.code==='23514',
+        'the table CHECK also rejects non-individual policy with a retained zero or positive quantity');
+    }
+    const policy=quantity===0?'excluded':'review',reason=`explicit ${policy} retirement ${quantity}`;
+    const retired=await save(policy,null,false,reason);
+    assert.equal(retired.stock_policy,policy);
+    assert.equal(retired.individual_stock,null);
+    const history=(await db.query(`select before_value,after_value from operations_private.operations_hub_ably_mapping_history where product_code='P5' and option_code='1' and reason=$1`,[reason])).rows[0];
+    assert.equal(history.before_value.stock_policy,'individual');
+    assert.equal(history.before_value.individual_stock,quantity,'retired quantity remains in the durable audit record');
+    assert.equal(history.after_value.stock_policy,policy);
+    assert.equal(history.after_value.individual_stock,null);
+  }
+  const shared=await save('shared',null,true,'ordinary shared policy uses no individual quantity');
+  assert.equal(shared.stock_policy,'shared');
+  assert.equal(shared.individual_stock,null);
+});

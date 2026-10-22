@@ -22,7 +22,7 @@
       <link rel="stylesheet" href="./ui-cleanup-v1.css?v=20260912-queue-count-clarity-v1">
       <link rel="stylesheet" href="./tag-management-v2.css?v=20260929-ably-carrier-policy-v1">
       <link rel="stylesheet" href="./seller-file-workflow-v2.css?v=20261022-parent-price-export-v1">
-      <link rel="stylesheet" href="./inventory-batch.css?v=20261008-inventory-partial-v2">
+      <link rel="stylesheet" href="./inventory-batch.css?v=20261022-sku-dependencies-v3">
   </head>
   <body class="operations-auth-locked">
     <section id="operations-auth-gate" class="operations-auth-gate" aria-labelledby="operations-auth-title">
@@ -601,6 +601,7 @@
                 <label><input type="radio" name="inventory-stock-source" value="available_stock" checked> 가용재고</label>
                 <label><input type="radio" name="inventory-stock-source" value="stock"> 재고</label>
               </fieldset>
+              <label class="inventory-stock-dependency"><input id="inventory-batch-stock-dependencies" type="checkbox" aria-describedby="inventory-stock-dependency-help"><span>개별상품 → 모음전 재고 종속관계 적용<small id="inventory-stock-dependency-help">파일에만 상위 재고 적용 · 하위 원본/조사기록 유지. 개별 수량 입력 대신 모든 판매처에 같은 재고 기준을 적용하며 1+1 조합은 별도로 유지합니다.</small></span></label>
               <p id="inventory-ably-mapping-status" role="status" aria-live="polite">에이블리 DB 매핑과 재고 양식을 확인 중입니다.</p>
               <section class="inventory-download-destination" aria-label="파일 저장 위치">
                 <div><b>파일 저장 위치</b><span id="inventory-download-destination-name" role="status" aria-live="polite">브라우저 기본 다운로드 폴더</span><small id="inventory-download-destination-hint" hidden></small></div>
@@ -1061,14 +1062,14 @@
     <script src="./matrix-shadow.js?v=20260919-full-scope-v12"></script>
     <script src="./baseline-canary.js?v=20260917-shadow-preview-v1"></script>
     <script src="./matrix-multilisting.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./data-service.js?v=20261022-parent-price-export-v1"></script>
+  <script src="./data-service.js?v=20261022-sku-dependencies-v3"></script>
     <script src="./original-upload-history.js?v=20261020-upload-history-v1"></script>
     <script src="./channels-page.js?v=20260910-rule-destination-v111"></script>
     <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
     <script src="./matrix-price-edit-policy.js?v=20261020-manual-price-save-v1"></script>
-    <script src="./app.js?v=20261022-parent-price-export-v1"></script>
+    <script src="./app.js?v=20261022-sku-dependencies-v3"></script>
     <script src="./mapping-import.js?v=20261021-seller-unmatched-v1"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
@@ -1087,17 +1088,18 @@
 <script src="./price-result-materializer.js?v=20261020-matrix-purchase-v1"></script>
 <script src="./current-price-export.js?v=20261022-parent-price-export-v1"></script>
 <script src="./price-dependency-export.js?v=20261022-parent-price-export-v1"></script>
-<script src="./price-dependency-service.js?v=20261022-parent-price-export-v1"></script>
+<script src="./price-dependency-service.js?v=20261022-sku-dependencies-v3"></script>
+<script src="./stock-dependency-export.js?v=20261022-sku-dependencies-v3"></script>
 <script src="./representative-price.js?v=20260917-tags-representative-ui-v1"></script>
 <script src="./representative-price-workspace.js?v=20260917-tags-representative-ui-v1"></script>
 <script src="./rule-workspace.js?v=20261020-matrix-purchase-v1"></script>
       <script src="./ui-cleanup-v1.js?v=20261007-inventory-tab-v1"></script>
       <script src="./tag-management-v2.js?v=20260929-ably-carrier-policy-v1"></script>
-      <script src="./seller-file-workflow-v2.js?v=20261022-parent-price-export-v1"></script>
-      <script src="./ably-inventory-export.js?v=20261008-inventory-partial-v1"></script>
-      <script src="./ably-mapping-management.js?v=20261008-integrated-export-v4"></script>
+      <script src="./seller-file-workflow-v2.js?v=20261022-sku-dependencies-v3"></script>
+      <script src="./ably-inventory-export.js?v=20261022-sku-dependencies-v3"></script>
+      <script src="./ably-mapping-management.js?v=20261022-sku-dependencies-v3"></script>
       <script src="./inventory-file-downloads.js?v=20261008-inventory-partial-v1"></script>
-      <script src="./inventory-batch-ui.js?v=20261008-inventory-partial-v2"></script>
+      <script src="./inventory-batch-ui.js?v=20261022-sku-dependencies-v3"></script>
 <link rel="stylesheet" href="./price-decision-workspace.css?v=20261008-price-decisions-v1">
 <script src="./price-decision-workspace.js?v=20261008-price-decisions-v1"></script>
   </body>

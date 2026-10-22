@@ -6,6 +6,8 @@ import vm from 'node:vm';
 const modules = ['discount-price-math.js','rule-registry.js','current-price-export.js','price-dependency-export.js','price-dependency-service.js']
   .map(name => [name,fs.readFileSync(`mockups/operations-hub/${name}`,'utf8')]);
 const plain = value => JSON.parse(JSON.stringify(value));
+const exportSnapshots={seller_snapshot_id:'00000000-0000-4000-8000-000000000001',sellpia_snapshot_id:'00000000-0000-4000-8000-000000000002',sellpia_observed_at:'2026-10-22T00:00:00Z'};
+const exportEnvelope=response=>response.proof_version?response:{...response,proof_version:'sellpia-export-v2',absence_proofs:[],carrier_proofs:[],snapshots:{...exportSnapshots}};
 const graph = (parents = ['A'], {version = 'graph-1', requested = parents, references = []} = {}) => ({
   contract_version:1,version,snapshot_id:'sellpia-1',requested_skus:requested,
   selected_skus:[...new Set([...requested,...parents.map(sku=>`${sku}-child`)])].sort(),reference_skus:references,
@@ -24,6 +26,11 @@ function harness({context = graph(),decisions = {rows:[],groups:[]},handlers = {
     loadCurrentPriceDecisions:async()=>decisions,
     ...handlers
   };
+  implementations.loadExportCurrentPriceDecisions=handlers.loadExportCurrentPriceDecisions||(async options=>{
+    assert.ok(['smartstore','makeshop','ably'].includes(options.source),'the large-group reader must receive an explicit supported source');
+    assert.equal(options.allowLargeGroups,true,'dependency parent reads must explicitly opt into the bounded large-group contract');
+    return exportEnvelope(await implementations.loadCurrentPriceDecisions(options));
+  });
   const SystemV3Data = new Proxy({}, {get(_target,name) {
     return async(...args)=>{
       calls.push({name,args});
@@ -53,8 +60,9 @@ test('current exact-SKU final decisions take precedence in both modes without re
     assert.equal(result.summary.autoIncludedCount,2);assert.equal(result.summary.inheritedCount,2);
     assert.equal(result.resolution.bySku.get('A-child').price_proof.origin,'current_decision');
     assert.equal(Object.hasOwn(result.resolution.bySku.get('A-child'),'current_price_decision'),false);
-    assert.deepEqual(calls.map(call=>call.name),['loadExportSkuDependencies','loadCurrentPriceDecisions']);
-    assert.deepEqual(plain(calls[1].args[0]),{source,skus:['A']});
+    assert.deepEqual(calls.map(call=>call.name),['loadExportSkuDependencies','loadExportCurrentPriceDecisions']);
+    assert.equal(calls[1].args[0].source,source);assert.deepEqual(plain(calls[1].args[0].skus),['A']);
+    assert.equal(calls[1].args[0].allowLargeGroups,true,'every dependency parent uses the bounded export reader rather than the editor group cap');
     assert.equal(JSON.stringify({context,row}),before,'read-only preparation must not modify graph or decision input');
   }
 });
@@ -69,7 +77,7 @@ test('multiple seller identities may agree on a parent final but conflicting val
   assert.equal(blocked.resolution.bySku.get('A-child').final,null);
   assert.match(blocked.resolution.bySku.get('A-child').error,/연결 가격이 서로 다릅니다/);
   assert.equal(blocked.summary.inheritedCount,0);
-  assert.deepEqual(calls.map(call=>call.name),['loadExportSkuDependencies','loadCurrentPriceDecisions']);
+  assert.deepEqual(calls.map(call=>call.name),['loadExportSkuDependencies','loadExportCurrentPriceDecisions']);
 });
 
 test('a foreign SKU decision or invalid mapping is rejected rather than becoming a parent override',async()=>{
@@ -96,7 +104,7 @@ test('source mode reads only unresolved parent SKUs and preserves raw final and 
   assert.equal(result.resolution.bySku.get('A-child').final,9000);
   assert.equal(result.resolution.bySku.get('B-child').final,12345);
   const evidence=result.resolution.bySku.get('B-child').price_proof;
-  assert.equal(evidence.origin,'sellpia_source');assert.match(evidence.decisionProof,/"sku":"B","event_id":null/);
+  assert.equal(evidence.origin,'sellpia_source');assert.equal(JSON.parse(evidence.decisionProof).rows.find(row=>row.sku==='B').event_id,null);
   assert.deepEqual(plain(calls.at(-1).args[0].skus),['B']);assert.equal(calls.at(-1).args[0].onQuery,onQuery);
   assert.ok(!calls.some(call=>/save|materialize|calculate|apply|write|insert|update/i.test(String(call.name))));
 });
@@ -130,7 +138,7 @@ test('rules mode uses current platform or manual draft finals and evaluates an u
   assert.equal(result.resolution.bySku.get('R').price_proof.origin,'matrix_base_price');
   assert.equal(result.resolution.bySku.get('R-child').price_proof.origin,'matrix_base_price');
   assert.equal(result.resolution.bySku.get('R-child').price_proof.value.versions[0].version,3);
-  assert.deepEqual(calls.map(call=>call.name),['loadExportSkuDependencies','loadCurrentPriceDecisions','loadCarrierMatrixTargets','ruleRegistry','loadInternalFormulaProducts']);
+  assert.deepEqual(calls.map(call=>call.name),['loadExportSkuDependencies','loadExportCurrentPriceDecisions','loadCarrierMatrixTargets','ruleRegistry','loadInternalFormulaProducts']);
 });
 
 test('invalid platform targets and absent internal prices stay blocked with no source-price fallback',async()=>{
@@ -159,7 +167,7 @@ test('a reference-only internal parent supplies the selected child without enter
   assert.equal(result.resolution.bySku.get('A-child').final,12345);
   assert.equal(result.resolution.bySku.get('A-child').dependency_root,undefined);
   assert.equal(result.resolution.bySku.get('A-child').automatically_included,false);
-  assert.deepEqual(plain(calls.find(call=>call.name==='loadCurrentPriceDecisions').args[0].skus),['A']);
+  assert.deepEqual(plain(calls.find(call=>call.name==='loadExportCurrentPriceDecisions').args[0].skus),['A']);
 });
 
 test('final verification repeats read-only inputs and rejects a newly added decision even when its final equals the original',async()=>{
@@ -172,7 +180,7 @@ test('final verification repeats read-only inputs and rejects a newly added deci
   assert.equal(await api.verify(prepared),true);
   rows=[decision('A',5000)];
   await assert.rejects(api.verify(prepared),/상위 가격 또는 종속관계가 변경/);
-  assert.equal(calls.filter(call=>call.name==='loadCurrentPriceDecisions').length,3);
+  assert.equal(calls.filter(call=>call.name==='loadExportCurrentPriceDecisions').length,3);
   assert.ok(!calls.some(call=>/save|materialize|apply|write|insert|update/i.test(String(call.name))));
 });
 
@@ -190,6 +198,43 @@ test('parent final, current-decision revision, and graph version changes invalid
   final=5000;event='event-2';revision=2;await assert.rejects(api.verify(prepared),/상위 가격 또는 종속관계가 변경/);
   event='event-1';revision=1;currentGraph=graph(['A'],{version:'graph-2'});
   await assert.rejects(api.verify(prepared),/dependency graph version changed/);
+});
+
+test('all supported cache-only reference parents retain carrier and source snapshot evidence through large-group reads and final verification',async()=>{
+ for(const source of ['smartstore','makeshop','ably']){
+  const context={...graph(),requested_skus:['A-child'],selected_skus:['A-child'],reference_skus:['A']};
+  const carrier={source_channel:source,seller_product_code:'CACHE-PRODUCT',mapping_fingerprint:'cache-map-1',
+    snapshot_id:exportSnapshots.seller_snapshot_id,sellpia_snapshot_id:exportSnapshots.sellpia_snapshot_id,source_observed_at:exportSnapshots.sellpia_observed_at,
+    sellpia_prices:{A:21000},targets:[{sku:'A',member_skus:['A'],seller_product_code:'CACHE-PRODUCT',seller_option_code:'A-option',
+      price:{base:21000,discounted:21000,option:0,final:21000,terms:[]},source_row_no:2,source_valid:true,
+      component_members:[{sku:'A',mapping_source:'carrier_cache',listing_id:null,component_id:null,component_qty:1,component_role:'primary'}]}]};
+  const original={rows:[],groups:[],proof_version:'sellpia-export-v2',absence_proofs:[],carrier_proofs:[carrier],snapshots:{...exportSnapshots}};
+  let response=structuredClone(original),rawPrice=21000;
+  const onQuery=()=>{};
+  const {api,calls}=harness({context,handlers:{
+    loadCurrentPriceDecisions:async()=>{throw Error('editor fallback is forbidden for a dependency parent');},
+    loadExportCurrentPriceDecisions:async options=>{
+      assert.equal(options.source,source);assert.equal(options.allowLargeGroups,true);
+      assert.deepEqual(plain(options.skus),['A']);return response;
+    },
+    loadSellpiaSourcePricesForExport:async({skus})=>{assert.deepEqual(plain(skus),['A']);return new Map([['A',rawPrice]]);}
+  }});
+  const prepared=await api.prepare({source,skus:['A-child'],priceMode:'sellpia_source',onQuery});
+  assert.deepEqual(plain(prepared.outputSkus),['A-child']);assert.equal(prepared.resolution.bySku.has('A'),false);
+  assert.equal(prepared.resolution.bySku.get('A-child').final,21000);
+  const proof=JSON.parse(prepared.resolution.bySku.get('A-child').price_proof.decisionProof);
+  assert.deepEqual(proof.groups,[]);assert.equal(proof.carrier_proofs[0].mapping_fingerprint,'cache-map-1');assert.deepEqual(proof.snapshots,exportSnapshots);
+  assert.equal(proof.carrier_proofs[0].source_channel,source);
+  assert.equal(calls.find(call=>call.name==='loadExportCurrentPriceDecisions').args[0].onQuery,onQuery);
+  assert.equal(await api.verify(prepared),true);
+  response=structuredClone(original);response.carrier_proofs[0].mapping_fingerprint='cache-map-2';
+  await assert.rejects(api.verify(prepared),/상위 가격 또는 종속관계가 변경/);
+  response=structuredClone(original);response.snapshots.seller_snapshot_id='new-seller-snapshot';response.carrier_proofs[0].snapshot_id='new-seller-snapshot';
+  await assert.rejects(api.verify(prepared),/상위 가격 또는 종속관계가 변경/);
+  response=structuredClone(original);rawPrice=22000;
+  await assert.rejects(api.verify(prepared),/상위 가격 또는 종속관계가 변경/);
+  assert.ok(!calls.some(call=>call.name==='loadCurrentPriceDecisions'));
+ }
 });
 
 test('no inherited outputs means no price reads and invalid modes fail before any data access',async()=>{

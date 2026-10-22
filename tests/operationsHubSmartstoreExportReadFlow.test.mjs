@@ -51,7 +51,7 @@ async function harness(){
   let parsed;
   const db={
     async rpc(name,args){
-      assert.equal(name,'hub_price_decision_export_read_v2','preview and generation must use the optimized read without calling the editor RPC');
+      assert.ok(['hub_price_decision_export_read_v2','hub_price_decision_export_read_v3'].includes(name),'preview and generation must use a bounded export read without calling the editor RPC');
       calls.push({name,args:plain(args)});
       if(state.error)return {data:null,error:state.error};
       const data=evidence(parsed,args.p_skus);state.mutate?.(data,calls.length);
@@ -103,6 +103,7 @@ test('dependency ON auto includes collection and copies parent final over child 
  const h=await harness(),state=dependencies(h),options={mode:'target_all',priceMode:'sellpia_source',includePrice:true,includeStock:false,includeDependencies:true};
  const preview=await h.value.prepare('smartstore',['A'],options),output=await cells(preview.outputs[0].blob),byCode=new Map(output.slice(1).map(row=>[String(row[0]),row]));
  assert.equal(preview.scopeSummary.selectedSkuCount,2);
+ assert.ok(h.calls.every(call=>call.name==='hub_price_decision_export_read_v3'),'dependency previews use the full large-group proof reader');
  assert.deepEqual([Number(byCode.get('1001')[5]),byCode.get('1001')[17]],[32000,'0\n1500']);
  assert.deepEqual([Number(byCode.get('1002')[5]),Number(byCode.get('1002')[17])],[32000,0],'collection gets exact parent final, replacing its 18,900 current decision only in this export');
  const child=preview.plans.flatMap(plan=>plan.preview).find(row=>row.sku==='C');

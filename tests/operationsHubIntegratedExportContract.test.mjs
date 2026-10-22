@@ -71,16 +71,20 @@ test('integrated fanout writes each literal solution code independently and clam
  const rows=[shared('000123'),shared('123'),shared('J<&"한글'),{...shared('INDIVIDUAL','SKU-B'),stock_policy:'individual',individual_stock:0}];
  const available=exporter.prepare({mappingRows:rows,stockSources:snapshot,stockSource:'available_stock'});
  const real=exporter.prepare({mappingRows:rows,stockSources:snapshot,stockSource:'stock'});
- assert.deepEqual(plain(available.rows.map(row=>[row.solution_code,row.sellpia_sku_code,row.quantity])),[['000123','SKU-A',0],['123','SKU-A',0],['J<&"한글','SKU-A',0],['INDIVIDUAL','SKU-B',0]]);
- assert.deepEqual(plain(real.rows.map(row=>row.quantity)),[12,12,12,0]);
+ assert.deepEqual(plain(available.rows.map(row=>[row.solution_code,row.sellpia_sku_code,row.quantity])),[['000123','SKU-A',0],['123','SKU-A',0],['J<&"한글','SKU-A',0],['INDIVIDUAL','SKU-B',18]]);
+ assert.deepEqual(plain(real.rows.map(row=>row.quantity)),[12,12,12,21]);
  assert.equal(snapshot.bySku.get('SKU-A').sellpia_available_stock,-7,'source snapshot remains the authoritative negative value');
 });
 
-test('integrated excluded, suppressed, review and uncertain stock are reported without zero writes, including all-blocked official output',async()=>{
- const rows=[shared('SAFE'),{...shared('EXCLUDED'),stock_policy:'excluded'},{...shared('SUPPRESSED'),suppression_active:true},{...shared('REVIEW'),mapping_state:'review'},{...shared('NULL'),stock_policy:'individual',individual_stock:null},{...shared('FRACTION'),stock_policy:'individual',individual_stock:1.5}];
- const result=exporter.prepare({mappingRows:rows,stockSources:snapshot,stockSource:'stock'});
- assert.deepEqual(plain(result.rows.map(row=>[row.solution_code,row.quantity])),[['SAFE',12]]);
+test('integrated legacy individual metadata is ignored while excluded, suppressed, review and uncertain source stock stay protected',async()=>{
+ const rows=[shared('SAFE'),{...shared('EXCLUDED'),stock_policy:'excluded'},{...shared('SUPPRESSED'),suppression_active:true},{...shared('REVIEW'),mapping_state:'review'},{...shared('NULL'),stock_policy:'individual',individual_stock:null},{...shared('FRACTION'),stock_policy:'individual',individual_stock:1.5},{...shared('SOURCE-NULL','RAW-NULL'),stock_policy:'individual',individual_stock:9},{...shared('SOURCE-FRACTION','RAW-FRACTION'),stock_policy:'individual',individual_stock:9}];
+ const uncertainSources={...snapshot,bySku:new Map([...snapshot.bySku,['RAW-NULL',{sellpia_current_stock:null,sellpia_available_stock:3}],['RAW-FRACTION',{sellpia_current_stock:1.5,sellpia_available_stock:3}]])};
+ const before=JSON.stringify({rows,stock:[...uncertainSources.bySku]});
+ const result=exporter.prepare({mappingRows:rows,stockSources:uncertainSources,stockSource:'stock'});
+ assert.deepEqual(plain(result.rows.map(row=>[row.solution_code,row.quantity])),[['SAFE',12],['NULL',12],['FRACTION',12]],'legacy individual quantities cannot override or invalidate a valid Sellpia source');
  assert.equal(result.summary.reviewCount,3);assert.equal(result.summary.excludedCount,2);
+ assert.deepEqual(plain(result.excludedRows.filter(row=>row.solution_code.startsWith('SOURCE-')).map(row=>[row.solution_code,row.status])),[['SOURCE-NULL','invalid_quantity'],['SOURCE-FRACTION','invalid_quantity']],'invalid source values cannot fall back to a stored individual quantity');
+ assert.equal(JSON.stringify({rows,stock:[...uncertainSources.bySku]}),before);
  const unavailable=exporter.prepare({mappingRows:[shared('MISSING','UNKNOWN'),{...shared('MISSING-INDIVIDUAL','UNKNOWN','other'),stock_policy:'individual',individual_stock:0}],stockSources:snapshot,stockSource:'stock'});
  assert.equal(unavailable.rows.length,0);assert.equal(unavailable.excludedRows.length,2);
  assert.deepEqual(plain(unavailable.excludedRows.map(row=>[row.solution_code,row.status])),[['MISSING','snapshot_sku_missing'],['MISSING-INDIVIDUAL','snapshot_sku_missing']]);
@@ -118,7 +122,7 @@ test('integrated 1205-row official template output reopens every code and quanti
  for(let index=0;index<rows.length;index++){
   assert.equal(sheet[`A${index+2}`].v,rows[index].solution_code,`exact code at ${index+2}`);
   assert.equal(sheet[`A${index+2}`].t,'s',`text type at ${index+2}`);
-  assert.equal(sheet[`B${index+2}`].v,rows[index].individual_stock,`exact stock at ${index+2}`);
+  assert.equal(sheet[`B${index+2}`].v,snapshot.bySku.get(rows[index].sellpia_sku_code).sellpia_current_stock,`exact selected Sellpia stock at ${index+2}`);
   assert.equal(sheet[`B${index+2}`].t,'n',`numeric type at ${index+2}`);
  }
  const before=await JSZip.loadAsync(official),after=await JSZip.loadAsync(bytes);

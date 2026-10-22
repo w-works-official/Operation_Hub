@@ -15,6 +15,8 @@ const context={console,Blob,File:TestFile,JSZip,XLSX,Map,Set,Number,String,JSON,
 context.window=context;
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(root,'mockups/operations-hub/sellpia-inventory-count.js'),'utf8'),context,{filename:'sellpia-inventory-count.js'});
+vm.runInContext(fs.readFileSync(path.join(root,'mockups/operations-hub/price-dependency-export.js'),'utf8'),context,{filename:'price-dependency-export.js'});
+vm.runInContext(fs.readFileSync(path.join(root,'mockups/operations-hub/stock-dependency-export.js'),'utf8'),context,{filename:'stock-dependency-export.js'});
 vm.runInContext(source,context,{filename:'ably-inventory-export.js'});
 const exporter=context.HubAblyInventoryExport;
 const shared=(solution_code,sellpia_sku_code,option_code)=>({solution_code,sellpia_sku_code,product_code:`P-${option_code}`,option_code,mapping_state:'verified',stock_policy:'shared',individual_stock:null,suppression_active:false,is_active:true});
@@ -22,10 +24,39 @@ const stockSources={snapshotId:'snapshot-1',bySku:new Map([['sku-1',{sellpia_cur
 function templateFile(){return new TestFile([templateBytes],'official-template.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});}
 function xmlSection(xml,name){return xml.match(new RegExp(`<${name}\\b[^>]*>[\\s\\S]*?<\\/${name}>`))?.[0]||'';}
 
-test('mapping readiness excludes review and suppressed rows while retaining multiple solution codes for one SKU',()=>{
+test('mapping readiness retains eligible legacy individual rows but all eligible rows use the selected Sellpia stock source',()=>{
  const rows=[shared('code-1','sku-1','red'),shared('code-2','sku-1','blue'),{...shared('code-3','sku-2','one'),stock_policy:'individual',individual_stock:0},{...shared('code-4','sku-1','suppressed'),suppression_active:true},{...shared('code-5','sku-2','review'),mapping_state:'review'}];
  const readiness=exporter.readiness({mappingRows:rows});assert.equal(readiness.ready,true);assert.equal(readiness.eligibleCount,3);assert.equal(readiness.reviewCount,1);assert.equal(readiness.excludedCount,1);
- const plan=exporter.prepare({mappingRows:rows,stockSources,stockSource:'available_stock'});assert.deepEqual(Array.from(plan.rows,row=>[row.solution_code,row.sellpia_sku_code,row.quantity]),[['code-1','sku-1',0],['code-2','sku-1',0],['code-3','sku-2',0]]);assert.equal(plan.summary.reviewCount,1);assert.equal(plan.summary.excludedCount,1);
+ const before=JSON.stringify(rows);
+ // Legacy policy records remain stored; their individual quantities no longer
+ // override the same authoritative Sellpia source used by other marketplaces.
+ const plan=exporter.prepare({mappingRows:rows,stockSources,stockSource:'available_stock'});assert.deepEqual(Array.from(plan.rows,row=>[row.solution_code,row.sellpia_sku_code,row.quantity]),[['code-1','sku-1',0],['code-2','sku-1',0],['code-3','sku-2',4]]);assert.equal(plan.summary.reviewCount,1);assert.equal(plan.summary.excludedCount,1);
+ assert.equal(JSON.stringify(rows),before);
+});
+
+test('stock dependency exports parent 3 and legacy-individual child 3 to the official XLSX while raw child 77 and stored individual 9 remain unchanged',async()=>{
+ const graph={contract_version:1,version:'stock-relations-1',snapshot_id:'sellpia-snapshot-1',requested_skus:['parent'],selected_skus:['child','parent'],reference_skus:[],edges:[{edge_id:'parent-child',parent_sku:'parent',child_sku:'child'}]};
+ const raw={snapshotId:'sellpia-snapshot-1',bySku:new Map([['parent',{sellpia_current_stock:3,sellpia_available_stock:2}],['child',{sellpia_current_stock:77,sellpia_available_stock:66}]])};
+ const rows=[shared('0001','parent','parent-option'),{...shared('0002','child','child-option'),stock_policy:'individual',individual_stock:9}];
+ const before=JSON.stringify({rows,stock:[...raw.bySku]});
+ const ordinary=exporter.prepare({mappingRows:rows,stockSources:raw,stockSource:'stock'});
+ assert.deepEqual(Array.from(ordinary.rows,row=>[row.solution_code,row.quantity]),[['0001',3],['0002',77]],'unchecked inheritance uses raw child stock rather than legacy individual stock');
+ const dependency=context.HubStockDependencyExport.resolve({context:graph,stockSources:raw,stockSource:'stock'});
+ const plan=exporter.prepare({mappingRows:rows,stockSources:dependency.stockSources,stockSource:'stock',excludedSkus:dependency.blockedSkus});
+ assert.deepEqual(Array.from(plan.rows,row=>[row.solution_code,row.quantity]),[['0001',3],['0002',3]]);
+ const output=await exporter.build({plan,templateFile:templateFile()}),book=XLSX.read(await output.blob.arrayBuffer(),{type:'array'}),sheet=book.Sheets['재고 수량 수정_양식'];
+ assert.equal(sheet.A2.v,'0001');assert.equal(sheet.B2.v,3);assert.equal(sheet.A3.v,'0002');assert.equal(sheet.B3.v,3);
+ assert.equal(dependency.stockSources.bySku.get('child').sellpia_available_stock,66,'the other stock field remains the child original');
+ assert.equal(JSON.stringify({rows,stock:[...raw.bySku]}),before,'local export must not change the source stock or stored mapping policy');
+});
+
+test('legacy individual quantity cannot rescue an absent or invalid authoritative source',()=>{
+ const rows=[{...shared('missing','missing','missing'),stock_policy:'individual',individual_stock:9},{...shared('invalid','invalid','invalid'),stock_policy:'individual',individual_stock:9}];
+ const raw={snapshotId:'stock-1',bySku:new Map([['invalid',{sellpia_current_stock:'',sellpia_available_stock:''}]])};
+ const plan=exporter.prepare({mappingRows:rows,stockSources:raw,stockSource:'stock'});
+ assert.equal(plan.rows.length,0);
+ assert.deepEqual(Array.from(plan.excludedRows,row=>[row.solution_code,row.status]),[['missing','snapshot_sku_missing'],['invalid','invalid_quantity']]);
+ assert.deepEqual(rows.map(row=>row.individual_stock),[9,9]);
 });
 
 test('duplicate active solution codes fail closed, including identical option rows',()=>{

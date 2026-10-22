@@ -79,5 +79,7 @@
   "operationsHubSellerUnmatchedSql.test.mjs",
   "operationsHubPriceDependencyExport.test.mjs",
   "operationsHubPriceDependencyService.test.mjs",
-  "operationsHubExportSkuDependenciesSql.test.mjs"
+  "operationsHubExportSkuDependenciesSql.test.mjs",
+  "operationsHubStockDependencyExport.test.mjs",
+  "operationsHubPriceDecisionExportLargeGroupsSql.test.mjs"
 ]

@@ -2314,8 +2314,8 @@
     return value;
   }
 
-  async function loadExportCurrentPriceDecisions({source,skus=[],signal=null,onQuery=null,consistency=null}={}) {
-    if(source!=='smartstore')throw Error('내보내기 현재 가격 조회는 스마트스토어만 지원합니다.');
+  async function loadExportCurrentPriceDecisions({source,skus=[],signal=null,onQuery=null,consistency=null,allowLargeGroups=false}={}) {
+    if(!['smartstore','makeshop','ably'].includes(source)||source!=='smartstore'&&!allowLargeGroups)throw Error('내보내기 현재 가격 조회 판매처를 확인해주세요.');
     const codes=[...new Set(skus.map(cleanText).filter(Boolean))],rows=[],groups=new Map(),absenceProofs=new Map(),carrierProofs=new Map();
     const proofVersion='sellpia-export-v2',canonical=value=>JSON.stringify(canonicalExportDecisionEvidence(value));
     throwIfAborted(signal);
@@ -2328,7 +2328,7 @@
     for(let offset=0;offset<codes.length;offset+=200){
       throwIfAborted(signal);
       const batch=codes.slice(offset,offset+200);
-      let query=db.rpc('hub_price_decision_export_read_v2',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_skus:batch});
+      let query=db.rpc(allowLargeGroups?'hub_price_decision_export_read_v3':'hub_price_decision_export_read_v2',{p_session_token:requireOperationsHubSessionToken(),p_source:source,p_skus:batch});
       if(signal&&typeof query.abortSignal==='function')query=query.abortSignal(signal);
       const {data}=await carrierRead('내보내기 현재 가격 결정',batch.length,query,event=>onQuery?.({...event,processed_count:event.status==='ok'?offset+batch.length:offset,total_count:codes.length}));
       throwIfAborted(signal);

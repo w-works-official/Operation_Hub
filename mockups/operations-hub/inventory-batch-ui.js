@@ -1,11 +1,11 @@
 (function initInventoryBatchUi(global){
  'use strict';
- const page=document.getElementById('inventory'),button=document.getElementById('inventory-batch-run'),sellpiaPicker=document.getElementById('inventory-sellpia-files');
+ const page=document.getElementById('inventory'),button=document.getElementById('inventory-batch-run'),sellpiaPicker=document.getElementById('inventory-sellpia-files'),stockDependencies=document.getElementById('inventory-batch-stock-dependencies');
  if(!page||!button||!sellpiaPicker)return;
  const fileList=document.getElementById('inventory-sellpia-file-list'),clearFilesButton=document.getElementById('inventory-sellpia-clear-files'),dropzone=document.getElementById('inventory-sellpia-dropzone');
  const status=document.getElementById('inventory-batch-status'),title=document.getElementById('inventory-batch-title'),detail=document.getElementById('inventory-batch-detail'),progress=document.getElementById('inventory-batch-progress'),result=document.getElementById('inventory-batch-result');
  const previewPanel=document.getElementById('inventory-update-preview'),previewTitle=document.getElementById('inventory-preview-title'),previewMessage=document.getElementById('inventory-preview-message'),summaryPanel=document.getElementById('inventory-preview-summary'),mappingStatus=document.getElementById('inventory-ably-mapping-status');
- const radios=[...page.querySelectorAll('input[name="inventory-stock-source"]')],destinationName=document.getElementById('inventory-download-destination-name'),destinationHint=document.getElementById('inventory-download-destination-hint'),chooseDestinationButton=document.getElementById('inventory-choose-destination'),clearDestinationButton=document.getElementById('inventory-clear-destination'),blockedReport=document.getElementById('inventory-blocked-report'),blockedReportSummary=document.getElementById('inventory-blocked-report-summary'),blockedDownloadButton=document.getElementById('inventory-blocked-preview-download'),allControls=[sellpiaPicker,...radios,button,clearFilesButton,chooseDestinationButton,clearDestinationButton,blockedDownloadButton];
+ const radios=[...page.querySelectorAll('input[name="inventory-stock-source"]')],destinationName=document.getElementById('inventory-download-destination-name'),destinationHint=document.getElementById('inventory-download-destination-hint'),chooseDestinationButton=document.getElementById('inventory-choose-destination'),clearDestinationButton=document.getElementById('inventory-clear-destination'),blockedReport=document.getElementById('inventory-blocked-report'),blockedReportSummary=document.getElementById('inventory-blocked-report-summary'),blockedDownloadButton=document.getElementById('inventory-blocked-preview-download'),allControls=[sellpiaPicker,...radios,stockDependencies,button,clearFilesButton,chooseDestinationButton,clearDestinationButton,blockedDownloadButton];
  const summaryFields={fileCount:'inventory-preview-files',readRowCount:'inventory-preview-read-rows',validSkuCount:'inventory-preview-valid-skus',changedSkuCount:'inventory-preview-changed',unchangedSkuCount:'inventory-preview-unchanged',unknownSkuCount:'inventory-preview-unconfirmed',duplicateSameCount:'inventory-preview-duplicate-same',duplicateConflictCount:'inventory-preview-duplicate-conflict',errorRowCount:'inventory-preview-errors',blockedSkuCount:'inventory-preview-blocked-skus',blockedRowCount:'inventory-preview-blocked-rows'};
  const state={busy:false,requestId:0,previewStatus:'idle',preview:null,previewSignature:'',previewError:'',mappingStatus:'idle',mapping:null,mappingError:'',mappingRequest:0,retrySignature:'',retryAvailable:false,files:[],destination:null,destinationBusy:false,lastDownloadFiles:[],resultUrls:[]};
  const selectionLocked=()=>state.busy||state.destinationBusy||state.previewStatus==='checking';
@@ -13,7 +13,8 @@
  function identity(file){return `${file.name}\u0000${file.size}\u0000${file.lastModified}\u0000${file.type}`;}
  function sellpiaSignature(){return selectedSellpiaFiles().map(identity).join('|');}
  function stockSource(){return radios.find(input=>input.checked)?.value||'available_stock';}
- function signature(){return `${sellpiaSignature()}||${stockSource()}`;}
+ function includeStockDependencies(){return Boolean(stockDependencies?.checked);}
+ function signature(){return `${sellpiaSignature()}||${stockSource()}||${includeStockDependencies()}`;}
  function number(value){return Number(value||0).toLocaleString('ko-KR');}
  function showStatus(heading,message,kind=''){status.hidden=false;status.dataset.state=kind;title.textContent=heading;detail.textContent=message||'';}
  function clearResult(){state.resultUrls.forEach(url=>URL.revokeObjectURL(url));state.resultUrls=[];result.replaceChildren();result.hidden=true;status.hidden=true;state.lastDownloadFiles=[];}
@@ -89,7 +90,7 @@
   if(previewHasBlockers()){showStatus('재고 반영 중단','유효한 SKU가 없어 반영을 시작할 수 없습니다. 차단 목록을 내려받아 확인해주세요.','error');return;}
   if(global.__systemV3DirectExportBusy){showStatus('재고 반영 대기','진행 중인 판매처 내보내기가 끝난 뒤 다시 실행해주세요.');return;}
   const bridge=global.SystemV3SellerExportBridge;
-  const files=selectedSellpiaFiles(),expectedPreview=state.preview,source=stockSource(),retry=retryCurrent(),method=retry?'retryInventoryBatchExport':'runInventoryUpdateBatch';
+  const files=selectedSellpiaFiles(),expectedPreview=state.preview,source=stockSource(),applyDependencies=includeStockDependencies(),retry=retryCurrent(),method=retry?'retryInventoryBatchExport':'runInventoryUpdateBatch';
   if(!bridge?.[method]){showStatus('재고 반영 중단','재고 반영 기능을 불러오지 못했습니다. 새로고침 후 다시 실행해주세요.','error');return;}
   const downloadModule=global.HubInventoryFileDownloads;if(typeof downloadModule?.prepareDestination!=='function'){showStatus('재고 반영 중단','브라우저 파일 저장 기능을 불러오지 못했습니다. 새로고침 후 다시 실행해주세요.','error');return;}
   let destinationPromise;try{destinationPromise=downloadModule.prepareDestination();}catch(error){showStatus('재고 반영 중단',String(error?.message||error),'error');return;}
@@ -99,7 +100,7 @@
    const destination=await destinationPromise;await refreshDestination();
    await refreshMappingReadiness({duringRun:true});
    if(!mappingsReady()){showStatus('재고 반영 중단',state.mappingError||state.mapping?.reason||'에이블리 재고 매핑을 확인해주세요.','error');return;}
-   const output=retry?await bridge.retryInventoryBatchExport({stockSource:source,onProgress:progressUpdate}):await bridge.runInventoryUpdateBatch({files,expectedPreview,stockSource:source,onProgress:progressUpdate});
+   const output=retry?await bridge.retryInventoryBatchExport({stockSource:source,includeStockDependencies:applyDependencies,onProgress:progressUpdate}):await bridge.runInventoryUpdateBatch({files,expectedPreview,stockSource:source,includeStockDependencies:applyDependencies,onProgress:progressUpdate});
    let saveBundle;try{saveBundle=await saveFiles(output,destination);}catch(error){if(output?.uploaded===true){error.uploaded=true;error.retryAvailable=true;}throw error;}
    invalidateRetry();progress.value=100;progress.hidden=true;const changed=Number(expectedPreview.summary?.changedSkuCount||0);
    if(saveBundle.blocked)output.blockedFile=saveBundle.blocked;state.lastDownloadFiles=saveBundle.files;
@@ -119,6 +120,7 @@
  dropzone?.addEventListener('dragleave',event=>{if(!dropzone.contains(event.relatedTarget))delete dropzone.dataset.dragging;});
  dropzone?.addEventListener('drop',event=>{event.preventDefault();delete dropzone.dataset.dragging;addFiles(event.dataTransfer?.files);});
  radios.forEach(radio=>radio.addEventListener('change',()=>{if(!state.busy&&!state.destinationBusy){invalidateRetry();clearResult();updateAction();}}));
+ stockDependencies?.addEventListener('change',()=>{if(!selectionLocked()){invalidateRetry();clearResult();updateAction();}});
  blockedDownloadButton?.addEventListener('click',()=>void downloadPreviewBlocked());
  result.addEventListener('click',event=>{const link=event.target.closest('a[data-redownload-index]');if(!link)return;if(state.busy||state.destinationBusy){event.preventDefault();return;}if(state.destination?.configured){event.preventDefault();void downloadFileAgain(Number(link.dataset.redownloadIndex));}});
  chooseDestinationButton?.addEventListener('click',async()=>{if(state.busy||state.destinationBusy)return;const module=global.HubInventoryFileDownloads;if(!module?.chooseDestination)return;state.destinationBusy=true;lock(true);try{state.destination=await module.chooseDestination();await refreshDestination();}catch(error){showStatus('저장 폴더 선택 실패',String(error?.message||error),'error');}finally{state.destinationBusy=false;lock(false);}});

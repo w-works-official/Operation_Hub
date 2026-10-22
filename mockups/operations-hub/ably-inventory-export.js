@@ -71,10 +71,9 @@
    }
    const source=stockSources.bySku.get(sku);
    if(!source){excludedRows.push(excludedExportRow(row,'snapshot_sku_missing',`최신 Sellpia 재고 snapshot에서 SKU를 찾지 못했습니다: ${sku}`));summary.reviewCount++;continue;}
-   let quantity=null;
-   if(row.stock_policy==='shared'){
-    quantity=resolveStock(source,stockSource);
-   }else quantity=row.individual_stock;
+   // Legacy individual_stock remains audit data. All eligible mappings now
+   // use the same Sellpia stock/available-stock basis as the other sellers.
+   const quantity=resolveStock(source,stockSource);
    if(quantity===null||quantity===undefined||clean(quantity)===''||!Number.isSafeInteger(Number(quantity))||Number(quantity)<0){
     excludedRows.push(excludedExportRow(row,'invalid_quantity',`선택한 재고 기준(${stockSource})의 수량을 확인할 수 없어 제외되었습니다.`));summary.reviewCount++;continue;
    }

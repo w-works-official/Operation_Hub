@@ -80,19 +80,30 @@ function buildHarness({statusOverride=null,changeSecondSnapshot=false}={}){
  const originals={smartstore:[],makeshop:[]};
  const ablyMappings=['1001-1','1002-1','2001-1'].map((sku,index)=>({solution_code:`00${index+1}`,sellpia_sku_code:sku,product_code:'4001',option_code:sku,mapping_state:'verified',stock_policy:'shared',individual_stock:null,suppression_active:false,is_active:true}));
  const officialTemplateBytes=fs.readFileSync('mockups/operations-hub/ably-inventory-template.xlsx');
- const snapshotId='snap-1';let stockRead=0,downloadCalls=0,statusCalls=0;const stockSkuSets=[];const workflow={active:false,snapshotId:'snap-1',failNextStockRead:false,failWaitCalls:0,uploadGate:null,sessionAuthenticated:true,checkSessionCalls:0,timeline:[],uploadCalls:0,waitCalls:0,refreshCalls:[]};
+ const snapshotId='snap-1';let stockRead=0,downloadCalls=0,statusCalls=0;const stockSkuSets=[];const workflow={active:false,snapshotId:'snap-1',failNextStockRead:false,failWaitCalls:0,uploadGate:null,sessionAuthenticated:true,checkSessionCalls:0,timeline:[],uploadCalls:0,uploadedRows:[],waitCalls:0,refreshCalls:[],graphEdges:[],graphVersion:'graph-1',graphReads:[],graphError:null};
  const status=[{source:'smartstore',snapshotId:'ss-1',available:true,files:[{name:'ss-a.xlsx',size:1},{name:'ss-b.xlsx',size:1}]},{source:'makeshop',snapshotId:'ms-1',available:true,files:[{name:'ms-a.xlsx',size:1}]}];
  const liveData={
   loadLatestSellerOriginalStatus:async()=>{statusCalls++;return statusOverride||structuredClone(status);},
   downloadLatestSellerOriginals:async()=>{downloadCalls++;return new Map([['smartstore',originals.smartstore],['makeshop',originals.makeshop]]);},
   loadAblyInventoryMappings:async()=>{workflow.timeline.push('ably-mapping');return {rows:ablyMappings,fingerprint:'mapping-1'};},
   loadAblyInventoryTemplateFile:async()=>{workflow.timeline.push('ably-template');return asFile('official-ably-template.xlsx',officialTemplateBytes);},
+  loadExportSkuDependencies:async({skus=null,expectedVersion=null}={})=>{
+   workflow.graphReads.push({skus:skus===null?null:[...skus],expectedVersion});workflow.timeline.push('graph');
+   if(workflow.graphError)throw Error(workflow.graphError);
+   const requested=[...new Set(skus??[...stockBySku.keys()])].sort(),selected=new Set(requested);
+   for(let changed=true;changed;){changed=false;for(const edge of workflow.graphEdges)if(selected.has(edge.parent_sku)&&!selected.has(edge.child_sku)){selected.add(edge.child_sku);changed=true;}}
+   const allowed=new Set(selected);
+   for(let changed=true;changed;){changed=false;for(const edge of workflow.graphEdges)if(allowed.has(edge.child_sku)&&!allowed.has(edge.parent_sku)){allowed.add(edge.parent_sku);changed=true;}}
+   const sourceSnapshot=workflow.active&&workflow.uploadCalls?workflow.snapshotId:snapshotId,version=`${workflow.graphVersion}@${sourceSnapshot}`;
+   if(expectedVersion!==null&&expectedVersion!==version)throw Error('종속관계 version이 변경되었습니다.');
+   return {contract_version:1,version,snapshot_id:sourceSnapshot,requested_skus:requested,selected_skus:[...selected].sort(),reference_skus:[...allowed].filter(sku=>!selected.has(sku)).sort(),edges:workflow.graphEdges.filter(edge=>allowed.has(edge.parent_sku)&&allowed.has(edge.child_sku)).map(edge=>({...edge}))};
+  },
   loadCarrierSellerMappings:async({source,identities})=>({rows:identities.map(row=>{const sku=skuByIdentity.get(`${row.product_code}\u0000${row.option_code||''}`)||(/^sellpia_.+-\d+$/.test(row.seller_option_code||'')?(row.seller_option_code||'').replace(/^sellpia_/,''):null);return {...row,sku};}).filter(row=>row.sku)}),
   loadPlayautoSellpiaCatalog:async productCodes=>[...stockBySku.keys()].map((sku,index)=>({sellpia_product_code:['1001','1002','2001'][index],sellpia_sku_code:sku,sellpia_option_name:`Option ${['5001','5002','5003'][index]}`})).filter(row=>productCodes.includes(row.sellpia_product_code)),
   loadSellpiaStockSourcesForExport:async({skus,allowPartial})=>{stockRead++;stockSkuSets.push([...skus]);workflow.timeline.push(`stock-read-${stockRead}`);if(workflow.failNextStockRead){workflow.failNextStockRead=false;throw Error('synthetic export source failed');}const selectedSnapshot=workflow.active?workflow.snapshotId:changeSecondSnapshot&&stockRead===2?'snap-2':snapshotId;const missingSkus=skus.filter(sku=>!stockBySku.has(sku)),invalidSkus=skus.filter(sku=>stockBySku.has(sku)&&['sellpia_current_stock','sellpia_available_stock'].some(field=>{const value=stockBySku.get(sku)[field];return value===null||value===undefined||String(value).trim()===''||!Number.isSafeInteger(Number(value));}));if(!allowPartial&&(missingSkus.length||invalidSkus.length))throw Error('missing/invalid stock source');return {snapshotId:selectedSnapshot,missingSkus,invalidSkus,bySku:new Map(skus.filter(sku=>stockBySku.has(sku)&&!invalidSkus.includes(sku)).map(sku=>[sku,{...stockBySku.get(sku)}]))};},
   previewSellpiaInventoryCount:async()=>workflow.expectedPreview,
   checkOperationsHubSession:async()=>{workflow.checkSessionCalls++;workflow.timeline.push('session');return {authenticated:workflow.sessionAuthenticated};},
-  uploadSellpiaInventoryCount:async(_files,expected)=>{workflow.uploadCalls++;workflow.timeline.push('upload');if(workflow.uploadGate)await workflow.uploadGate;for(const row of expected.changedRows||[]){const current=stockBySku.get(row.sellpia_sku_code);if(current)Object.assign(current,{sellpia_current_stock:row.stock,sellpia_available_stock:row.available_stock});}return {...expected,snapshotId:'snap-2',uploadMode:'inventory_count',uploadedRowCount:expected.changedRows.length,matrixAffectedSkus:['1001-1']};},
+  uploadSellpiaInventoryCount:async(_files,expected)=>{workflow.uploadCalls++;workflow.timeline.push('upload');if(workflow.uploadGate)await workflow.uploadGate;workflow.uploadedRows.push(...structuredClone(expected.changedRows||[]));for(const row of expected.changedRows||[]){const current=stockBySku.get(row.sellpia_sku_code);if(current)Object.assign(current,{sellpia_current_stock:row.stock,sellpia_available_stock:row.available_stock});}return {...expected,snapshotId:'snap-2',uploadMode:'inventory_count',uploadedRowCount:expected.changedRows.length,matrixAffectedSkus:(expected.changedRows||[]).map(row=>row.sellpia_sku_code)};},
   waitForSellpiaMatrixRebuild:async id=>{workflow.waitCalls++;workflow.timeline.push('wait');if(workflow.failWaitCalls>0){workflow.failWaitCalls--;throw Error('synthetic matrix rebuild timeout');}return {matrix_snapshot_id:id,rebuild_pending:false};}
  };
  const resolverCalls=[];
@@ -103,7 +114,7 @@ function buildHarness({statusOverride=null,changeSecondSnapshot=false}={}){
  ctx.JSZip=class TransportZip extends JSZip{file(name,value,...rest){return super.file(name,value instanceof BlobClass?value.arrayBuffer().then(bytes=>new Uint8Array(bytes)):value,...rest);}};
  ctx.window.JSZip=ctx.JSZip;
  ctx.assertMatrixChangesSaved??=()=>true;ctx.requireMatrixChangesSaved??=()=>true;vm.createContext(ctx);
- for(const name of ['sellpia-inventory-count','seller-source-parsers','seller-export-adapter','current-price-export','ably-stock-export','ably-playauto-export','ably-inventory-export'])vm.runInContext(fs.readFileSync(`mockups/operations-hub/${name}.js`,'utf8'),ctx,{filename:name+'.js'});
+ for(const name of ['sellpia-inventory-count','seller-source-parsers','seller-export-adapter','current-price-export','ably-stock-export','ably-playauto-export','ably-inventory-export','price-dependency-export','stock-dependency-export'])vm.runInContext(fs.readFileSync(`mockups/operations-hub/${name}.js`,'utf8'),ctx,{filename:name+'.js'});
  ctx.SystemV3SellpiaInventoryCount=ctx.window.SystemV3SellpiaInventoryCount||ctx.SystemV3SellpiaInventoryCount;
  ctx.SystemV3SellerParsers=ctx.window.SystemV3SellerParsers;ctx.HubCurrentPriceExport=ctx.window.HubCurrentPriceExport;ctx.AblyPlayautoExport=ctx.window.AblyPlayautoExport;ctx.sellerExport=ctx.window.SystemV3SellerExport;
  ctx.window.SystemV3SellpiaInventoryCount=ctx.SystemV3SellpiaInventoryCount;ctx.window.SystemV3SellerParsers=ctx.SystemV3SellerParsers;ctx.window.HubCurrentPriceExport=ctx.HubCurrentPriceExport;ctx.window.AblyPlayautoExport=ctx.AblyPlayautoExport;ctx.window.SystemV3SellerExport=ctx.sellerExport;
@@ -153,6 +164,25 @@ async function sheetCells(file){const zip=await JSZip.loadAsync(await file.array
 async function sheetXml(file){const zip=await JSZip.loadAsync(await file.arrayBuffer());return zip.file('xl/worksheets/sheet1.xml').async('string');}
 async function officialAblyRows(file){const book=XLSX.read(await file.arrayBuffer(),{type:'array'});assert.deepEqual(book.SheetNames,['재고 수량 수정_양식']);const sheet=book.Sheets['재고 수량 수정_양식'];assert.equal(sheet.A1.v,'솔루션사 고유코드');assert.equal(sheet.B1.v,'재고 수량');return XLSX.utils.sheet_to_json(sheet,{header:1,raw:true,defval:''}).slice(1).filter(row=>String(row[0])!=='').map(row=>({solution_code:row[0],quantity:row[1]}));}
 async function assertOfficialAblyPreserved(h,file){const original=await sheetCells(asFile('official.xlsx',h.officialTemplateBytes)),output=await sheetCells(file);for(const [ref,cell] of original)if(!/^[AB]\d+$/.test(ref)||/[AB]1$/.test(ref))assert.equal(output.get(ref),cell,`official Ably guidance/non-input cell ${ref} is preserved`);}
+function addStockDependencyChain(h){
+ h.stockBySku.set('outside-parent',{sellpia_current_stock:3,sellpia_available_stock:3});
+ h.workflow.graphEdges=[['outside-parent','1001-1'],['1001-1','1002-1'],['1002-1','2001-1']].map(([parent_sku,child_sku],index)=>({edge_id:`stock-edge-${index+1}`,parent_sku,child_sku}));
+}
+async function assertStockDependencyFiles(h,output,quantities,ablyQuantities=quantities){
+ const {zip,names}=await individualXlsx(output),result={};
+ for(const name of names){
+  const file=asFile(name,await zip.file(name).async('uint8array'));
+  if(name.startsWith('에이블리_')){result.ably=(await officialAblyRows(file)).map(row=>row.quantity);await assertOfficialAblyPreserved(h,file);continue;}
+  const source=name.startsWith('스마트스토어_')?'smartstore':'makeshop',index=source==='smartstore'&&name.includes('원본2_')?1:0;
+  const parsed=await h.ctx.SystemV3SellerParsers.parseSellerFiles(source,[file],{price:true,discount:true,inventory:true});
+  result[source]??=[];result[source].push(...parsed.normalizedRows.map(row=>row.stock));
+  assert.ok(parsed.normalizedRows.every(row=>row.price===1025),'stock inheritance preserves every seller final price');
+  const before=await sheetCells(h.originals[source][index]),after=await sheetCells(file),stockCell=source==='smartstore'?/^S\d+$/:/^AG\d+$/;
+  assert.deepEqual([...after.keys()].sort(),[...before.keys()].sort());
+  for(const [ref,cell] of before)if(!stockCell.test(ref))assert.equal(after.get(ref),cell,`stock dependency must preserve ${source} cell ${ref}`);
+ }
+ assert.deepEqual(result.smartstore,quantities.slice(0,2));assert.deepEqual(result.makeshop,quantities.slice(2));assert.deepEqual(result.ably,ablyQuantities);
+}
 async function writeQaOutput(result,details){
  const outputDir=process.env.INVENTORY_QA_OUTPUT;if(!outputDir)return;
  fs.mkdirSync(outputDir,{recursive:true});
@@ -415,6 +445,131 @@ test('matrix rebuild timeout can be retried from the completed upload without a 
  assert.equal(h.workflow.uploadCalls,1);assert.equal(h.workflow.waitCalls,1);assert.equal(h.counts.stockRead,0);
  const result=await h.ctx.SystemV3SellerExportBridge.retryInventoryBatchExport({});
  assert.equal(h.workflow.uploadCalls,1);assert.equal(h.workflow.waitCalls,2);assert.equal(result.stockSnapshotId,'snap-2');assert.equal(h.counts.stockRead,2);
+});
+
+test('stock dependency OFF retains each SKU stock and avoids the graph reader entirely',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ const before=structuredClone([...h.stockBySku]),output=await h.run({stockSource:'available_stock',includeStockDependencies:false});
+ await assertStockDependencyFiles(h,output,[0,5,9]);
+ assert.equal(h.workflow.graphReads.length,0);assert.equal(h.workflow.uploadCalls,0);assert.deepEqual([...h.stockBySku],before);
+ assert.ok(h.stockSkuSets.every(skus=>!skus.includes('outside-parent')),'OFF never adds an otherwise unneeded parent lookup');
+ assert.deepEqual(h.resolverCalls,[],'stock mode never enters price-decision or price-inheritance evaluation');
+});
+
+test('stock dependency ON copies an outside parent unchanged through descendants to all four XLSX files without changing source or price',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ h.stockBySku.set('unmapped-descendant',{sellpia_current_stock:44,sellpia_available_stock:45});
+ h.workflow.graphEdges.push({edge_id:'unmapped-edge',parent_sku:'1001-1',child_sku:'unmapped-descendant'});
+ const before=structuredClone([...h.stockBySku]),output=await h.run({stockSource:'available_stock',includeStockDependencies:true});
+ await assertStockDependencyFiles(h,output,[3,3,3]);
+ assert.equal(h.workflow.uploadCalls,0);assert.deepEqual([...h.stockBySku],before,'the export overlay never overwrites child Sellpia source stock');
+ assert.ok(h.workflow.graphReads.length>=2,'both preparation and final graph proof are read');
+ assert.ok(h.workflow.graphReads.some(read=>read.expectedVersion==='graph-1@snap-1'),'the last read pins the exact original graph proof');
+ assert.ok(h.stockSkuSets.every(skus=>skus.includes('outside-parent')),'both initial and final raw stock proof include an ancestor outside seller mappings');
+ assert.ok(h.stockSkuSets.every(skus=>skus.includes('unmapped-descendant')),'auto-included descendants remain in proof scope even when no seller option is connected');
+ assert.deepEqual(h.resolverCalls,[]);
+});
+
+test('inherited physical stock uses the chosen stock field rather than available-stock or the child values',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ h.stockBySku.set('outside-parent',{sellpia_current_stock:7,sellpia_available_stock:3});
+ const before=structuredClone([...h.stockBySku]),output=await h.run({stockSource:'stock',includeStockDependencies:true});
+ await assertStockDependencyFiles(h,output,[7,7,7]);assert.deepEqual([...h.stockBySku],before);
+});
+
+test('inventory upload writes only the counted parent, reloads the new snapshot graph, and inherits into child export cells only',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ h.stockBySku.set('outside-parent',{sellpia_current_stock:17,sellpia_available_stock:19});
+ const beforeChildren=structuredClone([...h.stockBySku].filter(([sku])=>sku!=='outside-parent'));
+ const changedRows=[{sellpia_sku_code:'outside-parent',stock:3,available_stock:3}],expectedPreview={baseSnapshotId:'snap-1',fingerprint:'parent-count-proof',summary:{changedSkuCount:1,validSkuCount:1},changedRows};
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;
+ const output=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('parent-count.xlsx',new Uint8Array([8]))],expectedPreview,includeStockDependencies:true});
+ await assertStockDependencyFiles(h,output,[3,3,3]);
+ assert.deepEqual(h.workflow.uploadedRows,changedRows,'inheritance must not append synthesized child rows to the upload');
+ assert.deepEqual([...h.stockBySku].filter(([sku])=>sku!=='outside-parent'),beforeChildren);
+ assert.deepEqual(h.workflow.refreshCalls,[['outside-parent']],'only genuinely counted SKU is refreshed as an uploaded DB change');
+ const uploadAt=h.workflow.timeline.indexOf('upload'),graphs=h.workflow.timeline.flatMap((entry,index)=>entry==='graph'?[index]:[]);
+ assert.ok(graphs.some(index=>index<uploadAt),'graph errors are preflighted before the upload');
+ assert.ok(graphs.some(index=>index>h.workflow.timeline.indexOf('wait')),'graph is loaded again after the new snapshot is ready');
+ assert.ok(h.workflow.graphReads.some(read=>read.expectedVersion==='graph-1@snap-2'),'final proof pins the post-upload graph snapshot');
+});
+
+test('a malformed or unavailable stock graph fails before inventory-count DB upload',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);h.workflow.graphError='허용되지 않은 종속관계 노드';
+ const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'graph-preflight-proof',summary:{changedSkuCount:1},changedRows:[{sellpia_sku_code:'1001-1',stock:3,available_stock:3}]};
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;
+ await assert.rejects(()=>h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([8]))],expectedPreview,includeStockDependencies:true}),/허용되지 않은 종속관계/);
+ assert.equal(h.workflow.uploadCalls,0);assert.equal(h.counts.stockRead,0);
+});
+
+test('stock inheritance rechecks outside-parent raw quantity and graph version before returning any XLSX files',async()=>{
+ for(const drift of ['parent_quantity','graph_version']){
+  const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+  const read=h.liveData.loadSellpiaStockSourcesForExport;let calls=0;
+  h.liveData.loadSellpiaStockSourcesForExport=async args=>{if(++calls===2){if(drift==='parent_quantity')h.stockBySku.get('outside-parent').sellpia_available_stock=4;else h.workflow.graphVersion='graph-2';}return read(args);};
+  await assert.rejects(()=>h.run({includeStockDependencies:true}),/snapshot이 변경|종속관계.*변경/);
+  assert.equal(h.workflow.uploadCalls,0);assert.ok(h.stockSkuSets.every(skus=>skus.includes('outside-parent')));
+ }
+});
+
+test('stock inheritance rejects a seller-option owner changed after the final raw-stock confirmation',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ const read=h.liveData.loadSellpiaStockSourcesForExport;let reads=0,returned;
+ h.liveData.loadSellpiaStockSourcesForExport=async args=>{
+  const response=await read(args);
+  if(++reads===2)h.skuByIdentity.set('1001\u00005001','replacement-owner');
+  return response;
+ };
+ await assert.rejects(async()=>{returned=await h.run({includeStockDependencies:true});},/판매처 SKU 연결이 변경되었습니다/);
+ assert.equal(returned,undefined,'no generated file bundle escapes the last mapping proof check');
+ assert.equal(reads,2,'the owner changes only after the initial overlay and final raw-stock comparison inputs were read');
+ assert.equal(h.workflow.uploadCalls,0);
+});
+
+test('stock inheritance rejects a latest seller-original snapshot changed only at the final status check',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ const stockRead=h.liveData.loadSellpiaStockSourcesForExport,statusRead=h.liveData.loadLatestSellerOriginalStatus;let reads=0,afterStockConfirmation=false,returned;
+ h.liveData.loadSellpiaStockSourcesForExport=async args=>{const response=await stockRead(args);if(++reads===2)afterStockConfirmation=true;return response;};
+ h.liveData.loadLatestSellerOriginalStatus=async sources=>{
+  const response=await statusRead(sources);
+  if(afterStockConfirmation)response.find(row=>row.source==='smartstore').snapshotId='ss-new-final-only';
+  return response;
+ };
+ await assert.rejects(async()=>{returned=await h.run({includeStockDependencies:true});},/최신 판매처 원본이 변경되었습니다/);
+ assert.equal(returned,undefined,'no bundle based on the superseded seller original is returned');
+ assert.equal(h.counts.statusCalls,3,'both original preflight reads succeed and only the final identity changes');
+ assert.equal(reads,2);assert.equal(h.workflow.uploadCalls,0);
+});
+
+test('Ably individual labels use the same source-stock inheritance as other sellers without changing stored policy rows',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ h.ablyMappings[1].stock_policy='individual';h.ablyMappings[1].individual_stock=9;
+ const before=structuredClone(h.ablyMappings),output=await h.run({includeStockDependencies:true});
+ await assertStockDependencyFiles(h,output,[3,3,3]);assert.deepEqual(h.ablyMappings,before);
+ const off=await h.run({includeStockDependencies:false});await assertStockDependencyFiles(h,off,[0,5,9]);assert.deepEqual(h.ablyMappings,before,'individual labels and configured quantities remain unchanged in DB metadata');
+});
+
+test('a blocked parent input also blocks descendant stock export without falling back to child source values',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ const expectedPreview={baseSnapshotId:'snap-1',fingerprint:'blocked-parent-proof',summary:{changedSkuCount:0,validSkuCount:1},changedRows:[],blockedSkus:['outside-parent'],blockedRows:[{stage:'inventory_input',source:'sellpia',file_name:'blocked-parent.xlsx',source_row_no:2,sellpia_sku_code:'outside-parent',status:'invalid',reason:'중복 부모 입력'}]};
+ h.workflow.expectedPreview=expectedPreview;
+ const output=await h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('blocked-parent.xlsx',new Uint8Array([8]))],expectedPreview,includeStockDependencies:true});
+ await assertStockDependencyFiles(h,output,[1,2,3],[]);assert.equal(h.workflow.uploadCalls,0);
+ for(const sku of ['1001-1','1002-1','2001-1'])assert.ok(output.blockedRows.some(row=>row.sellpia_sku_code===sku),'each descendant receives a report row instead of an independent stock fallback');
+});
+
+test('retry remembers inherited-stock choice and permits explicit export-only option changes without uploading again',async()=>{
+ const h=buildHarness();await makeHarnessFiles(h);addStockDependencyChain(h);
+ const changedRows=[{sellpia_sku_code:'1001-1',stock:10,available_stock:7}],expectedPreview={baseSnapshotId:'snap-1',fingerprint:'dependency-retry-proof',summary:{changedSkuCount:1},changedRows};
+ h.workflow.active=true;h.workflow.snapshotId='snap-2';h.workflow.expectedPreview=expectedPreview;h.workflow.failNextStockRead=true;
+ await assert.rejects(()=>h.ctx.SystemV3SellerExportBridge.runInventoryUpdateBatch({files:[asFile('count.xlsx',new Uint8Array([9]))],expectedPreview,includeStockDependencies:true}),error=>error.code==='INVENTORY_EXPORT_FAILED_AFTER_UPDATE'&&error.uploaded&&error.retryAvailable);
+ assert.equal(h.workflow.uploadCalls,1);
+ const savedChoice=await h.ctx.SystemV3SellerExportBridge.retryInventoryBatchExport({});await assertStockDependencyFiles(h,savedChoice,[3,3,3]);
+ const graphCount=h.workflow.graphReads.length;
+ const explicitlyOff=await h.ctx.SystemV3SellerExportBridge.retryInventoryBatchExport({includeStockDependencies:false});await assertStockDependencyFiles(h,explicitlyOff,[7,5,9]);
+ assert.equal(h.workflow.graphReads.length,graphCount,'an explicit OFF regeneration uses no stale inherited result');
+ const explicitlyOn=await h.ctx.SystemV3SellerExportBridge.retryInventoryBatchExport({includeStockDependencies:true});await assertStockDependencyFiles(h,explicitlyOn,[3,3,3]);
+ assert.equal(h.workflow.uploadCalls,1,'every retry regenerates files from the one retained completed upload');assert.deepEqual(h.workflow.uploadedRows,changedRows);
 });
 
 test('separate legacy PlayAuto option workflow retains V/W and blank X while updating only safe X stock',async()=>{

@@ -40,11 +40,13 @@ async function fixture(t){
    },
    async verify(){verifyCalls++;if(window.failVerify)throw Error('가격 종속관계가 변경되었습니다. 다시 미리보기 해주세요.');}
   };
+  const currentDecisions=({skus})=>({groups:[],rows:skus.includes('C1')?[{sku:'C1',source_channel:'ably',seller_product_code:'CHILD',seller_option_code:'C1',price:{base:50000,discounted:50000,option:0,final:50000,terms:[]},event_id:'child-current',revision:1,decision_source:'matrix_manual',effective_at:'2026-10-22T00:00:00Z',mapping_valid:true}]:[]});
   window.SystemV3Data={
    loadAuxiliarySellerFiles:async()=>({rows:[]}),loadLatestSellerOriginalStatus:async()=>[],loadTagCatalog:async()=>({rows:[]}),
    loadPlayautoSellpiaCatalog:async()=>[],loadCarrierSellerMappings:async()=>({rows:[]}),
    loadCarrierMatrixTargets:async args=>{calls.push({name:'ably-targets',args});return {rows:args.skus.map(sku=>window.rootInternalOnly&&sku==='P'?{sku,active_price_rule:false,current_effective_price:null}:{sku,active_price_rule:true,current_effective_price:{platformBase:sku==='P'?6000:99000,platformDiscount:0,platformOption:0,platformFinal:sku==='P'?6000:99000,platformTerms:[]}})};},
-   loadCurrentPriceDecisions:async({skus})=>({groups:[],rows:skus.includes('C1')?[{sku:'C1',source_channel:'ably',seller_product_code:'CHILD',seller_option_code:'C1',price:{base:50000,discounted:50000,option:0,final:50000,terms:[]},event_id:'child-current',revision:1,decision_source:'matrix_manual',effective_at:'2026-10-22T00:00:00Z',mapping_valid:true}]:[]}),
+   loadCurrentPriceDecisions:async args=>{calls.push({name:'ably-editor-decisions',args});return currentDecisions(args);},
+   loadExportCurrentPriceDecisions:async args=>{calls.push({name:'ably-large-decisions',args});return currentDecisions(args);},
    loadSellpiaSourcePricesForExport:async({skus})=>new Map(skus.map(sku=>[sku,sku==='P'?6000:88000])),
    loadAblyCarrierPoliciesForSkus:async()=>({rows:[],fingerprint:'[]'}),
    loadSellpiaStockSourcesForExport:async()=>({snapshotId:'stock',bySku:new Map(['P','C1','C2'].map(sku=>[sku,{sellpia_available_stock:9,sellpia_current_stock:9}]))}),
@@ -118,14 +120,43 @@ for(const mode of ['rules','sellpia_source'])test(`Ably ${mode} copies parent fi
  await clickReady(page,'[data-ably-standard-run]');await page.waitForFunction(()=>downloads.length>0||document.querySelector('[data-ably-progress]').dataset.state==='error');
  assert.equal(await page.evaluate(()=>downloads.length),1,await page.locator('#export-workflow-status').innerText());
  assert.equal(await page.evaluate(()=>verifyCalls),1);
+ assert.equal(await page.evaluate(()=>calls.filter(call=>call.name==='ably-editor-decisions').length),0,'enabled preview and final verification never fall back to the editor group cap');
+ assert.deepEqual(await page.evaluate(()=>calls.filter(call=>call.name==='ably-large-decisions').map(call=>[call.args.source,call.args.allowLargeGroups])),[['ably',true],['ably',true],['ably',true]]);
  assert.deepEqual(await page.evaluate(()=>builds[0].filter(row=>row.fixtureSku!=='P').map(row=>row.target_base_price+row.target_option_price)),[6000,6000]);
 });
 
 test('Ably unchecked retains its current manual price decision and makes no dependency request',async t=>{
  const page=await fixture(t);await ablyPreview(page,{scope:'C1'});
  assert.equal(await page.evaluate(()=>dependencyCalls.length),0);
+ assert.equal(await page.evaluate(()=>calls.filter(call=>call.name==='ably-large-decisions').length),0);
+ assert.equal(await page.evaluate(()=>calls.filter(call=>call.name==='ably-editor-decisions').length),1,'unchecked retains its original editor read');
  assert.match(await page.locator('#export-preview-rows tr').filter({hasText:'C1'}).innerText(),/목표 최종 50,000/);
  assert.equal(await page.locator('#export-dependency-provenance [data-dependency-summary]').count(),0);
+});
+
+test('Ably dependency export retains a whole group above 200 options through preview and final revalidation',async t=>{
+ const page=await fixture(t);
+ await page.evaluate(()=>{
+  const skus=Array.from({length:205},(_,index)=>`C${index}`),rows=skus.map(sku=>({sku,parent_sku:'P',root_sku:'P',final:6000,path:['P',sku],inherited:true,automatically_included:true}));
+  HubPriceDependencyService.prepare=async()=>({outputSkus:['P',...skus],resolution:{bySku:new Map(rows.map(row=>[row.sku,row]))},proof:'large-group-proof',summary:{enabled:true,requestedCount:1,autoIncludedCount:205,inheritedCount:205,rows}});
+  SystemV3Data.loadCurrentPriceDecisions=async()=>{throw Error('editor group limit must not be used');};
+  AblyPlayautoExport.readTemplate=async()=>({type:'product_price_option',items:[...skus.map((sku,index)=>({fixtureSku:sku,source_row_no:2,option_index:index,seller_product_code:'CHILD',seller_option_code:sku,sellpia_product_code:sku,seller_management_code:sku,primary_option_name:'size',secondary_option_value:sku,base_price:10000,option_price:index,sales_quantity:3})),{fixtureSku:'P',source_row_no:3,option_index:0,seller_product_code:'PARENT',seller_option_code:'P',sellpia_product_code:'P',seller_management_code:'P',primary_option_name:'size',secondary_option_value:'P',base_price:5000,option_price:0,sales_quantity:3}]});
+ });
+ await page.locator(dependency('ably')).check();await ablyPreview(page);
+ assert.match(await page.locator('#export-dependency-provenance').innerText(),/모음전 자동 포함 205 SKU/);
+ await clickReady(page,'[data-ably-standard-run]');await page.waitForFunction(()=>downloads.length>0||document.querySelector('[data-ably-progress]').dataset.state==='error');
+ assert.equal(await page.evaluate(()=>downloads.length),1);
+ assert.equal(await page.evaluate(()=>builds[0].length),206,'the preview display page does not truncate generated targets');
+ assert.equal(await page.evaluate(()=>builds[0].every(row=>row.target_base_price+row.target_option_price===6000)),true);
+ assert.deepEqual(await page.evaluate(()=>calls.filter(call=>call.name==='ably-large-decisions').map(call=>[call.args.allowLargeGroups,call.args.skus.length])),[[true,206],[true,206],[true,206]]);
+});
+
+test('Ably enabled dependency export fails closed when the large-group reader is unavailable',async t=>{
+ const page=await fixture(t);await page.evaluate(()=>delete SystemV3Data.loadExportCurrentPriceDecisions);
+ await page.locator(dependency('ably')).check();await ablyPreview(page);
+ assert.match(await page.locator('#export-workflow-status').innerText(),/현재 가격 결정 조회 모듈/);
+ assert.equal(await page.evaluate(()=>calls.filter(call=>call.name==='ably-editor-decisions').length),0);
+ assert.equal(await page.evaluate(()=>downloads.length),0);
 });
 
 test('Ably exports a selected parents edited internal price together with inherited children without a platform Rule',async t=>{
