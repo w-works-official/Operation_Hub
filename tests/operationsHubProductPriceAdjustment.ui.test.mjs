@@ -124,6 +124,24 @@ test('validation exposes recalculated options but rejects a missing zero-price o
  assert.ok((await page.locator('[data-adjustment-options] tr td:nth-child(3)').allTextContents()).some(value=>value==='0원'));assert.equal(await page.evaluate(()=>calls.length),1);
 });
 
+test('an existing zero option with an out-of-bounds price reports the price range instead of matching the 10-won error text',async t=>{
+ const page=await fixture(t);await page.evaluate(()=>{const original=makeResult;window.makeResult=args=>{const result=original(args),group=result.priceAdjustmentContext.groups[0],finals=[8500,15100,9800,13900];for(let index=0;index<group.rows.length;index++){group.rows[index].targetFinal=finals[index%4];group.helperRows[index].final=finals[index%4];}return result;};});
+ await preview(page);await open(page);await fill(page,8500,0);
+ assert.ok((await page.locator('[data-adjustment-options] tr td:nth-child(3)').allTextContents()).includes('0원'));
+ assert.match(await page.locator('[data-adjustment-validation]').innerText(),/가능 판매가 확인/);assert.doesNotMatch(await page.locator('[data-adjustment-validation]').innerText(),/0원 옵션 필요/);
+ assert.match(await page.locator('[data-adjustment-errors]').textContent(),/±50%·10원/);assert.doesNotMatch(await page.locator('[data-adjustment-errors]').textContent(),/추가금 0원인 옵션/);
+ assert.equal(await page.locator('[data-adjustment-options] tr').nth(1).locator('td').last().innerText(),'±4,250원 초과');assert.equal(await page.locator('[data-adjustment-apply]').isDisabled(),true);assert.equal(await page.evaluate(()=>saveWrites.length),0);
+});
+
+test('a negative option below a 2000-won base respects the calculated row rejection even inside the numeric option bound',async t=>{
+ const page=await fixture(t);await page.evaluate(()=>{const original=makeResult;window.makeResult=args=>{const result=original(args),group=result.priceAdjustmentContext.groups[0];for(let index=0;index<group.rows.length;index++){group.rows[index].targetFinal=index%2?1500:1000;group.helperRows[index].final=group.rows[index].targetFinal;}return result;};});
+ await preview(page);await open(page);await fill(page,1500,0);
+ const rejected=page.locator('[data-adjustment-options] tr').first(),zero=page.locator('[data-adjustment-options] tr').nth(1);
+ assert.equal(await rejected.locator('td').nth(2).innerText(),'-500원');assert.match(await rejected.getAttribute('class'),/product-price-adjustment-option-error/);assert.equal(await rejected.locator('td').last().innerText(),'음수 옵션가 불가');
+ assert.equal(await zero.locator('td').nth(2).innerText(),'0원');assert.equal(await zero.locator('td').last().innerText(),'허용범위 충족');assert.doesNotMatch(await zero.getAttribute('class'),/product-price-adjustment-option-error/);
+ assert.match(await page.locator('[data-adjustment-errors]').textContent(),/2,000원 미만.*음수 옵션가/);assert.equal(await page.locator('[data-adjustment-apply]').isDisabled(),true);assert.equal(await page.evaluate(()=>saveWrites.length),0);
+});
+
 test('scope, mode, source reload and authentication changes discard applied drafts and require a fresh preview',async t=>{
  for(const change of ['scope','mode','source','auth']){
   const page=await fixture(t);await preview(page);await open(page);await fill(page);await apply(page);

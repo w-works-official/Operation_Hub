@@ -91,7 +91,7 @@
  function adjustmentIssueLabel(result){
   if(result.valid)return '검증 통과';
   const text=(result.errors||[]).map(adjustmentError).join(' ');
-  return /0원/.test(text)?'0원 옵션 필요':/옵션가|허용범위/.test(text)?'가능 판매가 확인':/할인/.test(text)?'할인 입력 확인':/정수|기준가|판매가/.test(text)?'판매가 입력 확인':'검증 상세 확인';
+  return /추가금\s*0원인\s*옵션/.test(text)?'0원 옵션 필요':/옵션가|허용범위/.test(text)?'가능 판매가 확인':/할인/.test(text)?'할인 입력 확인':/정수|기준가|판매가/.test(text)?'판매가 입력 확인':'검증 상세 확인';
  }
  function adjustmentDetails(modal,messages=[]){
   const details=modal.dialog.querySelector('[data-adjustment-details]'),list=modal.dialog.querySelector('[data-adjustment-errors]'),errors=[...new Set(messages.map(adjustmentError).filter(Boolean))];
@@ -122,7 +122,7 @@
   const select=dialog.querySelector('[data-adjustment-candidates]');select.innerHTML=`<option value="">가능 판매가 선택${allowed.length?` (${n(allowed.length)}개)`:''}</option>${allowed.map(value=>`<option value="${value}">${n(value)}원</option>`).join('')}`;select.disabled=modal.applying||group.editable===false||!allowed.length;select.value=allowed.includes(draft.basePrice)?String(draft.basePrice):'';
   adjustmentDetails(modal,[...(group.editable===false?[group.blockedReason]:[]),...(result.errors||[]),...(!allowed.length&&range?.reason?[range.reason]:[]),...(group.savedAdjustmentValid===false?[group.savedAdjustmentReason]:[])]);
   const calculated=result.rows||[],rows=group.rows||[];
-  dialog.querySelector('[data-adjustment-options]').innerHTML=rows.map((row,index)=>{const option=calculated[index]?.optionPrice??(Number.isSafeInteger(result.discountedBasePrice)&&Number.isSafeInteger(row.targetFinal)?row.targetFinal-result.discountedBasePrice:null),safe=Number.isSafeInteger(option)&&limit!==null&&Math.abs(option)<=limit;return `<tr class="${safe?'':'product-price-adjustment-option-error'}"><td>${esc(row.sku||'미연결')}<small>${esc(row.optionCode||'단일')} ${esc(row.optionName||'')}</small></td><td>${Number.isSafeInteger(row.targetFinal)?`${n(row.targetFinal)}원`:'확인 불가'}<small>${row.parentSku?`상위 ${esc(row.parentSku)} 최종가 그대로`:row.preserved?'미선택 옵션 최종가 보존':'선택한 가격 기준의 최종가'}</small></td><td>${Number.isSafeInteger(option)?`${n(option)}원`:'—'}</td><td>${limit===null?'입력 확인':safe?'허용범위 충족':`±${n(limit)}원 초과`}</td></tr>`;}).join('');
+  dialog.querySelector('[data-adjustment-options]').innerHTML=rows.map((row,index)=>{const entry=calculated[index],option=entry?.optionPrice??(Number.isSafeInteger(result.discountedBasePrice)&&Number.isSafeInteger(row.targetFinal)?row.targetFinal-result.discountedBasePrice:null),withinRange=Number.isSafeInteger(option)&&limit!==null&&Math.abs(option)<=limit,safe=withinRange&&entry?.valid!==false,label=limit===null?'입력 확인':safe?'허용범위 충족':withinRange?(/음수 옵션가/.test(entry?.error||'')?'음수 옵션가 불가':'옵션 조건 확인'):`±${n(limit)}원 초과`;return `<tr class="${safe?'':'product-price-adjustment-option-error'}"><td>${esc(row.sku||'미연결')}<small>${esc(row.optionCode||'단일')} ${esc(row.optionName||'')}</small></td><td>${Number.isSafeInteger(row.targetFinal)?`${n(row.targetFinal)}원`:'확인 불가'}<small>${row.parentSku?`상위 ${esc(row.parentSku)} 최종가 그대로`:row.preserved?'미선택 옵션 최종가 보존':'선택한 가격 기준의 최종가'}</small></td><td>${Number.isSafeInteger(option)?`${n(option)}원`:'—'}</td><td>${label}</td></tr>`;}).join('');
   const changed=[...modal.touched].map(code=>modal.context.groups.find(item=>String(item.productCode)===code));
   dialog.querySelector('[data-adjustment-apply]').disabled=modal.applying||!modal.touched.size||changed.some(item=>!item||!validateAdjustment(modal,item).valid);
  }
