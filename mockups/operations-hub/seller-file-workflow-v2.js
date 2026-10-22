@@ -102,11 +102,42 @@
   for(const node of modal.dialog.querySelectorAll('input,select,button'))node.disabled=modal.applying&&(phase==='saving'||!node.matches('[data-adjustment-cancel]'));
   const status=modal.dialog.querySelector('[data-adjustment-validation]');status.dataset.state='pending';status.textContent=phase==='saving'?'저장 중 · 잠시 기다려주세요.':'최신 가격 확인 중';
  }
+ function visibleAdjustmentGroups(modal){
+  const query=modal.search.trim().toLocaleLowerCase();
+  return (modal.context.groups||[]).filter(group=>(modal.filter==='all'||Boolean(group.needsAdjustment)===(modal.filter==='needs'))&&(!query||[group.productCode,group.productName,...(group.rows||[]).map(row=>row.sku)].join(' ').toLocaleLowerCase().includes(query)));
+ }
+ function selectAdjustmentProduct(modal,code,{focus=false,edit=false}={}){
+  modal.selected=String(code);renderAdjustmentList(modal);renderAdjustmentEditor(modal);
+  const button=[...modal.dialog.querySelectorAll('[data-adjustment-product]')].find(node=>node.dataset.adjustmentProduct===modal.selected);
+  if(focus){button?.focus({preventScroll:true});button?.scrollIntoView({block:'nearest',inline:'nearest'});}
+  if(edit)modal.dialog.querySelector('[data-adjustment-base]:not(:disabled)')?.focus();
+ }
+ function fillAdjustmentRecommendation(modal,group){
+  if(group.editable===false)throw Error(group.blockedReason||'이 상품의 가격 구성은 조정할 수 없습니다.');
+  const result=global.HubProductPriceAdjustment.recommend(adjustmentHelperGroup(group)),recommended=result.draft||group.recommendedDraft;
+  if(!result.valid||!recommended)throw Error((result.errors||['추천값을 계산할 수 없습니다.']).map(adjustmentError).join(' · '));
+  const draft={source:modal.source,productCode:String(group.productCode),basePrice:adjustmentInput(recommended.basePrice),basicDiscount:adjustmentInput(recommended.basicDiscount)},validation=global.HubProductPriceAdjustment.validate(adjustmentHelperGroup(group),draft);
+  if(!validation.valid)throw Error((validation.errors||['추천값을 검증할 수 없습니다.']).map(adjustmentError).join(' · '));
+  const initial=group.appliedDraft||group.savedAdjustment,unchanged=initial&&draft.basePrice===adjustmentInput(initial.basePrice)&&draft.basicDiscount===adjustmentInput(initial.basicDiscount);
+  if(unchanged){modal.touched.delete(draft.productCode);if(group.appliedDraft)modal.working.set(draft.productCode,draft);else modal.working.delete(draft.productCode);}
+  else{modal.working.set(draft.productCode,draft);modal.touched.add(draft.productCode);}
+ }
+ function recommendAllAdjustments(modal){
+  if(modal.applying)return;
+  let filled=0,locked=0,unavailable=0;
+  for(const group of modal.context.groups||[]){
+   if(group.editable===false){locked++;continue;}
+   try{fillAdjustmentRecommendation(modal,group);filled++;}catch(error){unavailable++;}
+  }
+  const status=modal.dialog.querySelector('[data-adjustment-bulk-status]');status.hidden=false;
+  status.textContent=`전체 ${n(filled)}상품 추천값 채움${locked?` · 조정 불가 ${n(locked)}`:''}${unavailable?` · 추천 불가 ${n(unavailable)}`:''} · 저장 전`;
+  renderAdjustmentList(modal);renderAdjustmentEditor(modal);
+ }
  function renderAdjustmentList(modal){
-  const query=modal.search.trim().toLocaleLowerCase(),all=modal.context.groups||[],needs=all.filter(group=>group.needsAdjustment).length;
+  const all=modal.context.groups||[],needs=all.filter(group=>group.needsAdjustment).length;
   for(const button of modal.dialog.querySelectorAll('[data-adjustment-filter]')){const filter=button.dataset.adjustmentFilter;button.setAttribute('aria-pressed',String(filter===modal.filter));button.textContent=`${filter==='all'?'전체':filter==='needs'?'조정 필요':'정상'} ${n(filter==='all'?all.length:filter==='needs'?needs:all.length-needs)}`;}
-  const groups=all.filter(group=>(modal.filter==='all'||Boolean(group.needsAdjustment)===(modal.filter==='needs'))&&(!query||[group.productCode,group.productName,...(group.rows||[]).map(row=>row.sku)].join(' ').toLocaleLowerCase().includes(query))),list=modal.dialog.querySelector('[data-adjustment-products]'),scroll=list.scrollTop;
-  list.innerHTML=groups.map(group=>`<button type="button" class="product-price-adjustment-product" data-adjustment-product="${esc(group.productCode)}" aria-current="${String(group.productCode)===modal.selected?'true':'false'}"><span><b>${esc(group.productCode)}</b><small>${esc(group.productName||'상품명 없음')}</small></span><span>${n(group.rows?.length||group.helperRows?.length)}옵션<small>${modal.touched.has(String(group.productCode))?'미저장 변경':group.savedAdjustment?adjustmentSaveState(modal,group):group.needsAdjustment?'조정 필요':'정상'}${group.editable===false?' · 조정 불가':''}</small></span></button>`).join('')||'<p class="product-price-adjustment-empty">검색 조건에 맞는 상품이 없습니다.</p>';
+  const groups=visibleAdjustmentGroups(modal),list=modal.dialog.querySelector('[data-adjustment-products]'),scroll=list.scrollTop,focusCode=groups.some(group=>String(group.productCode)===modal.selected)?modal.selected:String(groups[0]?.productCode||'');
+  list.innerHTML=groups.map(group=>`<button type="button" class="product-price-adjustment-product" data-adjustment-product="${esc(group.productCode)}" tabindex="${String(group.productCode)===focusCode?'0':'-1'}" aria-current="${String(group.productCode)===modal.selected?'true':'false'}"><span><b>${esc(group.productCode)}</b><small>${esc(group.productName||'상품명 없음')}</small></span><span>${n(group.rows?.length||group.helperRows?.length)}옵션<small>${modal.touched.has(String(group.productCode))?'미저장 변경':group.savedAdjustment?adjustmentSaveState(modal,group):group.needsAdjustment?'조정 필요':'정상'}${group.editable===false?' · 조정 불가':''}</small></span></button>`).join('')||'<p class="product-price-adjustment-empty">검색 조건에 맞는 상품이 없습니다.</p>';
   list.scrollTop=scroll;
  }
  function updateAdjustmentValidation(modal,group){
@@ -124,7 +155,8 @@
   const calculated=result.rows||[],rows=group.rows||[];
   dialog.querySelector('[data-adjustment-options]').innerHTML=rows.map((row,index)=>{const entry=calculated[index],option=entry?.optionPrice??(Number.isSafeInteger(result.discountedBasePrice)&&Number.isSafeInteger(row.targetFinal)?row.targetFinal-result.discountedBasePrice:null),withinRange=Number.isSafeInteger(option)&&limit!==null&&Math.abs(option)<=limit,safe=withinRange&&entry?.valid!==false,label=limit===null?'입력 확인':safe?'허용범위 충족':withinRange?(/음수 옵션가/.test(entry?.error||'')?'음수 옵션가 불가':'옵션 조건 확인'):`±${n(limit)}원 초과`;return `<tr class="${safe?'':'product-price-adjustment-option-error'}"><td>${esc(row.sku||'미연결')}<small>${esc(row.optionCode||'단일')} ${esc(row.optionName||'')}</small></td><td>${Number.isSafeInteger(row.targetFinal)?`${n(row.targetFinal)}원`:'확인 불가'}<small>${row.parentSku?`상위 ${esc(row.parentSku)} 최종가 그대로`:row.preserved?'미선택 옵션 최종가 보존':'선택한 가격 기준의 최종가'}</small></td><td>${Number.isSafeInteger(option)?`${n(option)}원`:'—'}</td><td>${label}</td></tr>`;}).join('');
   const changed=[...modal.touched].map(code=>modal.context.groups.find(item=>String(item.productCode)===code));
-  dialog.querySelector('[data-adjustment-apply]').disabled=modal.applying||!modal.touched.size||changed.some(item=>!item||!validateAdjustment(modal,item).valid);
+  const limitStatus=dialog.querySelector('[data-adjustment-save-limit]');limitStatus.hidden=modal.touched.size<=500;limitStatus.textContent=modal.touched.size>500?`미저장 ${n(modal.touched.size)}상품 · 한 번에 500상품까지 저장할 수 있습니다. 미리보기 대상을 줄여주세요.`:'';
+  dialog.querySelector('[data-adjustment-apply]').disabled=modal.applying||!modal.touched.size||modal.touched.size>500||changed.some(item=>!item||!validateAdjustment(modal,item).valid);
  }
  function renderAdjustmentEditor(modal){
   const group=modal.context.groups.find(item=>String(item.productCode)===modal.selected),editor=modal.dialog.querySelector('[data-adjustment-editor]');
@@ -138,7 +170,8 @@
   };
   editor.querySelector('[data-adjustment-candidates]').onchange=event=>{if(!event.target.value)return;editor.querySelector('[data-adjustment-base]').value=event.target.value;editor.querySelector('[data-adjustment-base]').dispatchEvent(new Event('input',{bubbles:true}));};
   editor.querySelector('[data-adjustment-recommend]').onclick=()=>{
-   try{const result=global.HubProductPriceAdjustment.recommend(adjustmentHelperGroup(group)),recommended=result.draft||group.recommendedDraft;if(!result.valid||!recommended)throw Error((result.errors||['추천값을 계산할 수 없습니다.']).map(adjustmentError).join(' · '));modal.working.set(String(group.productCode),{...recommended,source:modal.source,productCode:String(group.productCode)});modal.touched.add(String(group.productCode));renderAdjustmentList(modal);renderAdjustmentEditor(modal);}
+   if(modal.applying)return;
+   try{fillAdjustmentRecommendation(modal,group);renderAdjustmentList(modal);renderAdjustmentEditor(modal);modal.dialog.querySelector('[data-adjustment-recommend]')?.focus();}
    catch(error){const status=modal.dialog.querySelector('[data-adjustment-validation]');status.dataset.state='invalid';status.textContent='추천값 없음 · 검증 상세 확인';adjustmentDetails(modal,[adjustmentError(error)]);}
   };
   updateAdjustmentValidation(modal,group);
@@ -148,17 +181,27 @@
   const saved=productPriceContexts.get(source);if(!saved||!state.sourcePricePreviews.has(source))return;
   if(!global.HubProductPriceAdjustment?.validate||!global.HubProductPriceAdjustment?.recommend){standardResult(source,'상품별 가격 조정 모듈을 불러오지 못했습니다. 새로고침 후 다시 확인해주세요.','error');return;}
   const dialog=document.createElement('dialog');dialog.className='product-price-adjustment-dialog';dialog.setAttribute('aria-labelledby','product-price-adjustment-title');
-  dialog.innerHTML=`<div class="product-price-adjustment-shell"><header class="product-price-adjustment-head"><div><h2 id="product-price-adjustment-title">상품별 가격 조정</h2><p>스마트스토어 · 저장한 공통 판매가·할인을 다음 내보내기에도 불러옵니다.</p></div><button class="btn" type="button" data-adjustment-cancel aria-label="상품별 가격 조정 닫기">닫기</button></header><div class="product-price-adjustment-body"><aside><div class="product-price-adjustment-filters" aria-label="상품 상태"><button type="button" data-adjustment-filter="all">전체</button><button type="button" data-adjustment-filter="needs">조정 필요</button><button type="button" data-adjustment-filter="normal">정상</button></div><label class="product-price-adjustment-search">상품 검색<input type="search" data-adjustment-search placeholder="상품코드 · 상품명 · SKU"></label><div data-adjustment-products></div></aside><section data-adjustment-editor></section></div><footer><p>상품별 조정값을 저장합니다. 원본 파일과 가격태그는 변경하지 않습니다.</p><div><button class="btn" type="button" data-adjustment-cancel>취소</button><button class="btn primary" type="button" data-adjustment-apply>저장 후 다시 미리보기</button></div></footer></div>`;
+  dialog.innerHTML=`<div class="product-price-adjustment-shell"><header class="product-price-adjustment-head"><div><h2 id="product-price-adjustment-title">상품별 가격 조정</h2><p>스마트스토어 · 저장한 공통 판매가·할인을 다음 내보내기에도 불러옵니다.</p></div><div class="product-price-adjustment-head-actions"><button class="btn" type="button" data-adjustment-recommend-all>전체 추천값 채우기</button><button class="btn" type="button" data-adjustment-cancel aria-label="상품별 가격 조정 닫기">닫기</button></div></header><div class="product-price-adjustment-body"><aside><div class="product-price-adjustment-filters" aria-label="상품 상태"><button type="button" data-adjustment-filter="all">전체</button><button type="button" data-adjustment-filter="needs">조정 필요</button><button type="button" data-adjustment-filter="normal">정상</button></div><label class="product-price-adjustment-search">상품 검색<input type="search" data-adjustment-search placeholder="상품코드 · 상품명 · SKU"></label><p class="product-price-adjustment-shortcuts" id="product-price-adjustment-shortcuts" data-adjustment-shortcut-hint>목록에서 Tab 다음 · Shift+Tab 이전<br>Enter 가격 입력</p><div data-adjustment-products aria-describedby="product-price-adjustment-shortcuts"></div></aside><section data-adjustment-editor></section></div><footer><p>상품별 조정값을 저장합니다. 원본 파일과 가격태그는 변경하지 않습니다.<span data-adjustment-bulk-status role="status" aria-live="polite" hidden></span><span data-adjustment-save-limit role="status" hidden></span></p><div><button class="btn" type="button" data-adjustment-cancel>취소</button><button class="btn primary" type="button" data-adjustment-apply>저장 후 다시 미리보기</button></div></footer></div>`;
   const groups=saved.context.groups,initial=groups.find(group=>group.appliedDraft||group.savedAdjustment)||groups.find(group=>group.needsAdjustment&&group.editable!==false)||groups.find(group=>group.editable!==false)||groups[0];
   const working=new Map(productPriceDraftList(source).map(draft=>[String(draft.productCode),draft])),modal={source,dialog,trigger,context:saved.context,key:saved.key,mode:saved.mode,scopeKey:saved.scopeKey,working,touched:new Set(),filter:'all',search:'',selected:String(initial.productCode),applying:false,phase:'editing',saved:false};
   productPriceModal=modal;document.body.append(dialog);lockAdjustmentGeneration(source,true);
   dialog.querySelectorAll('[data-adjustment-cancel]').forEach(button=>button.onclick=()=>closeProductPriceAdjustment({invalidate:true}));dialog.addEventListener('cancel',event=>{event.preventDefault();closeProductPriceAdjustment({invalidate:true});});
   dialog.querySelector('[data-adjustment-search]').oninput=event=>{modal.search=event.target.value;renderAdjustmentList(modal);};
-  dialog.querySelector('[data-adjustment-products]').onclick=event=>{const button=event.target.closest('[data-adjustment-product]');if(!button)return;modal.selected=button.dataset.adjustmentProduct;renderAdjustmentList(modal);renderAdjustmentEditor(modal);};
+  dialog.querySelector('[data-adjustment-products]').onclick=event=>{const button=event.target.closest('[data-adjustment-product]');if(!button||modal.applying)return;selectAdjustmentProduct(modal,button.dataset.adjustmentProduct,{focus:true});};
+  dialog.querySelector('[data-adjustment-recommend-all]').onclick=()=>recommendAllAdjustments(modal);
+  dialog.addEventListener('keydown',event=>{
+   if(modal.applying||event.defaultPrevented||event.isComposing||event.keyCode===229||event.ctrlKey||event.altKey||event.metaKey)return;
+   const button=event.target.closest('[data-adjustment-product]');if(!button||!dialog.contains(button))return;
+   if(event.key==='Enter'){event.preventDefault();selectAdjustmentProduct(modal,button.dataset.adjustmentProduct,{focus:true,edit:true});return;}
+   if(event.key!=='Tab')return;
+   const groups=visibleAdjustmentGroups(modal),index=groups.findIndex(group=>String(group.productCode)===button.dataset.adjustmentProduct),next=index+(event.shiftKey?-1:1);
+   if(index<0||next<0||next>=groups.length)return;
+   event.preventDefault();selectAdjustmentProduct(modal,groups[next].productCode,{focus:true});
+  });
   for(const button of dialog.querySelectorAll('[data-adjustment-filter]'))button.onclick=()=>{modal.filter=button.dataset.adjustmentFilter;renderAdjustmentList(modal);};
   dialog.querySelector('[data-adjustment-apply]').onclick=async()=>{
    if(modal.applying)return;const candidates=[...modal.working.keys()].map(code=>modal.context.groups.find(group=>String(group.productCode)===code));
-   if(!modal.touched.size||candidates.some(group=>!group||!validateAdjustment(modal,group).valid))return;
+   if(!modal.touched.size||modal.touched.size>500||candidates.some(group=>!group||!validateAdjustment(modal,group).valid))return;
    const drafts=candidates.map(group=>adjustmentDraft(modal,group)),saveKey=JSON.stringify(drafts);
    if(modal.saveRequestKey!==saveKey){modal.saveRequestKey=saveKey;modal.saveRequestId=adjustmentRequestId();}
    setAdjustmentPhase(modal,'validating');
@@ -166,6 +209,7 @@
    catch(error){if(productPriceModal!==modal)return;modal.phase='editing';modal.applying=false;if(!productPriceContexts.has(source)){productPriceAwaitingPreview.add(source);closeProductPriceAdjustment();standardResult(source,'설정이 변경되어 저장하지 못했습니다. 미리보기를 다시 실행해주세요.','error');return;}setSellerPanel(source,'preview');dialog.removeAttribute('aria-busy');for(const node of dialog.querySelectorAll('input,select,button'))node.disabled=false;renderAdjustmentEditor(modal);const status=dialog.querySelector('[data-adjustment-validation]');status.dataset.state='invalid';status.textContent='저장하지 못했습니다 · 이전 저장값 유지';adjustmentDetails(modal,[adjustmentError(error)]);}
   };
   renderAdjustmentList(modal);renderAdjustmentEditor(modal);dialog.showModal();
+  const selectedButton=dialog.querySelector('[data-adjustment-product][tabindex="0"]');selectedButton?.focus({preventScroll:true});selectedButton?.scrollIntoView({block:'nearest',inline:'nearest'});
  }
  function sellerPanel(source){return document.querySelector(`[data-seller-panel="${source}"]`);}
  function setSellerPanel(source,phase,message=''){

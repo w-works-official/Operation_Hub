@@ -264,6 +264,82 @@ test('both price modes and price-only, changed-only and full-original flows tran
  }
 });
 
+test('list-focused Tab shortcuts select visible products, preserve drafts, and let native focus escape at both boundaries',async t=>{
+ const page=await fixture(t);await preview(page);await open(page);
+ assert.match(await page.locator('[data-adjustment-shortcut-hint]').innerText(),/Tab/);
+ assert.equal(await page.evaluate(()=>document.activeElement?.dataset.adjustmentProduct),'COLLECTION');
+ assert.deepEqual(await page.locator('[data-adjustment-product]').evaluateAll(buttons=>buttons.map(button=>[button.dataset.adjustmentProduct,button.tabIndex])),[['COLLECTION',0],['NORMAL',-1],['LOCKED',-1]]);
+ await fill(page);await page.locator('[data-adjustment-product="COLLECTION"]').focus();await page.keyboard.press('Tab');
+ assert.equal(await page.evaluate(()=>document.activeElement?.dataset.adjustmentProduct),'NORMAL');assert.equal(await page.locator('[data-adjustment-product="NORMAL"]').getAttribute('aria-current'),'true');
+ await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.adjustmentProduct),'COLLECTION');assert.equal(await page.locator('[data-adjustment-base]').inputValue(),'9000');assert.equal(await page.locator('[data-adjustment-discount]').inputValue(),'2000');
+ await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>Boolean(document.activeElement?.closest('[data-adjustment-products]'))),false);assert.equal(await page.locator('[data-adjustment-product="COLLECTION"]').getAttribute('aria-current'),'true');
+ await page.locator('[data-adjustment-product="LOCKED"]').click();await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>Boolean(document.activeElement?.closest('[data-adjustment-products]'))),false);assert.equal(await page.locator('[data-adjustment-product="LOCKED"]').getAttribute('aria-current'),'true');
+ await page.locator('[data-adjustment-filter="needs"]').click();await page.locator('[data-adjustment-product="COLLECTION"]').click();await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.adjustmentProduct),'LOCKED');await page.keyboard.press('Shift+Tab');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.adjustmentProduct),'COLLECTION');
+ await page.locator('[data-adjustment-filter="all"]').click();await page.locator('[data-adjustment-search]').fill('NORMAL');assert.equal(await page.locator('[data-adjustment-product="NORMAL"]').evaluate(button=>button.tabIndex),0,'the visible fallback remains keyboard reachable when the selected product is filtered out');await page.locator('[data-adjustment-product="NORMAL"]').click();await page.keyboard.press('Tab');assert.equal(await page.locator('[data-adjustment-product]').count(),1);assert.equal(await page.evaluate(()=>Boolean(document.activeElement?.closest('[data-adjustment-products]'))),false);assert.equal(await page.locator('[data-adjustment-product="NORMAL"]').getAttribute('aria-current'),'true');
+ assert.equal(await page.evaluate(()=>calls.length),1);assert.equal(await page.evaluate(()=>saveWrites.length),0);
+});
+
+test('product shortcuts preserve native input focus and ignore modifier keys, composition and events outside the list',async t=>{
+ const page=await fixture(t);await preview(page);await open(page);await fill(page);
+ await page.locator('[data-adjustment-product="COLLECTION"]').focus();await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement?.hasAttribute('data-adjustment-base')),true);
+ await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement?.hasAttribute('data-adjustment-discount')),true);assert.equal(await page.locator('[data-adjustment-product="COLLECTION"]').getAttribute('aria-current'),'true');
+ for(const flags of [{ctrlKey:true},{altKey:true},{metaKey:true},{isComposing:true},{keyCode:229}]){
+  await page.locator('[data-adjustment-product="COLLECTION"]').focus();
+  const prevented=await page.evaluate(flags=>{const event=new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true,...flags});document.activeElement.dispatchEvent(event);return event.defaultPrevented;},flags);
+  assert.equal(prevented,false);assert.equal(await page.locator('[data-adjustment-product="COLLECTION"]').getAttribute('aria-current'),'true');
+ }
+ await page.evaluate(()=>document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true})));assert.equal(await page.locator('[data-adjustment-product="COLLECTION"]').getAttribute('aria-current'),'true');
+ await page.locator('[data-adjustment-search]').focus();await page.keyboard.press('Tab');assert.equal(await page.locator('[data-adjustment-product="COLLECTION"]').getAttribute('aria-current'),'true');assert.equal(await page.evaluate(()=>saveWrites.length),0);
+});
+
+test('list navigation and bulk recommendation stay inactive during fresh validation and the database save',async t=>{
+ const page=await fixture(t);await preview(page);await open(page);await fill(page);await page.evaluate(()=>{window.deferPreview=true;window.deferSave=true;});
+ await page.locator('[data-adjustment-apply]').click();await page.waitForFunction(()=>pending.length===1);
+ const bulkBefore=await page.locator('[data-adjustment-bulk-status]').textContent();
+ const forceKeysAndBulk=()=>page.evaluate(()=>{const row=document.querySelector('[data-adjustment-product="COLLECTION"]');for(const shiftKey of [false,true])row.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',shiftKey,bubbles:true,cancelable:true}));document.querySelector('[data-adjustment-recommend-all]').dispatchEvent(new MouseEvent('click',{bubbles:true}));});
+ await forceKeysAndBulk();assert.equal(await page.locator('[data-adjustment-product="COLLECTION"]').getAttribute('aria-current'),'true');assert.equal(await page.locator('[data-adjustment-bulk-status]').textContent(),bulkBefore);
+ await page.evaluate(()=>{window.deferPreview=false;pending.shift()();});await page.waitForFunction(()=>pendingSaves.length===1);await forceKeysAndBulk();
+ assert.equal(await page.locator('[data-adjustment-product="COLLECTION"]').getAttribute('aria-current'),'true');assert.equal(await page.locator('[data-adjustment-bulk-status]').textContent(),bulkBefore);assert.equal(await page.locator('[data-adjustment-recommend-all]').isDisabled(),true);
+ await page.evaluate(()=>pendingSaves.shift()());await page.locator(dialog).waitFor({state:'detached'});assert.deepEqual(await page.evaluate(()=>saveWrites[0].changedProductCodes),['COLLECTION']);
+});
+
+test('bulk recommendation covers the whole context regardless of search and keeps locked or unavailable drafts untouched',async t=>{
+ const page=await fixture(t);await page.evaluate(()=>{const original=makeResult;window.makeResult=args=>{const result=original(args),unavailable=structuredClone(result.priceAdjustmentContext.groups[1]);unavailable.productCode='UNAVAILABLE';unavailable.productName='추천 불가 상품';unavailable.needsAdjustment=true;unavailable.rows[0].sku='UNAVAILABLE-1';unavailable.helperRows[0].row.product_code='UNAVAILABLE';delete unavailable.helperRows[0].row.raw_payload.smartstore_basic_discount_unit;result.priceAdjustmentContext.groups.push(unavailable);return result;};});
+ await preview(page);await open(page);await page.locator('[data-adjustment-product="UNAVAILABLE"]').click();await fill(page,6400,400);
+ await page.locator('[data-adjustment-filter="needs"]').click();await page.locator('[data-adjustment-search]').fill('COLLECTION');await page.locator('[data-adjustment-product="COLLECTION"]').click();
+ await page.locator('[data-adjustment-recommend-all]').click();assert.equal(await page.locator('[data-adjustment-product]').count(),1);assert.ok((await page.locator('[data-adjustment-bulk-status]').innerText()).length>0);
+ assert.equal(await page.locator('[data-adjustment-apply]').isDisabled(),true,'the unavailable product keeps its prior invalid draft');assert.equal(await page.evaluate(()=>calls.length),1);assert.equal(await page.evaluate(()=>saveWrites.length),0);
+ await page.locator('[data-adjustment-filter="all"]').click();await page.locator('[data-adjustment-search]').fill('');
+ await page.locator('[data-adjustment-product="NORMAL"]').click();assert.match(await page.locator('[data-adjustment-product="NORMAL"]').innerText(),/미저장 변경/);assert.equal(await page.locator('[data-adjustment-base]').inputValue(),'5000');assert.equal(await page.locator('[data-adjustment-discount]').inputValue(),'0');
+ await page.locator('[data-adjustment-product="LOCKED"]').click();assert.equal(await page.locator('[data-adjustment-base]').inputValue(),'5000');assert.equal(await page.locator('[data-adjustment-base]').isDisabled(),true);assert.doesNotMatch(await page.locator('[data-adjustment-product="LOCKED"]').innerText(),/미저장 변경/);
+ await page.locator('[data-adjustment-product="UNAVAILABLE"]').click();assert.equal(await page.locator('[data-adjustment-base]').inputValue(),'6400');assert.equal(await page.locator('[data-adjustment-discount]').inputValue(),'400');
+ await page.locator('[data-adjustment-cancel]').last().click();assert.equal(await page.evaluate(()=>saveWrites.length),0);assert.equal(await page.evaluate(()=>savedRecords.size),0);
+});
+
+test('bulk recommendations require explicit save and include unchanged-original products without prior stored settings',async t=>{
+ const page=await fixture(t);await preview(page);await open(page);await page.locator('[data-adjustment-search]').fill('COLLECTION');await page.locator('[data-adjustment-recommend-all]').click();
+ assert.equal(await page.evaluate(()=>calls.length),1);assert.equal(await page.evaluate(()=>saveWrites.length),0);assert.equal(await page.locator('[data-adjustment-apply]').isDisabled(),false);
+ await apply(page);assert.deepEqual(await page.evaluate(()=>saveWrites[0].changedProductCodes),['COLLECTION','NORMAL']);assert.equal(await page.evaluate(()=>savedRecords.has('LOCKED')),false);assert.equal(await page.evaluate(()=>savedRecords.get('NORMAL').basePrice),5000);assert.equal(await page.evaluate(()=>savedRecords.get('NORMAL').basicDiscount),0);
+ assert.deepEqual(await page.evaluate(()=>saveWrites[0].drafts.map(draft=>draft.productCode)),['COLLECTION','NORMAL']);assert.match(await page.locator('[data-product-price-adjustment-entry]').innerText(),/저장 완료 2상품/);
+});
+
+test('bulk recommendations matching saved values clear dirty state without creating redundant database writes',async t=>{
+ const page=await fixture(t);await page.evaluate(()=>{const result=makeResult({productPriceAdjustments:[]});for(const group of result.priceAdjustmentContext.groups.filter(group=>group.editable)){const draft=HubProductPriceAdjustment.recommend({source:'smartstore',productCode:group.productCode,rows:group.helperRows}).draft;savedRecords.set(group.productCode,{basePrice:draft.basePrice,basicDiscount:draft.basicDiscount,revision:++window.savedRevision,updatedAt:'2026-10-22T12:00:00Z'});}});
+ await preview(page);await open(page);await fill(page,10000,3000);await page.locator('[data-adjustment-product="NORMAL"]').click();await fill(page,6000,1000);await page.locator('[data-adjustment-recommend-all]').click();
+ assert.doesNotMatch(await page.locator('[data-adjustment-product="COLLECTION"]').innerText(),/미저장 변경/);assert.doesNotMatch(await page.locator('[data-adjustment-product="NORMAL"]').innerText(),/미저장 변경/);assert.equal(await page.locator('[data-adjustment-apply]').isDisabled(),true);assert.equal(await page.evaluate(()=>saveWrites.length),0);
+ await page.locator('[data-adjustment-cancel]').last().click();assert.equal(await page.evaluate(()=>saveWrites.length),0);
+});
+
+test('bulk recommendation permits 500 pending settings and blocks a 501st setting before any save request',async t=>{
+ for(const count of [500,501]){
+  const page=await fixture(t);await page.evaluate(count=>{const original=makeResult;window.makeResult=args=>{const result=original(args),template=result.priceAdjustmentContext.groups[1];result.priceAdjustmentContext.groups=Array.from({length:count},(_,index)=>{const group=structuredClone(template),code=`BULK-${String(index).padStart(3,'0')}`;group.productCode=code;group.productName=`전체 추천 상품 ${index}`;group.rows[0].sku=`${code}-1`;group.helperRows[0].row.product_code=code;group.helperRows[0].row.source_row_no=index+10;return group;});return result;};},count);
+  await preview(page);await open(page);await page.locator('[data-adjustment-recommend-all]').click();
+  assert.equal(await page.locator('[data-adjustment-apply]').isDisabled(),count>500);assert.equal(await page.locator('[data-adjustment-save-limit]').isVisible(),count>500);
+  if(count>500){assert.match(await page.locator('[data-adjustment-save-limit]').innerText(),/미저장 501상품.*500상품/);await page.evaluate(()=>document.querySelector('[data-adjustment-apply]').dispatchEvent(new MouseEvent('click',{bubbles:true})));}
+  assert.equal(await page.evaluate(()=>calls.length),1);assert.equal(await page.evaluate(()=>saveWrites.length),0);await page.locator('[data-adjustment-cancel]').last().click();assert.equal(await page.evaluate(()=>savedRecords.size),0);
+ }
+});
+
 test('the desktop and narrow dialog keep its actions and every option reachable without page overflow',async t=>{
  const page=await fixture(t);await preview(page);await open(page);await fill(page);
  for(const viewport of [{width:1700,height:1000},{width:390,height:844}]){
