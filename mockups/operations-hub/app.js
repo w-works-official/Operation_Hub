@@ -8979,7 +8979,7 @@ async function prepareChangedOnlyExport(source,skus=null,{download=false,onProgr
   const onQuery=query=>{queries.push(query);onProgress?.(`${source} · ${query.query} · 대상 ${formatNumber(query.scope_count)}${Number.isFinite(query.processed_count)?` · 처리 ${formatNumber(query.processed_count)}/${formatNumber(query.total_count)} SKU`:''} · ${formatNumber(query.latency_ms)}ms`);};
   for(const file of files){
     mark=clock();
-    const parsed=await window.SystemV3SellerParsers.parseSellerFiles(source,[file],{price:Boolean(includePrice),discount:Boolean(includePrice),inventory:Boolean(includeStock)});
+    const parsed=await window.SystemV3SellerParsers.parseSellerFiles(source,[file],{basic:adjustmentEnabled,price:Boolean(includePrice),discount:Boolean(includePrice),inventory:Boolean(includeStock)});
     if(adjustmentEnabled)adjustmentOriginalProofs.push(await originalFileProof(file));
     timings.parse_ms+=Math.round(clock()-mark);carrierRows+=parsed.normalizedRows.length;
     onProgress?.(`${source} · carrier ${formatNumber(parsed.normalizedRows.length)}행에서 identity를 확인합니다.`);

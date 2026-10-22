@@ -91,7 +91,7 @@ async function harness({siblingCount=218,splitSameProduct=false,duplicateAcrossF
   value.window=value;value.globalThis=value;vm.createContext(value);
   for(const name of ['discount-price-math','sellpia-inventory-count','seller-source-parsers','seller-export-adapter','rule-registry','current-price-export','product-price-adjustment','data-service','price-dependency-export','price-dependency-service'])vm.runInContext(read(name),value,{filename:name+'.js'});
   value.SystemV3Data.setOperationsHubSessionToken('test-session');
-  parsed=(await value.SystemV3SellerParsers.parseSellerFiles('smartstore',sources.map(source=>source.file),{price:true,discount:true,inventory:true})).normalizedRows;
+  parsed=(await value.SystemV3SellerParsers.parseSellerFiles('smartstore',sources.map(source=>source.file),{basic:true,price:true,discount:true,inventory:true})).normalizedRows;
   const matrixTargets=async({skus})=>({rows:skus.map(sku=>({sku,active_price_rule:['SELECTED','SECOND','ROOT'].includes(sku),current_effective_price:['SELECTED','SECOND','ROOT'].includes(sku)?{
     platformBase:sku==='SECOND'?5000:10000,platformDiscount:sku==='SECOND'?0:3000,platformOption:sku==='SECOND'?500:-4000,platformFinal:rawPrices[sku],platformTerms:sku==='SECOND'?[]:[basic(3000)],versions:[{id:'fixture-current-rule',version:1}]
   }:null}))});
@@ -144,6 +144,9 @@ test('actual two-file XLSX flow changes common registration/basic discount while
     assert.equal(preview.priceAdjustmentContext.source,'smartstore');assert.ok(preview.priceAdjustmentContext.versionKey);
     const group=preview.priceAdjustmentContext.groups.find(group=>group.productCode===productCode);
     assert.equal(group.editable,true);assert.equal(group.rows.length,219);assert.equal(group.rows.filter(row=>row.preserved).length,218);
+    assert.equal(group.productName,`원본 상품명 ${productCode}`,`${mode}: the actual export parser must retain the carrier's product name for the adjustment dialog`);
+    for(const option of group.rows)assert.equal(option.optionName,`이름-${option.optionCode}`,`${mode}: every selected and preserved sibling retains its original option name`);
+    assert.equal(h.parsed.find(row=>row.product_code===productCode).product_name,`원본 상품명 ${productCode}`,'the real workbook fixture contains its original basic product information');
     assert.deepEqual(plain(group.appliedDraft),draft());
     const output=await cells(preview.outputs.find(output=>output.file.name==='smartstore-one.xlsx').blob),row=output.find(row=>String(row[0])===productCode);
     assert.equal(Number(row[5]),9000);assert.equal(Number(row[57]),2000);assert.equal(String(row[58]),'원');
@@ -167,7 +170,10 @@ test('all common preview/run bridges forward the product draft and return its ap
   for(const [previewMethod,runMethod] of [['previewPriceOnly','runPriceOnly'],['previewChangedOnly','runChangedOnly'],['previewTargetAll','runTargetAll'],['previewFullOriginal','runFullOriginal']]){
     const h=await harness({siblingCount:2}),options={source:'smartstore',skus:['SELECTED','SECOND'],priceMode:'sellpia_source',includePrice:true,includeStock:false,productPriceAdjustments:[draft()]};
     const preview=await h.value.SystemV3SellerExportBridge[previewMethod](options);
-    assert.deepEqual(plain(preview.priceAdjustmentContext.groups.find(group=>group.productCode===productCode).appliedDraft),draft(),`${previewMethod} forwards the draft`);
+    const group=preview.priceAdjustmentContext.groups.find(group=>group.productCode===productCode);
+    assert.deepEqual(plain(group.appliedDraft),draft(),`${previewMethod} forwards the draft`);
+    assert.equal(group.productName,`원본 상품명 ${productCode}`,`${previewMethod} retains the carrier product name`);
+    assert.ok(group.rows.every(row=>row.optionName===`이름-${row.optionCode}`),`${previewMethod} retains every carrier option name`);
     await h.value.SystemV3SellerExportBridge[runMethod]({...options,expectedPlanFingerprint:preview.planFingerprint});
     assert.equal(h.downloads.filter(output=>output.name.endsWith('.xlsx')).length,2,`${runMethod} generates both files from its matching preview`);
   }
