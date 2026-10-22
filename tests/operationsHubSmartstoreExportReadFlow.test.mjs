@@ -85,6 +85,103 @@ async function harness(){
 }
 async function cells(blob){const book=XLSX.read(await blob.arrayBuffer(),{type:'array'});return XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]],{header:1,raw:true,defval:''});}
 
+function dependencies(h,{price=32000,graphVersion='graph-1',forceRoot=false}={}){
+  vm.runInContext(read('price-dependency-export'),h.value);
+  const state={price,graphVersion,verified:0};
+  h.value.HubPriceDependencyService={
+    async prepare({source,skus,priceMode}){
+      const context={contract_version:1,version:state.graphVersion,requested_skus:skus,selected_skus:[...new Set([...skus,...(skus.includes('A')?['C']:[])])].sort(),reference_skus:skus.includes('A')?[]:['A'],edges:[{edge_id:1,parent_sku:'A',child_sku:'C'}]};
+      const resolution=h.value.HubPriceDependencyExport.resolve({context,selection:skus,parentPrices:new Map([['A',{final:state.price,proof:{mode:priceMode}}]])});
+      if(forceRoot)for(const row of resolution.rows)if(row.sku==='A'){row.dependency_root=true;row.final=state.price;}
+      return {source,context,resolution,outputSkus:resolution.outputSkus,proof:resolution.proof,summary:{enabled:true,rows:resolution.rows}};
+    },async verify(){state.verified++;}
+  };
+  return state;
+}
+
+test('dependency ON auto includes collection and copies parent final over child decision without modifying source or sibling cells',async()=>{
+ const h=await harness(),state=dependencies(h),options={mode:'target_all',priceMode:'sellpia_source',includePrice:true,includeStock:false,includeDependencies:true};
+ const preview=await h.value.prepare('smartstore',['A'],options),output=await cells(preview.outputs[0].blob),byCode=new Map(output.slice(1).map(row=>[String(row[0]),row]));
+ assert.equal(preview.scopeSummary.selectedSkuCount,2);
+ assert.deepEqual([Number(byCode.get('1001')[5]),byCode.get('1001')[17]],[32000,'0\n1500']);
+ assert.deepEqual([Number(byCode.get('1002')[5]),Number(byCode.get('1002')[17])],[32000,0],'collection gets exact parent final, replacing its 18,900 current decision only in this export');
+ const child=preview.plans.flatMap(plan=>plan.preview).find(row=>row.sku==='C');
+ assert.equal(child.dependency.parent_sku,'A');assert.equal(child.dependency.automatically_included,true);assert.equal(child.diff.price.after.final,32000);
+ for(const code of ['1001','1002'])for(const column of [0,1,3,12,15,16,18,93])assert.equal(byCode.get(code)[column],h.source.rows.find(row=>row[0]===code)[column]);
+ await h.value.prepare('smartstore',['A'],{...options,download:true,expectedPlanFingerprint:preview.planFingerprint});
+ assert.equal(state.verified,1);assert.equal(h.downloads.filter(entry=>entry.name.endsWith('.xlsx')).length,1);
+});
+
+test('dependency rules mode copies final scalar without applying collection formula again; child-only scope can read outside parent',async()=>{
+ const h=await harness();dependencies(h,{price:40000});
+ h.value.liveData.loadCurrentPriceDecisions=h.value.liveData.loadExportCurrentPriceDecisions;
+ h.value.liveData.loadCarrierMatrixTargets=async({skus})=>({rows:skus.map(sku=>({sku,active_price_rule:true,current_effective_price:{platformBase:60000,platformDiscount:0,platformOption:0,platformFinal:60000,platformTerms:[]}}))});
+ const result=await h.value.prepare('smartstore',['C'],{mode:'target_all',priceMode:'rules',includePrice:true,includeStock:false,includeDependencies:true});
+ const output=await cells(result.outputs[0].blob);
+ assert.equal(output.length,2);assert.equal(String(output[1][0]),'1002');assert.equal(Number(output[1][5])+Number(output[1][17]),40000);
+ assert.equal(result.scopeSummary.selectedSkuCount,1,'reference-only parent is not added to output');
+});
+
+test('dependency graph and parent price changes invalidate preview even when ordinary child decisions remain the same',async()=>{
+ const h=await harness(),state=dependencies(h),options={mode:'target_all',priceMode:'sellpia_source',includePrice:true,includeStock:false,includeDependencies:true};
+ const before=await h.value.prepare('smartstore',['A'],options);
+ state.graphVersion='graph-2';
+ await assert.rejects(h.value.prepare('smartstore',['A'],{...options,download:true,expectedPlanFingerprint:before.planFingerprint}),/미리보기/);
+ assert.equal(h.downloads.length,0);
+ state.graphVersion='graph-1';state.price=33000;
+ await assert.rejects(h.value.prepare('smartstore',['A'],{...options,download:true,expectedPlanFingerprint:before.planFingerprint}),/미리보기/);
+ assert.equal(h.downloads.length,0);
+});
+
+test('a parent with only an edited Matrix internal price is exported together with its collection at the same final',async()=>{
+ const h=await harness();dependencies(h,{price:34000,forceRoot:true});
+ h.value.liveData.loadCarrierMatrixTargets=async()=>({rows:[]});
+ h.value.liveData.loadCurrentPriceDecisions=h.value.liveData.loadExportCurrentPriceDecisions;
+ const result=await h.value.prepare('smartstore',['A'],{mode:'target_all',priceMode:'rules',includePrice:true,includeStock:false,includeDependencies:true});
+ const output=await cells(result.outputs[0].blob),byCode=new Map(output.slice(1).map(row=>[String(row[0]),row]));
+ assert.equal(Number(byCode.get('1001')[5])+Number(String(byCode.get('1001')[17]).split('\n')[0]),34000);
+ assert.equal(Number(byCode.get('1002')[5])+Number(byCode.get('1002')[17]),34000);
+ const sibling=String(byCode.get('1001')[17]).split('\n').map(Number)[1];
+ assert.equal(Number(byCode.get('1001')[5])+sibling,33500,'unselected individual sibling final stays unchanged');
+});
+
+test('changing the checkbox or closing while final dependency verification is pending prevents native downloads',async()=>{
+ const h=await harness();dependencies(h);
+ let current=true;const options={mode:'target_all',priceMode:'sellpia_source',includePrice:true,includeStock:false,includeDependencies:true,isCurrent:()=>current};
+ const preview=await h.value.prepare('smartstore',['A'],options);
+ h.value.HubPriceDependencyService.verify=async()=>{current=false;};
+ await assert.rejects(h.value.prepare('smartstore',['A'],{...options,download:true,expectedPlanFingerprint:preview.planFingerprint}),/설정이 변경|취소/);
+ assert.equal(h.downloads.length,0);
+});
+
+test('stock-only never reads dependencies even if a stale checkbox flag is passed',async()=>{
+ const h=await harness();h.value.HubPriceDependencyService={prepare(){throw Error('dependency lookup forbidden');}};
+ h.value.liveData.loadSellpiaStockSourcesForExport=async({skus})=>({snapshotId:'stock',bySku:new Map(skus.map(sku=>[sku,{sellpia_current_stock:5,sellpia_available_stock:5}]))});
+ await h.value.prepare('smartstore',['A'],{mode:'target_all',includePrice:false,includeStock:true,stockSource:'stock',includeDependencies:true});
+});
+
+test('collection registration price is composed independently from inherited finals and preserves both negative and positive option deltas in actual XLSX',async()=>{
+ const h=await harness();vm.runInContext(read('price-dependency-export'),h.value);
+ const context={contract_version:1,version:'wide-collection',requested_skus:['ROOT_A','ROOT_B'],selected_skus:['A','B','ROOT_A','ROOT_B'],reference_skus:[],edges:[{parent_sku:'ROOT_A',child_sku:'A'},{parent_sku:'ROOT_B',child_sku:'B'}]};
+ let prices=[5000,15000];
+ h.value.HubPriceDependencyService={async prepare(){
+  const resolution=h.value.HubPriceDependencyExport.resolve({context,parentPrices:new Map([['ROOT_A',prices[0]],['ROOT_B',prices[1]]])});
+  return {context,resolution,outputSkus:resolution.outputSkus,proof:resolution.proof,summary:{enabled:true,rows:resolution.rows}};
+ },async verify(){}};
+ const options={mode:'target_all',priceMode:'sellpia_source',includePrice:true,includeStock:false,includeDependencies:true};
+ const result=await h.value.prepare('smartstore',['ROOT_A','ROOT_B'],options),output=await cells(result.outputs[0].blob),row=output.find(row=>String(row[0])==='1001');
+ assert.equal(Number(row[5]),10000,'collection base differs from each individual final and is not copied from either parent');
+ assert.deepEqual(String(row[17]).split('\n').map(Number),[-5000,5000]);
+ assert.deepEqual(String(row[17]).split('\n').map(value=>Number(row[5])+Number(value)),prices);
+ assert.deepEqual(plain(result.plans[0].preview.map(row=>[row.sku,row.option_code,row.diff.price.after.final])),[['A','A',5000],['B','B',15000]],'options sharing a physical spreadsheet row retain distinct identities and preview prices');
+ for(const column of [0,1,3,12,15,16,18,93])assert.equal(row[column],h.source.rows[1][column]);
+ prices=[1000,100000];
+ const blocked=await h.value.prepare('smartstore',['ROOT_A','ROOT_B'],options);
+ assert.equal(blocked.changedItems.filter(item=>item.field_key==='sellpia_sale_price').length,0);
+ assert.ok(blocked.plans[0].preview.every(row=>row.status==='blocked'));
+ assert.match(blocked.plans[0].preview[0].reason,/옵션가 허용범위/);
+});
+
 test('actual app, data service, parser and XLSX serializer preserve price precedence, siblings, unchanged targets and untouched cells',async()=>{
   const h=await harness(),before=Buffer.from(await h.source.file.arrayBuffer());
   const preview=await h.run({download:false});

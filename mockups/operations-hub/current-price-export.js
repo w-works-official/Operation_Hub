@@ -224,9 +224,10 @@ function carrierPriceState(row,latestGeneration=null){
     source_base_price:original.base_price,source_discounted_base_price:original.discounted_base_price,
     source_option_price:original.option_price,source_final_price:original.final_price,source_discount_terms:original.discount_terms||[]};
    const changedFields=[],rowItems=[];let priceState=includePrice&&exportScopeSelected?carrierPriceState(row):{code:'not_selected',label:'가격 미선택 · 판매처 원본 유지',detail:'선택 범위 밖의 매핑은 판매처 원본을 유지합니다.',safe:true,usesOriginal:true};
-   const stockTarget=includeStock&&exportScopeSelected?matrixStockTarget(matches[0],stockSource):null;
-   if(includeStock&&exportScopeSelected&&original.stock!==null&&original.stock!==undefined&&original.stock!==''&&stockTarget===null){exclude(original,'재고 target 없음 → 이 행 원본 유지',{warning:true,sku:row.sku,priceState,exportScopeSelected});continue;}
-   if(includeStock&&original.stock!==null&&original.stock!==undefined&&original.stock!==''&&stockTarget!==null&&Number(original.stock)!==stockTarget){
+   const stockSelected=exportScopeSelected&&matches[0].stock_scope_selected!==false;
+   const stockTarget=includeStock&&stockSelected?matrixStockTarget(matches[0],stockSource):null;
+   if(includeStock&&stockSelected&&original.stock!==null&&original.stock!==undefined&&original.stock!==''&&stockTarget===null){exclude(original,'재고 target 없음 → 이 행 원본 유지',{warning:true,sku:row.sku,priceState,exportScopeSelected});preview[preview.length-1].stock_incomplete=true;continue;}
+   if(includeStock&&stockSelected&&original.stock!==null&&original.stock!==undefined&&original.stock!==''&&stockTarget!==null&&Number(original.stock)!==stockTarget){
     rowItems.push({export_item_id:nextId--,sellpia_sku_code:row.sku,source_channel:source,field_key:'sellpia_current_stock',seller_product_code:row.product_code,seller_option_code:row.option_code||'',source_file_name:row.source_file_name,source_row_no:Number(original.source_row_no),expected_source_value:original.stock,before_value:original.stock,after_value:stockTarget,matrix_visible_stock:true,target_component_skus:[row.sku]});changedFields.push('stock');
    }
    const target=includePrice&&exportScopeSelected&&priceState.safe?matrixPriceTarget(row):null;
@@ -373,7 +374,7 @@ function carrierPriceState(row,latestGeneration=null){
  // Opt-in, price-only plan. The selected SKU uses the latest uploaded Sellpia
  // price; every other option in the same seller product keeps its carrier final.
  // The serializer remains the authority for workbook identity/cell validation.
-function prepareSellpiaSourcePricePlan(source,fileName,carrierRows,mappingRows,sourcePrices,selectedSkus,externalBlockedProducts=new Map(),currentDecisions=new Map()){
+function prepareSellpiaSourcePricePlan(source,fileName,carrierRows,mappingRows,sourcePrices,selectedSkus,externalBlockedProducts=new Map(),currentDecisions=new Map(),options={}){
   if(!['smartstore','makeshop'].includes(source))throw Error('셀피아 판매가 기준은 스마트스토어·메이크샵 원본만 지원합니다.');
   if(!g.SystemV3DiscountPriceMath?.grossBaseForTarget)throw Error('가격 역산 모듈이 없습니다.');
   const selected=new Set(selectedSkus||[]),identity=row=>JSON.stringify([String(row.product_code||'').trim(),String(row.option_code||'').trim()]);
@@ -419,15 +420,22 @@ function prepareSellpiaSourcePricePlan(source,fileName,carrierRows,mappingRows,s
     }
     if(!Number.isSafeInteger(Number(row.final_price))||row.final_price===null||Number(row.final_price)<=0||!Number.isSafeInteger(Number(row.option_price))||sharedDiscounted+Number(row.option_price)!==Number(row.final_price))throw Error(`${product}/${row.option_code}: 판매처 원본 최종가를 신뢰할 수 없습니다.`);
     const decision=sku?currentDecisions.get(decisionIdentity({source_channel:source,sku,seller_product_code:product,seller_option_code:row.option_code||''}))||currentDecisions.get(sku):null;
-    const target=decision?decision.price.final:sku?sourcePrices.get(sku):Number(row.final_price);
+    const exactTarget=options.finalByIdentity?.get(identity(row));
+    const target=decision?decision.price.final:sku?(exactTarget??sourcePrices.get(sku)):Number(row.final_price);
     if(!Number.isSafeInteger(target)||target<=0)throw Error(`${sku||product}: 최신 셀피아 원본 판매가가 없습니다.`);
     desired.push({row,sku,target,decision});
    }
    const decided=desired.filter(entry=>entry.decision),sharedDecision=decided[0]?.decision?decisionTuple(decided[0].decision):null;
    if(decided.some(entry=>String(entry.decision.seller_product_code||'').trim()!==product||String(entry.decision.seller_option_code??'').trim()!==String(entry.row.option_code||'').trim()))throw Error(`${product}: 현재 가격 결정 판매처 identity가 파일 행과 다릅니다.`);
    if(sharedDecision&&decided.some(entry=>entry.decision.price.base!==sharedDecision.base||entry.decision.price.discounted!==sharedDecision.discounted||termsKey(entry.decision.price.terms)!==termsKey(sharedDecision.terms)))throw Error(`${product}: 현재 가격 결정 옵션들의 공통 등록가·할인조건이 서로 다릅니다.`);
-   const anchor=sharedDecision?sharedDecision.discounted:Math.min(...desired.map(entry=>entry.target));
-   const reversed=sharedDecision?{exact:true,basePrice:sharedDecision.base,discountedPrice:sharedDecision.discounted}:g.SystemV3DiscountPriceMath.grossBaseForTarget(anchor,terms);
+   let anchor=sharedDecision?sharedDecision.discounted:Math.min(...desired.map(entry=>entry.target));
+   let reversed=sharedDecision?{exact:true,basePrice:sharedDecision.base,discountedPrice:sharedDecision.discounted}:g.SystemV3DiscountPriceMath.grossBaseForTarget(anchor,terms);
+   if(options.preserveProductBase&&source==='smartstore'&&!sharedDecision){
+    const finals=desired.map(entry=>entry.target),low=Math.min(...finals),high=Math.max(...finals),middle=Math.floor((low+high)/2);
+    const candidates=[{exact:true,basePrice:sharedBase,discountedPrice:sharedDiscounted},g.SystemV3DiscountPriceMath.grossBaseForTarget(middle,terms),reversed];
+    const feasible=candidates.find(candidate=>candidate.exact&&Number.isSafeInteger(candidate.basePrice)&&Number.isSafeInteger(candidate.discountedPrice)&&g.SystemV3DiscountPriceMath.discountedBase(candidate.basePrice,terms)===candidate.discountedPrice&&finals.every(final=>Math.abs(final-candidate.discountedPrice)<=Math.floor(candidate.basePrice*0.5/10)*10));
+    if(feasible){reversed=feasible;anchor=feasible.discountedPrice;}
+   }
    let targetBase=reversed.basePrice,targetTerms=sharedDecision?sharedDecision.terms:terms,optionLimitAdjustment=null;
    if(!reversed.exact||!Number.isSafeInteger(targetBase)||reversed.discountedPrice!==anchor||g.SystemV3DiscountPriceMath.discountedBase(targetBase,targetTerms)!==anchor)throw Error(`${product}: 기준가와 할인조건이 현재 가격 결정 또는 기존 할인 규칙과 일치하지 않습니다. ${reversed.reason||''}`);
    if(source==='smartstore'){
@@ -464,6 +472,46 @@ function prepareSellpiaSourcePricePlan(source,fileName,carrierRows,mappingRows,s
   }
   return {kind:'TransformationPlan',source,source_type:'sellpia_source_overlay',file_name:fileName,version_token:planVersionToken({source,fileName,preview,operations}),operations,items:operations,excludedItems,preview,summary:{total:preview.length,selected:preview.filter(row=>row.sku&&row.status==='ready').length,preserved:preview.filter(row=>row.preserve_unmapped&&row.status==='ready').length,changed:preview.filter(row=>row.status==='ready'&&row.changed).length,unchanged:preview.filter(row=>row.status==='ready'&&!row.changed).length,blocked:preview.filter(row=>row.status==='blocked').length},canGenerate:true,safety:{can_generate_xlsx:true,price_complete:true,requires_revalidation:true,reason:'문제 상품은 원본 유지·빨간 표시하고, 안전한 상품만 셀피아 판매가로 변경합니다.'}};
  }
+ function applyDependencyPrices(source,fileName,carrierRows,snapshotRows,ordinary,resolution){
+  const identity=row=>JSON.stringify([String(row.product_code),String(row.option_code||'')]);
+  const inherited=new Map(resolution.rows.filter(row=>row.inherited||row.dependency_root||row.error).map(row=>[row.sku,row]));
+  const products=new Set(snapshotRows.filter(row=>row.export_scope_selected!==false&&inherited.has(row.sku)).map(row=>String(row.product_code)));
+  if(!products.size)return ordinary;
+  const originals=new Map(carrierRows.map(row=>[JSON.stringify([String(row.product_code),String(row.option_code||'')]),row]));
+  const ordinaryRows=new Map(ordinary.preview.map(row=>[identity(row),row]));
+  const selected=new Set(),prices=new Map(),decisions=new Map(),blocked=new Map(),finalByIdentity=new Map();
+  for(const row of snapshotRows){
+   if(!products.has(String(row.product_code))||row.export_scope_selected===false)continue;
+   const sku=String(row.sku),dependency=inherited.get(sku),key=JSON.stringify([String(row.product_code),String(row.option_code||'')]),original=originals.get(key);
+   selected.add(sku);
+   if(ordinaryRows.get(key)?.stock_incomplete){blocked.set(String(row.product_code),`${sku}: 재고 target 없음 → 이 행 원본 유지`);continue;}
+   if(dependency){
+    if(dependency.error)blocked.set(String(row.product_code),`${sku}: ${dependency.error}`);
+    else{prices.set(sku,dependency.final);finalByIdentity.set(key,dependency.final);}
+   }else{
+    const target=matrixPriceTarget(row),planned=ordinaryRows.get(key);
+    if(target?.invalid||planned?.status==='blocked'||planned?.price_state?.safe===false)blocked.set(String(row.product_code),`${sku}: ${target?.reason||planned?.reason||'가격 계산 실패'}`);
+    else{const final=planned?.diff?.price?.after?.final??target?.final??original?.final_price;prices.set(sku,final);finalByIdentity.set(key,final);}
+    if(row.current_price_decision)decisions.set(decisionIdentity(row.current_price_decision),row.current_price_decision);
+   }
+  }
+  const overlay=prepareSellpiaSourcePricePlan(source,fileName,carrierRows.filter(row=>products.has(String(row.product_code))),snapshotRows,prices,selected,blocked,decisions,{preserveProductBase:true,finalByIdentity});
+  const byRow=new Map(overlay.preview.map(row=>[identity(row),row]));
+  const items=ordinary.operations.filter(item=>item.field_key!=='sellpia_sale_price'||!products.has(String(item.seller_product_code)));
+  items.push(...overlay.operations.map(item=>({...item,pricing_input_mode:'dependency',dependency:inherited.get(item.sellpia_sku_code)||null})));
+  const excludedItems=ordinary.excludedItems.filter(entry=>!products.has(String(entry.item?.seller_product_code))||!['sellpia_sale_price','carrier_row'].includes(entry.item?.field_key));
+  excludedItems.push(...overlay.excludedItems);
+  const preview=ordinary.preview.map(row=>{
+   const next=byRow.get(identity(row));if(!next)return row;
+   const stockChanged=Boolean(row.diff?.stock?.changed),changedFields=[...(stockChanged?['stock']:[]),...(next.changed?['price']:[])];
+   const dependency=inherited.get(next.sku)||null;
+   return {...row,...next,diff:{...row.diff,...next.diff},dependency,price_source:dependency?'dependency':next.price_source,
+    price_state:dependency&&next.status==='ready'?{code:'dependency',label:dependency.dependency_root?'상위 SKU 현재 기준가격 적용':`상위 ${dependency.parent_sku} 가격 적용`,safe:true}:next.price_state,
+    changed:stockChanged||next.changed,changed_fields:changedFields,disposition:stockChanged||next.changed?'change':next.status==='ready'?'unchanged':next.status};
+  });
+  let id=-1;for(const item of items)item.export_item_id=id--;for(const entry of excludedItems){entry.export_item_id=id--;entry.item={...entry.item,export_item_id:entry.export_item_id};}
+  return {...ordinary,preview,items,operations:items,excludedItems,summary:{...ordinary.summary,total:preview.length,changed:preview.filter(row=>row.changed).length,blocked:preview.filter(row=>row.status==='blocked').length,warned:preview.filter(row=>row.status==='warn_keep_original').length},canGenerate:preview.length>0,safety:{...ordinary.safety,can_generate_xlsx:preview.length>0}};
+ }
  async function buildArchive(files,items,onProgress,excludedItems=[]){
   let remaining=[...items],excluded=[...excludedItems];
   while(true){
@@ -487,5 +535,5 @@ function prepareSellpiaSourcePricePlan(source,fileName,carrierRows,mappingRows,s
  }
  const decisionResolver=Object.freeze({normalize:normalizeCurrentPriceDecisions,proof:currentPriceDecisionProof,assertProof:assertCurrentPriceDecisionProof,attach:attachCurrentPriceDecisions,tuple:decisionTuple,validateGroups:validateCurrentPriceDecisionGroups,decisionForMapping});
  g.HubCurrentPriceDecisionResolver=decisionResolver;
- g.HubCurrentPriceExport={refreshItems,buildArchive,matrixPriceTarget,matrixStockTarget,prepareCarrierItems,prepareSellpiaSourcePricePlan,summarizeSourcePricePreview,validSourceLocation,carrierPriceState,planVersionToken,normalizeCurrentPriceDecisions,currentPriceDecisionProof,assertCurrentPriceDecisionProof,attachCurrentPriceDecisions,decisionTuple,validateCurrentPriceDecisionGroups,decisionForMapping};
+ g.HubCurrentPriceExport={refreshItems,buildArchive,matrixPriceTarget,matrixStockTarget,prepareCarrierItems,prepareSellpiaSourcePricePlan,applyDependencyPrices,summarizeSourcePricePreview,validSourceLocation,carrierPriceState,planVersionToken,normalizeCurrentPriceDecisions,currentPriceDecisionProof,assertCurrentPriceDecisionProof,attachCurrentPriceDecisions,decisionTuple,validateCurrentPriceDecisionGroups,decisionForMapping};
 })(typeof window==='undefined'?globalThis:window);

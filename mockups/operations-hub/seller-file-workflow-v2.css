@@ -33,6 +33,11 @@
 .seller-choice-options label:has(input:focus-visible){outline:2px solid #2563eb;outline-offset:2px}
 .seller-choice-field:disabled .seller-choice-options label{opacity:.55;cursor:default}
 .seller-card-scope .seller-setting-help{color:#68778c;font-weight:400;line-height:1.5}
+.seller-card-scope .seller-dependency-toggle,.seller-dependency-toggle{display:flex;align-items:flex-start;gap:8px;min-width:0;padding:10px;border:1px solid #d5dfec;border-radius:8px;background:#f8fafc;color:#334155;font-size:11px;font-weight:800;line-height:1.5;cursor:pointer}
+.seller-dependency-toggle input[type=checkbox]{flex:none;width:15px;height:15px;margin:2px 0 0;accent-color:#2563eb}
+.seller-dependency-toggle span{min-width:0;overflow-wrap:anywhere}.seller-card-scope .seller-dependency-toggle small,.seller-dependency-toggle small{display:block;margin-top:3px;color:#68778c;font-size:10px;font-weight:400;line-height:1.5}
+.seller-dependency-toggle:has(input:checked){border-color:#6797ef;background:#edf4ff}.seller-dependency-toggle:has(input:disabled){opacity:.55;cursor:default}.seller-dependency-toggle:has(input:focus-visible){outline:2px solid #2563eb;outline-offset:2px}
+.seller-dependency-summary{margin:10px;padding:10px;border:1px solid #cddcf0;border-radius:8px;background:#f7faff;color:#334155;font-size:11px;line-height:1.5;overflow-wrap:anywhere}.seller-dependency-summary>b{font-size:12px}.seller-dependency-summary p{margin:5px 0;color:#52647a;font-size:11px}.seller-dependency-summary summary{cursor:pointer;font-weight:800}.seller-dependency-summary small{display:block;color:#68778c;font-size:10px;white-space:normal}.seller-dependency-table-wrap{max-height:240px;overflow:auto;margin-top:7px}.seller-dependency-summary table{width:100%;border-collapse:collapse;text-align:left}.seller-dependency-summary th,.seller-dependency-summary td{padding:7px;border-bottom:1px solid #dce4ef;vertical-align:top;min-width:100px}.seller-dependency-summary th{position:sticky;top:0;background:#edf4fb}
 .seller-card-scope [data-seller-scope-summary]{padding:7px 8px;border-radius:6px;background:#f2f6fc;line-height:1.5}
 .seller-output-mode-label{display:grid;gap:5px;font-size:10px;font-weight:800;color:#52647a}
 .seller-output-mode-label select{width:100%;box-sizing:border-box;border:1px solid #cbd7e7;border-radius:7px;background:#fff;padding:7px;font:inherit;color:#1e293b}

@@ -23,9 +23,14 @@ test('standard field selection is the actual exporter contract',()=>{
 });
 
 test('Ably price-only suppresses stock projection while stock-only suppresses price projection',()=>{
+ const ablyPreview=workflow.slice(workflow.indexOf(' async function preview(role){'),workflow.indexOf('\n function previewRowsForFilter('));
  assert.match(workflow,/const priceOnly=role==='playauto_option'&&fieldMode==='price_only'/);
- assert.match(workflow,/if\(!priceOnly\)\{[\s\S]*?matrixStockTarget/);
- assert.match(workflow,/if\(stockOnly\)\{[\s\S]*?target_stock/);
+ assert.match(ablyPreview,/const stockInScope=inScope&&\(!selectedScope\|\|selectedScope\.has\(sku\)\)/,'automatically included children are outside the original stock scope');
+ const stockReads=[...ablyPreview.matchAll(/matrixStockTarget\(row,stockSource\)/g)];
+ const guardedStockReads=[...ablyPreview.matchAll(/if\(!priceOnly&&stockInScope\)\{\s*const \w+=global\.HubCurrentPriceExport\?\.matrixStockTarget\(row,stockSource\)/g)];
+ assert.equal(stockReads.length,2,'ordinary and inherited option-price paths both retain stock projection');
+ assert.equal(guardedStockReads.length,stockReads.length,'every stock projection requires both a stock-enabled field mode and the original selected scope');
+ assert.match(ablyPreview,/if\(stockOnly\)\{\s*return A\(\)\.prepareStockOnlyRow\(out,row,\{stockSource,inScope\}\)/);
  assert.match(workflow,/p\.priceOnly\?'가격-only/);
 });
 

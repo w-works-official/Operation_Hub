@@ -4886,6 +4886,15 @@
     }).map(assignment=>JSON.stringify([assignment.sku,assignment.scope])));
   }
 
+  async function loadExportSkuDependencies({skus=null,expectedVersion=null,onQuery=null}={}) {
+    const codes=skus===null?null:[...new Set(skus.map(cleanText).filter(Boolean))].sort();
+    const {data}=await carrierRead('hub_export_sku_dependencies_read_v1',codes?.length||0,db.rpc('hub_export_sku_dependencies_read_v1',{
+      p_session_token:requireOperationsHubSessionToken(),p_skus:codes,p_expected_version:expectedVersion
+    }),onQuery);
+    if(data?.contract_version!==1||!data.version||!Array.isArray(data.selected_skus)||!Array.isArray(data.reference_skus)||!Array.isArray(data.edges))throw Error('가격 종속관계 조회 응답을 확인할 수 없습니다.');
+    return data;
+  }
+
   async function loadCarrierMatrixTargets({source,skus=[],onQuery=null}={}) {
     const safeSource=cleanText(source);
     if(!['smartstore','makeshop','ably'].includes(safeSource))throw new Error('지원하지 않는 판매처입니다.');
@@ -5155,6 +5164,7 @@
     loadMatrixStocksForExport,
     loadMatrixExportSnapshot,
     loadCarrierMatrixTargets,
+    loadExportSkuDependencies,
     loadCurrentPriceDecisions,
     loadExportCurrentPriceDecisions,
     applyPriceDecision,

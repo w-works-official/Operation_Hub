@@ -82,7 +82,7 @@ test('Smartstore and Makeshop share paged TransformationPlan preview and seriali
   assert.match(js,/standardProgress\(source,5,'공식 수정파일 변환 시작'/);
   assert.match(js,/standardProgress\(source,100,'공식 수정파일 변환 완료'/);
   assert.match(js,/standardProgress\(source,100,'공식 수정파일 변환 중단'/);
-  assert.match(js,/bridge\.runCarrier\(\{source,file,plan\}\)/);
+  assert.match(js,/bridge\.runCarrier\(\{source,file,plan,includeDependencies:false,isCurrent:\(\)=>isStandardRequestCurrent\(source,request\)\}\)/);
   assert.match(app,/transformSellerFile\(plan\.file,plan\.operations\|\|plan\.items/);
   assert.match(app,/loadCarrierSellerMappings\(\{source,identities:parsed\.normalizedRows,onQuery\}\)/);
   assert.match(app,/loadCarrierMatrixTargets\(\{source,skus:matchedSkus,onQuery\}\)/);
@@ -139,12 +139,20 @@ test('carrier generate click always reports a blocked reason or runs the connect
   const file={name:'smartstore.xlsx'};
   const blockedPlan={kind:'TransformationPlan',canGenerate:false,safety:{reason:'latest generation 미반영'}};
   const state={standardCarrierFiles:new Map([['smartstore',file]]),standardCarrierPlans:new Map([['smartstore',blockedPlan]])};
-  let serializerCalls=0;
-  const global={SystemV3SellerExportBridge:{async runCarrier(){serializerCalls++;return {title:'완료',progressDetail:'반영 1건'};}}};
+  let serializerCalls=0,includeDependencies=false;
+  const global={SystemV3SellerExportBridge:{async runCarrier(options){
+    assert.equal(options.includeDependencies,false,'legacy carrier conversion must retain its existing prices');
+    assert.equal(typeof options.isCurrent,'function');assert.equal(options.isCurrent(),true);
+    serializerCalls++;return {title:'완료',progressDetail:'반영 1건'};
+  }}};
   const standardResult=(source,text,kind)=>messages.push({source,text,kind});
   const setStatus=(text,kind)=>messages.push({text,kind});
   const standardProgress=(...args)=>progress.push(args);
-  const runStandardCarrier=Function('global','state','document','standardResult','setStatus','standardProgress',`${functionSource}; return runStandardCarrier;`)(global,state,document,standardResult,setStatus,standardProgress);
+  const standardRequests=new Map(),standardSelection=()=>({includeDependencies});
+  const beginStandardRequest=source=>{const request={source};standardRequests.set(source,request);return request;};
+  const isStandardRequestCurrent=(source,request)=>standardRequests.get(source)===request;
+  const finishStandardRequest=(source,request)=>{if(isStandardRequestCurrent(source,request))standardRequests.delete(source);};
+  const runStandardCarrier=Function('global','state','document','standardResult','setStatus','standardProgress','standardSelection','standardRequests','beginStandardRequest','isStandardRequestCurrent','finishStandardRequest',`${functionSource}; return runStandardCarrier;`)(global,state,document,standardResult,setStatus,standardProgress,standardSelection,standardRequests,beginStandardRequest,isStandardRequestCurrent,finishStandardRequest);
 
   await runStandardCarrier('smartstore');
   assert.equal(serializerCalls,0);
@@ -152,6 +160,12 @@ test('carrier generate click always reports a blocked reason or runs the connect
 
   state.standardCarrierPlans.set('smartstore',{kind:'TransformationPlan',canGenerate:true,safety:{can_generate_xlsx:true}});
   messages.length=0;
+  includeDependencies=true;
+  await runStandardCarrier('smartstore');
+  assert.equal(serializerCalls,0,'dependency exports must use the ordinary preview/generation safety path');
+  assert.ok(messages.some(message=>String(message.text).includes('위의 일반 미리보기와 XLSX 생성')));
+  assert.equal(progress.length,0);
+  includeDependencies=false;messages.length=0;
   await runStandardCarrier('smartstore');
   assert.equal(serializerCalls,1,'safe click reaches the existing serializer bridge');
   assert.deepEqual(progress.map(entry=>[entry[1],entry[2]]),[[5,'공식 수정파일 변환 시작'],[100,'공식 수정파일 변환 완료']]);

@@ -76,5 +76,8 @@
   "operationsHubPriceDecisionExportReadSql.test.mjs",
   "operationsHubSmartstoreExportReadFlow.test.mjs",
   "operationsHubSellerUnmatchedRead.mock.test.mjs",
-  "operationsHubSellerUnmatchedSql.test.mjs"
+  "operationsHubSellerUnmatchedSql.test.mjs",
+  "operationsHubPriceDependencyExport.test.mjs",
+  "operationsHubPriceDependencyService.test.mjs",
+  "operationsHubExportSkuDependenciesSql.test.mjs"
 ]
