@@ -20,7 +20,7 @@ async function fixture(t){
  t.after(async()=>{assert.deepEqual(errors,[]);await page.close();});
  await page.setContent('<!doctype html><main><section id="jobs" class="page"><div class="page-head"><h2>내보내기</h2></div></section></main>');
  await page.addStyleTag({content:source('seller-file-workflow-v2.css')});
- for(const name of ['discount-price-math.js','sellpia-inventory-count.js','current-price-export.js','ably-price-projection.js'])await page.addScriptTag({content:source(name)});
+ for(const name of ['manual-sku-scope.js','discount-price-math.js','sellpia-inventory-count.js','current-price-export.js','ably-price-projection.js'])await page.addScriptTag({content:source(name)});
  await page.evaluate(()=>{
   window.calls=[];window.builds=[];window.downloads=[];window.dependencyCalls=[];window.verifyCalls=0;window.parentFinal=6000;
   if(!crypto.randomUUID)Object.defineProperty(crypto,'randomUUID',{value:()=>`fixture-${Date.now()}`});
@@ -42,6 +42,7 @@ async function fixture(t){
   };
   const currentDecisions=({skus})=>({groups:[],rows:skus.includes('C1')?[{sku:'C1',source_channel:'ably',seller_product_code:'CHILD',seller_option_code:'C1',price:{base:50000,discounted:50000,option:0,final:50000,terms:[]},event_id:'child-current',revision:1,decision_source:'matrix_manual',effective_at:'2026-10-22T00:00:00Z',mapping_valid:true}]:[]});
   window.SystemV3Data={
+   resolveCodeEntries:async entries=>entries.map(entry=>({input_row:entry.row_no,source_channel:entry.source,input_code:entry.code,match_scope:'sku',match_status:'matched',sellpia_sku_code:entry.code,product_code:null,option_code:null})),
    loadAuxiliarySellerFiles:async()=>({rows:[]}),loadLatestSellerOriginalStatus:async()=>[],loadTagCatalog:async()=>({rows:[]}),
    loadPlayautoSellpiaCatalog:async()=>[],loadCarrierSellerMappings:async()=>({rows:[]}),
    loadCarrierMatrixTargets:async args=>{calls.push({name:'ably-targets',args});return {rows:args.skus.map(sku=>window.rootInternalOnly&&sku==='P'?{sku,active_price_rule:false,current_effective_price:null}:{sku,active_price_rule:true,current_effective_price:{platformBase:sku==='P'?6000:99000,platformDiscount:0,platformOption:0,platformFinal:sku==='P'?6000:99000,platformTerms:[]}})};},

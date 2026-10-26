@@ -85,5 +85,8 @@
   "operationsHubProductPriceAdjustment.test.mjs",
   "operationsHubProductPriceAdjustmentFlow.test.mjs",
   "operationsHubProductPriceSettingsSql.test.mjs",
-  "operationsHubProductPriceSettingsService.test.mjs"
+  "operationsHubProductPriceSettingsService.test.mjs",
+  "operationsHubManualSkuScope.test.mjs",
+  "operationsHubManualSkuScopeData.test.mjs",
+  "operationsHubManualSkuExportFlow.test.mjs"
 ]

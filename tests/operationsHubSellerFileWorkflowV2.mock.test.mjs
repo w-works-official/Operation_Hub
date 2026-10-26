@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import '../mockups/operations-hub/manual-sku-scope.js';
 
 const js=fs.readFileSync('mockups/operations-hub/seller-file-workflow-v2.js','utf8');
 const css=fs.readFileSync('mockups/operations-hub/seller-file-workflow-v2.css','utf8');
@@ -111,24 +112,26 @@ test('each seller card owns an independent authoritative tag scope',async()=>{
     makeshop:{mode:'manual',manual:'M-1 M-2 M-1'},
     ably:{mode:'all'}
   };
-  const calls=[];
+  const calls=[],resolved=[];
   const document={querySelector(selector){
     const match=selector.match(/data-seller-scope-(mode|manual|tag)="([^"]+)"/);
     if(!match)return null;
     const [,kind,source]=match,value=controls[source]?.[kind];
     return value===undefined?null:{value};
   }};
-  const D=()=>({loadTagMembers:async({tagId,page,pageSize})=>{
+  const D=()=>({resolveCodeEntries:async entries=>{resolved.push(entries);return entries.map(entry=>({input_row:entry.row_no,source_channel:entry.source,input_code:entry.code,match_scope:'sku',match_status:'matched',sellpia_sku_code:entry.code,product_code:null,option_code:null}));},loadTagMembers:async({tagId,page,pageSize})=>{
     calls.push({tagId,page,pageSize});
     const rows=Array.from({length:1200},(_,index)=>({sellpia_sku_code:`S-${index+1}`}));
     return {count:1200,rows:rows.slice((page-1)*pageSize,page*pageSize)};
   }});
   const n=value=>String(value);
-  const scopeSkus=Function('document','D','n',`${functionSource}; return scopeSkus;`)(document,D,n);
+  const reports=new Map(),generations=new Map();
+  const scopeSkus=Function('document','D','n','global','manualScopeReports','manualScopeGenerations','updateSellerScopeSummary',`${functionSource}; return scopeSkus;`)(document,D,n,globalThis,reports,generations,()=>{});
 
   assert.equal((await scopeSkus('smartstore')).size,1200);
   assert.deepEqual(calls.map(call=>call.page),[1,2]);
   assert.deepEqual([...await scopeSkus('makeshop')],['M-1','M-2']);
+  assert.deepEqual(resolved,[[{row_no:1,source:'sellpia',code:'M-1'},{row_no:2,source:'sellpia',code:'M-2'}]],'manual scopes resolve deduplicated Sellpia inputs through the real helper contract');
   assert.equal(await scopeSkus('ably'),null);
 });
 

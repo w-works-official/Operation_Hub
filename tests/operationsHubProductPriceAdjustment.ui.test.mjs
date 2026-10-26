@@ -19,7 +19,7 @@ async function fixture(t){
  t.after(async()=>{assert.deepEqual(errors,[]);await page.close();});
  await page.setContent('<!doctype html><style>body{margin:0;font:14px system-ui}.btn{padding:8px}</style><main><section id="jobs" class="page"><div class="page-head"><h2>판매처 내보내기</h2></div></section></main>');
  await page.addStyleTag({content:source('seller-file-workflow-v2.css')});
- for(const name of ['discount-price-math.js','product-price-adjustment.js'])await page.addScriptTag({content:source(name)});
+ for(const name of ['manual-sku-scope.js','discount-price-math.js','product-price-adjustment.js'])await page.addScriptTag({content:source(name)});
  await page.evaluate(()=>{
   window.calls=[];window.downloads=[];window.pending=[];window.pendingSaves=[];window.saveWrites=[];window.savedRecords=new Map();window.savedRevision=0;window.upstreamVersion='upstream-v1';
   const summary={selectedSkuCount:218,matchedOptionCount:218,changedOptionCount:218,unchangedOptionCount:0,unmatchedSkuCount:0,blockedCount:0,preservedCount:0,outputRowCount:218};
@@ -50,7 +50,7 @@ async function fixture(t){
    if(window.postSavePreviewFailed)return {saved:true,previewFailed:true,savedAdjustments:[...savedRecords],message:'저장 후 최신 원본 재검증 실패'};
    return {saved:true,...makeResult(args)};
   };
-  window.SystemV3Data={loadAuxiliarySellerFiles:async()=>({rows:[]}),loadLatestSellerOriginalStatus:async()=>[],loadTagCatalog:async()=>({rows:[]})};
+  window.SystemV3Data={resolveCodeEntries:async entries=>entries.map(entry=>({input_row:entry.row_no,source_channel:entry.source,input_code:entry.code,match_scope:'sku',match_status:'matched',sellpia_sku_code:entry.code,product_code:null,option_code:null})),loadAuxiliarySellerFiles:async()=>({rows:[]}),loadLatestSellerOriginalStatus:async()=>[],loadTagCatalog:async()=>({rows:[]})};
  });
  await page.addScriptTag({content:source('seller-file-workflow-v2.js')});await page.waitForSelector('#export-workflow-v2');return page;
 }

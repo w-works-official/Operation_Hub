@@ -1970,11 +1970,41 @@
     const chunkSize = 500;
     const resolved = [];
     for (let offset = 0; offset < normalized.length; offset += chunkSize) {
-      const {data, error} = await db.rpc('resolve_operations_hub_code_entries', {
-        p_entries:normalized.slice(offset, offset + chunkSize)
-      });
-      if (error) throw error;
-      resolved.push(...(data || []));
+      const chunk = normalized.slice(offset, offset + chunkSize), pageSize = 1000;
+      const inputKey = row => JSON.stringify([row.row_no, row.source.toLowerCase(), row.code]);
+      const requested = new Map(), seenInputs = new Map(), seenRows = new Map();
+      for (const entry of chunk) requested.set(inputKey(entry), (requested.get(inputKey(entry)) || 0) + 1);
+      let total = null, from = 0;
+      while (true) {
+        // The SQL function orders by input ordinality, then complete SKU. Keep
+        // that order: sorting by returned input_row would reorder legacy lists.
+        const {data, error, count} = await db.rpc('resolve_operations_hub_code_entries', {
+          p_entries:chunk
+        }, {count:'exact'}).range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!Array.isArray(data) || !Number.isSafeInteger(count) || count < 0
+            || total !== null && total !== count || data.length > pageSize
+            || data.length > count - from || !data.length && from < count) throw new Error('코드 조회 결과가 누락되었거나 조회 중 변경되었습니다. 다시 조회해주세요.');
+        total = count;
+        for (const row of data) {
+          if (!row || typeof row !== 'object' || Array.isArray(row)
+              || !Number.isSafeInteger(row.input_row) || typeof row.source_channel !== 'string'
+              || typeof row.input_code !== 'string') throw new Error('코드 조회 응답 형식이 올바르지 않습니다.');
+          const key = JSON.stringify([row.input_row, row.source_channel, row.input_code]);
+          if (!requested.has(key)) throw new Error('코드 조회 응답의 입력 코드가 다릅니다. 다시 조회해주세요.');
+          const state = JSON.stringify([row.match_scope, row.match_status]);
+          if (seenInputs.has(key) && seenInputs.get(key) !== state) throw new Error('코드 조회 중 해석 범위가 변경되었습니다. 다시 조회해주세요.');
+          seenInputs.set(key, state);
+          const identity = JSON.stringify([key, row.match_scope, row.match_status, row.sellpia_sku_code, row.product_code, row.option_code]);
+          const occurrences = (seenRows.get(identity) || 0) + 1;
+          if (occurrences > requested.get(key)) throw new Error('코드 조회 페이지가 반복되거나 결과가 중복되었습니다. 다시 조회해주세요.');
+          seenRows.set(identity, occurrences);
+        }
+        resolved.push(...data);
+        from += data.length;
+        if (from === total) break;
+      }
+      if (seenInputs.size !== requested.size) throw new Error('일부 입력 코드의 조회 결과가 누락되었습니다. 다시 조회해주세요.');
     }
     return resolved;
   }

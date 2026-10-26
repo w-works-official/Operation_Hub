@@ -10,19 +10,23 @@ try{
  await page.setContent('<div id="jobs"><div class="page-head"></div><section class="queue-batch-workspace">history</section></div>');
  await page.evaluate(()=>{
   window.qa={recalculations:[]};
-  window.SystemV3Data={loadAuxiliarySellerFiles:async()=>({rows:[]}),loadLatestSellerOriginalStatus:async()=>[]};
+  window.SystemV3Data={resolveCodeEntries:async entries=>entries.map(entry=>({input_row:entry.row_no,source_channel:entry.source,input_code:entry.code,match_scope:'sku',match_status:'matched',sellpia_sku_code:entry.code,product_code:null,option_code:null})),loadAuxiliarySellerFiles:async()=>({rows:[]}),loadLatestSellerOriginalStatus:async()=>[]};
   window.SystemV3SellerExportBridge={previewCarrier:async()=>{throw Error('RPC scoped read · statement timeout');}};
   window.HubPriceMaterializer={materialize:async payload=>{const {onProgress,...request}=payload;qa.recalculations.push(structuredClone(request));onProgress?.({phase:'persist',totalSkus:2,completedSkus:2,persistedRows:10,errorRows:0});return {generationId:77,totalSkus:2,completedSkus:2,persistedRows:10,errorRows:0,status:'complete'};}};
  });
  await page.addStyleTag({content:fs.readFileSync('mockups/operations-hub/seller-file-workflow-v2.css','utf8')});
+ await page.addScriptTag({content:fs.readFileSync('mockups/operations-hub/manual-sku-scope.js','utf8')});
  await page.addScriptTag({content:fs.readFileSync('mockups/operations-hub/seller-file-workflow-v2.js','utf8')});
  const cards=page.locator('.export-channel-card');assert.equal(await cards.count(),3);
  const boxes=await cards.evaluateAll(nodes=>nodes.map(node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};}));
  assert.ok(boxes.every(box=>box.width>1400));assert.ok(boxes[0].y<boxes[1].y&&boxes[1].y<boxes[2].y);
  assert.equal(await page.locator('[data-seller-panel="ably"] #export-preview-v2').count(),1);
  assert.equal(await page.locator('.seller-export-history').getAttribute('open'),null);
- await page.locator('[data-seller-scope-mode="smartstore"]').selectOption('manual');
+ await page.locator('[data-seller-scope-mode="smartstore"]').locator('..').locator('.seller-choice-options input[value="manual"]').check();
  await page.locator('[data-seller-scope-manual="smartstore"]').fill('S-1 S-2 S-1');
+ await page.locator('[data-standard-price-mode="smartstore"]').locator('..').locator('.seller-choice-options input[value="rules"]').check();
+ await page.locator('[data-standard-source="smartstore"] details.seller-advanced').evaluate(node=>node.open=true);
+ await page.locator('[data-standard-source="smartstore"] details.seller-recalculate').evaluate(node=>node.open=true);
  await page.locator('[data-standard-recalculate="smartstore"]').click();
  await page.waitForFunction(()=>qa.recalculations.length===1);
  const recovery=await page.evaluate(()=>{const {onProgress,...payload}=qa.recalculations[0];return payload;});
@@ -50,7 +54,10 @@ try{
  await page.locator('[data-standard-carrier-input="smartstore"]').setInputFiles({name:'late.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from('sample')});
  await page.waitForFunction(()=>typeof window.releaseCarrier==='function');
  assert.equal(await panel.getAttribute('data-state'),'processing');
- await page.locator('[data-seller-reset="smartstore"]').click();
+ const pendingReset=page.locator('[data-seller-reset="smartstore"]');
+ assert.equal(await pendingReset.isDisabled(),true,'busy preview locks the native reset control');
+ // A forced/programmatic reset must still invalidate an already running preview.
+ await pendingReset.evaluate(node=>node.dispatchEvent(new MouseEvent('click',{bubbles:true})));
  await page.evaluate(()=>window.releaseCarrier({plan:{kind:'TransformationPlan',summary:{},preview:[]}}));
  await page.waitForTimeout(30);
  assert.equal(await panel.getAttribute('data-state'),'idle');
