@@ -57,6 +57,7 @@
 .upload-progress>div:first-child span{color:var(--blue);font-weight:1000}
 .upload-progress .progress{margin-top:8px}
 .upload-progress p{margin:7px 0 0;color:#64748b;font-size:9px}
+.matrix-formula-view-toggle{white-space:nowrap;flex-shrink:0}.matrix-formula-view-toggle.active{border-color:#7da6e5;background:#edf4ff;color:#1558c0}.matrix-formula-view-note{flex-shrink:0;white-space:nowrap;color:#64748b;font-size:9px}.matrix-stored-price-view{display:block;color:#64748b;font-size:8px;font-weight:600}
 .matrix-zoom-control{height:31px;display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;white-space:nowrap}
 .matrix-zoom-control button{width:28px;height:29px;border:0;border-right:1px solid var(--line-soft);background:#fff;color:#475569;font-size:13px;font-weight:900;cursor:pointer}
 .matrix-zoom-control button:last-child{border-right:0}

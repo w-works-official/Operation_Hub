@@ -88,5 +88,6 @@
   "operationsHubProductPriceSettingsService.test.mjs",
   "operationsHubManualSkuScope.test.mjs",
   "operationsHubManualSkuScopeData.test.mjs",
-  "operationsHubManualSkuExportFlow.test.mjs"
+  "operationsHubManualSkuExportFlow.test.mjs",
+  "operationsHubRawSourceFormulaIsolation.test.mjs"
 ]

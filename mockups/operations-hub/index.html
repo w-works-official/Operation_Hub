@@ -7,7 +7,7 @@
     <title>System V3 · 상품 운영 허브</title>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/static/pretendard.css">
-    <link rel="stylesheet" href="./style.css?v=20261020-scroll-seller-search-v1">
+    <link rel="stylesheet" href="./style.css?v=20261027-formula-view-v1">
     <link rel="stylesheet" href="./ably-combinations.css?v=20260910-rule-destination-v111">
     <link rel="stylesheet" href="./workspaces-v91.css?v=20260910-rule-destination-v111">
     <link rel="stylesheet" href="./price-rule-lab.css?v=20260910-rule-destination-v111">
@@ -232,6 +232,8 @@
               <button class="filter-toggle" disabled>가격 차이 <b>-</b></button>
               <button class="btn compact advanced-filter-trigger" id="advanced-filter-btn" type="button">상세 필터 <b id="advanced-filter-count">0</b></button>
               <button class="btn compact" id="view-settings-btn">보기 설정</button>
+              <button class="btn compact matrix-formula-view-toggle active" id="matrix-formula-view-toggle" type="button" aria-pressed="true" aria-describedby="matrix-formula-view-note" title="매트릭스의 수식 결과 표시만 전환합니다. 현재 가격 결정·수정안과 저장·내보내기는 유지됩니다.">수식 보기 ON</button>
+              <small class="matrix-formula-view-note" id="matrix-formula-view-note">표시만 · 저장·내보내기 유지</small>
               <button class="btn compact" id="shadow-diagnostics-toggle" type="button" aria-pressed="false" title="기준본·목표값·계산 상태의 상세 표시를 켭니다.">Shadow 진단 보기 OFF</button>
               <button class="btn compact matrix-bulk-source-refresh-trigger" id="matrix-bulk-source-refresh-btn" type="button" title="선택한 시스템 기준 컬럼 전체를 셀피아 최신 원본값으로 갱신합니다.">컬럼 원본 갱신</button>
               <button class="btn compact matrix-column-reset" id="matrix-column-reset" type="button" title="직접 조절한 모든 열 너비를 기본값으로 되돌립니다.">열 너비 초기화</button>
@@ -1069,7 +1071,7 @@
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
     <script src="./matrix-price-edit-policy.js?v=20261020-manual-price-save-v1"></script>
-    <script src="./app.js?v=20261022-product-price-settings-v1"></script>
+    <script src="./app.js?v=20261027-source-formula-separation-v1"></script>
     <script src="./mapping-import.js?v=20261021-seller-unmatched-v1"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
