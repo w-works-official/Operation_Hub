@@ -92,5 +92,6 @@
   "operationsHubRawSourceFormulaIsolation.test.mjs",
   "operationsHubNestedRelationFoldersSql.test.mjs",
   "operationsHubRelationGraphPagingSql.test.mjs",
-  "operationsHubRelationGraphDataService.test.mjs"
+  "operationsHubRelationGraphDataService.test.mjs",
+  "operationsHubEmptyProductPriceSyncSql.test.mjs"
 ]
