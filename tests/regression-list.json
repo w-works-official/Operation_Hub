@@ -89,5 +89,6 @@
   "operationsHubManualSkuScope.test.mjs",
   "operationsHubManualSkuScopeData.test.mjs",
   "operationsHubManualSkuExportFlow.test.mjs",
-  "operationsHubRawSourceFormulaIsolation.test.mjs"
+  "operationsHubRawSourceFormulaIsolation.test.mjs",
+  "operationsHubNestedRelationFoldersSql.test.mjs"
 ]
