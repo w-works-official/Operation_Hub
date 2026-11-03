@@ -202,3 +202,51 @@ test('Ably inherited-price failure preserves the whole child product and never f
  await page.locator('#export-dependency-provenance summary').click();
  assert.match(await page.locator('#export-dependency-provenance').innerText(),/상위 가격 확인 실패/);
 });
+
+test('relation changes invalidate a standard preview while retaining scope and price selections',async t=>{
+ const page=await fixture(t);
+ await choose(page,'[data-seller-scope-mode="smartstore"]','manual');
+ await page.locator('[data-seller-scope-manual="smartstore"]').fill('P');
+ await choose(page,'[data-standard-price-mode="smartstore"]','sellpia_source');
+ await page.locator(dependency('smartstore')).check();
+ await clickReady(page,'[data-standard-preview="smartstore"]');
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('hub-relations-changed',{detail:{skus:['P','C1'],complete:true}})));
+ assert.match(await page.locator('[data-seller-panel="smartstore"]').innerText(),/상품 관계가 변경/);
+ assert.equal(await page.locator(dependency('smartstore')).isChecked(),true);
+ assert.equal(await page.locator('[data-standard-price-mode="smartstore"]').inputValue(),'sellpia_source');
+ assert.equal(await page.locator('[data-seller-scope-manual="smartstore"]').inputValue(),'P');
+ await clickReady(page,'[data-standard-run="smartstore"]');
+ assert.equal(await page.evaluate(()=>calls.filter(call=>call.name.endsWith('-run')).length),0);
+ await clickReady(page,'[data-standard-preview="smartstore"]');
+ await clickReady(page,'[data-standard-run="smartstore"]');
+ assert.equal(await page.evaluate(()=>calls.at(-1).args.includeDependencies),true);
+ assert.equal(await page.evaluate(()=>calls.at(-1).args.priceMode),'sellpia_source');
+});
+
+test('a preview finishing after a relation change cannot publish its outdated result',async t=>{
+ const page=await fixture(t);
+ await page.evaluate(()=>{const original=SystemV3SellerExportBridge.previewTargetAll;SystemV3SellerExportBridge.previewTargetAll=async args=>{await new Promise(resolve=>window.releaseRelationPreview=resolve);return original(args);};});
+ await page.locator('[data-standard-preview="smartstore"]').click();
+ await page.waitForFunction(()=>typeof window.releaseRelationPreview==='function');
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('hub-relations-changed',{detail:{skus:[],complete:false}})));
+ await page.evaluate(()=>window.releaseRelationPreview());
+ await page.waitForFunction(()=>!window.__systemV3DirectExportBusy);
+ assert.equal(await page.locator('[data-seller-panel="smartstore"]').getAttribute('data-state'),'idle');
+ assert.match(await page.locator('[data-seller-panel="smartstore"]').innerText(),/상품 관계가 변경/);
+ await clickReady(page,'[data-standard-run="smartstore"]');
+ assert.equal(await page.evaluate(()=>calls.filter(call=>call.name.endsWith('-run')).length),0);
+});
+
+test('Ably relation invalidation retains the carrier file and chosen dependency options for a fresh preview',async t=>{
+ const page=await fixture(t);
+ await page.locator(dependency('ably')).check();await ablyPreview(page);
+ assert.equal(await page.locator('#export-preview-v2').isVisible(),true);
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('hub-relations-changed',{detail:{skus:['P'],complete:true}})));
+ assert.equal(await page.locator('#export-preview-v2').isVisible(),false);
+ assert.equal(await page.locator(dependency('ably')).isChecked(),true);
+ assert.equal(await page.locator('[data-seller-scope-manual="ably"]').inputValue(),'P');
+ await clickReady(page,'[data-ably-standard-preview]');
+ await page.waitForFunction(()=>document.querySelector('[data-ably-progress]').dataset.state==='done');
+ assert.equal(await page.locator('#export-preview-v2').isVisible(),true);
+ assert.equal(await page.evaluate(()=>downloads.length),0);
+});

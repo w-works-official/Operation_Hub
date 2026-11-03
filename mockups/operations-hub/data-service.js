@@ -2849,17 +2849,109 @@
     return data;
   }
 
-  async function loadRelationNodes({search = '', folderId = null, limit = 500} = {}) {
-    const {data, error} = await db.rpc('list_operations_hub_relation_nodes', {
-      p_search:cleanText(search),
-      p_folder_id:folderId === null || folderId === '' ? null : Number(folderId),
-      p_limit:Math.max(1, Math.min(Number(limit) || 500, 1000))
-    });
-    if (error) throw error;
-    return {
-      nodes:Array.isArray(data?.nodes) ? data.nodes : [],
-      edges:Array.isArray(data?.edges) ? data.edges : []
+  async function loadRelationNodes({search = '', folderId = null, limit = 500, signal = null, onProgress = null} = {}) {
+    // `limit` remains accepted for old callers, but may no longer truncate a graph.
+    // Nodes and edges have independent keysets; publish only a fully pinned result.
+    const pageSize=500,safeFolder=folderId===null||folderId===''?null:Number(folderId);
+    if(safeFolder!==null&&(!Number.isSafeInteger(safeFolder)||safeFolder<1))throw Error('관계 폴더를 확인해주세요.');
+    const nodes=[],edges=[],nodeIds=new Set(),edgeIds=new Set();
+    let version=null,nodeCount=null,edgeCount=null,afterNodeId=0,afterEdgeId=0;
+    const invalid=message=>new Error(`관계 전체 조회를 확인하지 못했습니다. ${message}`);
+    const integer=value=>Number.isSafeInteger(value)&&value>=0;
+    const read=async()=>{
+      throwIfAborted(signal);
+      const {data,error}=await withAbortSignal(db.rpc('list_operations_hub_relation_graph_page_v1',{
+        p_search:cleanText(search),p_folder_id:safeFolder,p_after_node_id:afterNodeId,p_after_edge_id:afterEdgeId,
+        p_page_size:pageSize,p_expected_version:version
+      }),signal);
+      if(error)throw error;
+      throwIfAborted(signal);
+      if(!data||data.contractVersion!==1||typeof data.version!=='string'||!/^[a-f0-9]{32}$/.test(data.version)
+          ||!integer(data.nodeCount)||!integer(data.edgeCount)||!Array.isArray(data.nodes)||!Array.isArray(data.edges)
+          ||data.nodes.length>pageSize||data.edges.length>pageSize
+          ||typeof data.hasMoreNodes!=='boolean'||typeof data.hasMoreEdges!=='boolean'
+          ||!integer(data.nextNodeId)||!integer(data.nextEdgeId))throw invalid('응답 형식이 올바르지 않습니다.');
+      if(version!==null&&(data.version!==version||data.nodeCount!==nodeCount||data.edgeCount!==edgeCount))throw invalid('조회 중 관계가 변경됐습니다. 다시 불러와주세요.');
+      version=data.version;nodeCount=data.nodeCount;edgeCount=data.edgeCount;
+      return data;
     };
+    while(true){
+      const page=await read();let lastNode=afterNodeId,lastEdge=afterEdgeId;
+      for(const node of page.nodes){
+        if(!node||!Number.isSafeInteger(node.nodeId)||node.nodeId<=lastNode||nodeIds.has(node.nodeId))throw invalid('노드 순서 또는 중복 identity를 확인해주세요.');
+        nodeIds.add(node.nodeId);nodes.push(node);lastNode=node.nodeId;
+      }
+      for(const edge of page.edges){
+        if(!edge||!Number.isSafeInteger(edge.edgeId)||edge.edgeId<=lastEdge||edgeIds.has(edge.edgeId)
+            ||!Number.isSafeInteger(edge.parentNodeId)||edge.parentNodeId<1||!Number.isSafeInteger(edge.childNodeId)||edge.childNodeId<1)throw invalid('연결 순서 또는 identity를 확인해주세요.');
+        edgeIds.add(edge.edgeId);edges.push(edge);lastEdge=edge.edgeId;
+      }
+      if(page.nextNodeId!==lastNode||page.nextEdgeId!==lastEdge||nodes.length>nodeCount||edges.length>edgeCount
+          ||page.hasMoreNodes!==(nodes.length<nodeCount)||page.hasMoreEdges!==(edges.length<edgeCount)
+          ||page.hasMoreNodes&&lastNode===afterNodeId||page.hasMoreEdges&&lastEdge===afterEdgeId)throw invalid('전체 건수 또는 다음 조회 위치가 일치하지 않습니다.');
+      afterNodeId=lastNode;afterEdgeId=lastEdge;
+      onProgress?.({loadedNodes:nodes.length,totalNodes:nodeCount,loadedEdges:edges.length,totalEdges:edgeCount});
+      if(!page.hasMoreNodes&&!page.hasMoreEdges)break;
+    }
+    // Catch edits made after the last data page, including an empty graph.
+    const confirmation=await read();
+    if(confirmation.nodes.length||confirmation.edges.length||confirmation.hasMoreNodes||confirmation.hasMoreEdges
+        ||confirmation.nextNodeId!==afterNodeId||confirmation.nextEdgeId!==afterEdgeId)throw invalid('마지막 조회 이후 관계가 변경됐습니다. 다시 불러와주세요.');
+    if(edges.some(edge=>!nodeIds.has(edge.parentNodeId)||!nodeIds.has(edge.childNodeId)))throw invalid('연결의 양 끝 노드가 전체 목록에 없습니다.');
+    nodes.sort((a,b)=>String(a.displayName||'').localeCompare(String(b.displayName||''),'ko')||a.nodeId-b.nodeId);
+    edges.sort((a,b)=>a.parentNodeId-b.parentNodeId||Number(a.sortOrder||0)-Number(b.sortOrder||0)||a.childNodeId-b.childNodeId||a.edgeId-b.edgeId);
+    return {nodes,edges,version,nodeCount,edgeCount,complete:true};
+  }
+
+  const relationGraphMutationMethods=new Set(['saveRelationEdge','updateRelationEdge','removeRelationEdge','undoRelationEdgeEvent','applyRelationBoard','archiveRelationNode']);
+  function relationGraphAffectedSkus(name,args,result,before,after=null) {
+    const seeds=new Set(),skus=new Set(),graphs=[before,after].filter(Boolean);
+    const addId=value=>{const id=Number(value);if(Number.isSafeInteger(id)&&id>0)seeds.add(id);};
+    const addSku=value=>{if(typeof value==='string'&&value.trim())skus.add(value.trim());};
+    const addEdge=edge=>{if(edge){addId(edge.parentNodeId);addId(edge.childNodeId);}};
+    const beforeEdges=new Map(before.edges.map(edge=>[edge.edgeId,edge]));
+    const afterEdges=new Map((after?.edges||[]).map(edge=>[edge.edgeId,edge]));
+    if(after){
+      for(const id of new Set([...beforeEdges.keys(),...afterEdges.keys()])){
+        const previous=beforeEdges.get(id),current=afterEdges.get(id);
+        if(JSON.stringify(previous)!==JSON.stringify(current)){addEdge(previous);addEdge(current);}
+      }
+      const previous=new Map(before.nodes.map(node=>[node.nodeId,node])),current=new Map(after.nodes.map(node=>[node.nodeId,node]));
+      for(const id of new Set([...previous.keys(),...current.keys()]))if(JSON.stringify(previous.get(id))!==JSON.stringify(current.get(id)))addId(id);
+    }
+    const payload=args[0];
+    if(name==='removeRelationEdge')addEdge(beforeEdges.get(Number(payload)));
+    if(name==='archiveRelationNode')addId(payload);
+    if(payload&&typeof payload==='object'){
+      addId(payload.parentNodeId);addId(payload.childNodeId);addEdge(beforeEdges.get(Number(payload.edgeId)));
+      for(const node of Array.isArray(payload.nodes)?payload.nodes:[]){addId(node?.nodeId);addSku(node?.sellpiaSkuCode);}
+      for(const id of Array.isArray(payload.removeEdgeIds)?payload.removeEdgeIds:[])addEdge(beforeEdges.get(Number(id)));
+    }
+    addEdge(result);addEdge(beforeEdges.get(Number(result?.edgeId)));addEdge(afterEdges.get(Number(result?.edgeId)));
+    for(const id of Object.values(result?.nodeMap||{}))addId(id);
+    // Include descendants in both the old and new graph. A move must invalidate
+    // its former parent's output scope as well as the new inheritance path.
+    for(const graph of graphs){
+      const children=new Map();
+      for(const edge of graph.edges){const list=children.get(edge.parentNodeId)||[];list.push(edge.childNodeId);children.set(edge.parentNodeId,list);}
+      const reached=new Set(seeds),queue=[...seeds];
+      for(let index=0;index<queue.length;index++)for(const child of children.get(queue[index])||[])if(!reached.has(child)){reached.add(child);queue.push(child);}
+      for(const node of graph.nodes)if(reached.has(node.nodeId)&&node.nodeType==='sellpia_sku')addSku(node.sellpiaSkuCode);
+    }
+    return [...skus].sort();
+  }
+  async function runRelationGraphMutation(name,fn,args) {
+    const before=await loadRelationNodes();
+    const result=await fn(...args);
+    let after=null,warning='';
+    try{after=await loadRelationNodes();}
+    catch(error){warning=`관계 저장은 완료됐지만 변경된 전체 범위를 다시 확인하지 못했습니다. 새로고침해주세요. ${error?.message||error}`;}
+    const skus=relationGraphAffectedSkus(name,args,result,before,after),complete=Boolean(after);
+    const emit=(type,detail)=>{if(typeof global.dispatchEvent==='function'&&typeof global.CustomEvent==='function')global.dispatchEvent(new global.CustomEvent(type,{detail}));};
+    if(skus.length)emit('hub-matrix-affected',{skus});
+    emit('hub-matrix-price-ownership-changed');
+    emit('hub-relations-changed',{skus,complete,warning,version:after?.version||null});
+    return {...(result&&typeof result==='object'&&!Array.isArray(result)?result:{}),affected_skus:skus,affected_scope_complete:complete,...(warning?{relationRefreshWarning:warning}:{})};
   }
 
   async function saveRelationEdge({parentNodeId, childNodeId, sortOrder = 100} = {}) {
@@ -5398,7 +5490,7 @@
     waitForSellpiaMatrixRebuild,
     uploadSellerSnapshot,
   };
-  for(const [name,fn] of Object.entries(api)){if(typeof fn!=='function'||! /^(save|apply|remove|bulkImport|syncTag|rename|assign|delete|cancel|upsertCalculated|uploadSellpiaSnapshot|uploadSellpiaInventoryCount|uploadSellerSnapshot|productPrice|ruleRegistry|retireProductTagCascade|updateProductTag)/.test(name))continue;api[name]=async function(...args){const result=await fn(...args);if(args[0]?.preview===true||(['productPrice','ruleRegistry'].includes(name)&&['list','rules','read','members','inspect'].includes(args[0])))return result;const isTargetedSellpia=name==='uploadSellpiaSnapshot'&&result?.uploadMode==='patch'||name==='uploadSellpiaInventoryCount';if(isTargetedSellpia)return result; // The upload UI publishes affected rows only after the server's Matrix rebuild completes.
+  for(const [name,fn] of Object.entries(api)){if(relationGraphMutationMethods.has(name)){api[name]=(...args)=>runRelationGraphMutation(name,fn,args);continue;}if(typeof fn!=='function'||! /^(save|apply|remove|bulkImport|syncTag|rename|assign|delete|cancel|upsertCalculated|uploadSellpiaSnapshot|uploadSellpiaInventoryCount|uploadSellerSnapshot|productPrice|ruleRegistry|retireProductTagCascade|updateProductTag)/.test(name))continue;api[name]=async function(...args){const result=await fn(...args);if(args[0]?.preview===true||(['productPrice','ruleRegistry'].includes(name)&&['list','rules','read','members','inspect'].includes(args[0])))return result;const isTargetedSellpia=name==='uploadSellpiaSnapshot'&&result?.uploadMode==='patch'||name==='uploadSellpiaInventoryCount';if(isTargetedSellpia)return result; // The upload UI publishes affected rows only after the server's Matrix rebuild completes.
     if(/^(uploadSellpiaSnapshot|uploadSellpiaInventoryCount|uploadSellerSnapshot)$/.test(name))global.dispatchEvent(new CustomEvent('hub-matrix-source-reloaded'));const codes=new Set();const visit=(v,depth=0)=>{if(depth>5||v==null)return;if(Array.isArray(v)){for(const x of v)if(typeof x==='string'&&/^[^\s]+-\d+$/.test(x))codes.add(x);else visit(x,depth+1);}else if(typeof v==='object')for(const [k,x] of Object.entries(v)){if(['sku','sellpia_sku_code'].includes(k)&&typeof x==='string')codes.add(x);else if(['skus','affectedSkus','affected_skus','rows','assignments','applied'].includes(k))visit(x,depth+1);}};args.forEach(a=>visit(a));visit(result);const tag=args[0]?.tagId||args[0]?.tag_id||(/renameProductTag/.test(name)?args[0]?.id:null);if(tag&&/rename|saveTag/.test(name)&&global.HubMatrixClient?.dataset)global.HubMatrixClient.dataset.tagSkus(tag).forEach(s=>codes.add(s));if(global.HubMatrixClient?.dataset){const input=typeof args[0]==='object'?args[0]:args[1],ids=new Set([input?.id,input?.rule_id,result?.id,result?.rule?.id].filter(Boolean).map(String)),product=input?.product_code;for(const row of global.HubMatrixClient.dataset.rows){const owners=[...Object.values(row.__hubInternalPrices||{}).flatMap(r=>[...(r.activeOutputRules||[]),...(r.versions||[])]),...Object.values(row.__hubRulePrices||{}).flatMap(r=>r.versions||[]),row.__hubRepresentativePrice?.rule].filter(Boolean);if(owners.some(o=>ids.has(String(o.id||o.rule_id)))||product&&String(row.__profile?.sellpia_product_code)===String(product))codes.add(row.sellpia_sku_code);}}
     if(name==='ruleRegistry'||name==='productPrice'||name==='assignRules'||name==='saveProductProfile'||name==='retireProductTagCascade'||name==='updateProductTag'||/^(saveInboundCost|deleteInboundCostFormulaTag|savePriceRule|deletePriceRule|savePlatformRule|saveTag|delete.*Tag|assign.*Tag|apply.*Tag|syncTag|remove.*Tag|bulkImportTags)/.test(name))global.dispatchEvent(new CustomEvent('hub-matrix-price-ownership-changed'));
     if(codes.size)global.dispatchEvent(new CustomEvent('hub-matrix-affected',{detail:{skus:[...codes]}}));return result&&typeof result==='object'&&!Array.isArray(result)&&codes.size?{...result,affected_skus:[...codes]}:result;};}

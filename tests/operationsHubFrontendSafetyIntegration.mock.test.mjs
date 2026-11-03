@@ -33,12 +33,14 @@ test('relation drawer exposes authenticated history and only renders allowed und
   assert.match(dataService, /undo_operations_hub_relation_edge_event_v1[\s\S]*?p_session_token:requireOperationsHubSessionToken\(\)/);
   assert.match(app, /event\.canUndo \? `<button type="button" data-undo-relation-event=/);
   assert.match(app, /await liveData\.undoRelationEdgeEvent\(eventId\)/);
-  assert.match(app, /if \(multiLinkWorkspaceState\.allLoaded\) await loadMultiLinks\(\);\s*else await loadRelationGraph\(\)/);
+  assert.match(app, /const reloaded = multiLinkWorkspaceState\.allLoaded \? await loadMultiLinks\(\) : await loadRelationGraph\(\)/);
+  assert.match(app, /relationMutationMessage\(result, result\?\.alreadyUndone[\s\S]*?\{reloaded\}\)/);
   assert.match(app, /await loadRelationEdgeHistory\(edgeId\)/);
 });
 
 test('relation meanings, searchable filter fields, and Makeshop manual defaults are explicit', () => {
-  assert.match(html, /상품 관계<\/b>분류·화면 표시만/);
+  assert.match(html, /상품 관계<\/b>SKU 관계 · 종속 적용 내보내기에 사용/);
+  assert.match(html, /저장만으로 원본 가격·재고를 바꾸지 않습니다/);
   assert.match(html, /세트·번들<\/b>구성수량으로 재고 계산/);
   assert.match(html, /판매처 구성<\/b>판매처 옵션의 구성 SKU/);
   assert.match(html, /id="advanced-filter-field-search"/);

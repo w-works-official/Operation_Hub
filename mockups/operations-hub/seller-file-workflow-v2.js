@@ -1269,6 +1269,19 @@ async function runStandard(source,mode=null){
    if(message)setSellerPanel(source,'idle',message);
   }
  }
+ function invalidateRelationPreviews(){
+  const message='상품 관계가 변경되었습니다. 미리보기를 다시 실행해주세요.';
+  if(productPriceModal&&productPriceModal.phase!=='saving')closeProductPriceAdjustment({invalidate:true});
+  for(const source of ['smartstore','makeshop','ably']){
+   invalidateManualScope(source);
+   state.sourcePricePreviews.delete(source);state.standardCarrierPlans.delete(source);state.standardCarrierViews.delete(source);
+   productPriceContexts.delete(source);
+   if(source==='ably'){state.ablyJob?.cancel(false);state.preview=null;}
+   else invalidateStandardRequest(source);
+   setSellerPanel(source,'idle',message);updateSellerScopeSummary(source);
+  }
+ }
+ global.addEventListener('hub-relations-changed',invalidateRelationPreviews);
  global.addEventListener('hub-matrix-source-reloaded',()=>{invalidateManualScopes();invalidateProductPriceContexts('원본이 갱신되어 상품 가격 수정안을 해제했습니다. 미리보기를 다시 실행해주세요.');});
  global.addEventListener('operations-hub-auth-required',()=>{invalidateManualScopes();invalidateProductPriceContexts();});
  function tick(){if(document.body?.classList.contains('operations-auth-locked')){if(manualScopeReports.size)invalidateManualScopes();invalidateProductPriceContexts();}ensureUpload();ensureExport();renameLegacyExportUi();}

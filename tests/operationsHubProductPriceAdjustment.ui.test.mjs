@@ -191,6 +191,31 @@ test('source invalidation during the save request retains the prior record and r
  await preview(page);await open(page);assert.equal(await page.locator('[data-adjustment-base]').inputValue(),'9000');
 });
 
+test('a relation event while the committed save response is pending preserves settings and reports saved with a fresh preview required',async t=>{
+ const page=await fixture(t);await preview(page);await open(page);await fill(page);
+ await page.evaluate(()=>{
+  const save=SystemV3SellerExportBridge.saveProductPriceAdjustments;
+  SystemV3SellerExportBridge.saveProductPriceAdjustments=async args=>{
+   const committed=await save(args);
+   // The write has committed; only its response is delayed. Cancellation cannot
+   // turn that completed server write into an apparent failed or repeated save.
+   await new Promise(resolve=>pendingSaves.push(resolve));return committed;
+  };
+ });
+ await page.locator('[data-adjustment-apply]').click();await page.waitForFunction(()=>pendingSaves.length===1);
+ assert.equal(await page.evaluate(()=>saveWrites.length),1);assert.equal(await page.evaluate(()=>savedRecords.get('COLLECTION').basePrice),9000);
+ assert.match(await page.locator('[data-adjustment-validation]').innerText(),/저장 중/);
+ await page.evaluate(()=>dispatchEvent(new CustomEvent('hub-relations-changed',{detail:{skus:['2242-1','10322-5'],complete:true,version:'b'.repeat(32)}})));
+ assert.equal(await page.locator(dialog).count(),1);assert.equal(await page.locator('[data-adjustment-cancel]').last().isDisabled(),true);
+ await page.evaluate(()=>pendingSaves.shift()());await page.locator(dialog).waitFor({state:'detached'});
+ const status=await page.locator('[data-standard-result="smartstore"]').innerText();assert.match(status,/저장 완료.*미리보기를 다시/);assert.doesNotMatch(status,/저장하지 못|이전 저장값 유지/);
+ assert.equal(await page.locator(primary('run')).isDisabled(),true);assert.equal(await page.evaluate(()=>saveWrites.length),1);
+ assert.deepEqual(await page.evaluate(()=>savedRecords.get('COLLECTION')),{basePrice:9000,basicDiscount:2000,revision:1,updatedAt:'2026-10-22T12:00:00Z'});
+ await page.locator(primary('run')).dispatchEvent('click');assert.equal(await page.evaluate(()=>downloads.length),0,'the invalidated preview cannot generate a file');
+ await preview(page);await open(page);assert.equal(await page.locator('[data-adjustment-base]').inputValue(),'9000');assert.equal(await page.locator('[data-adjustment-discount]').inputValue(),'2000');
+ assert.match(await page.locator('[data-adjustment-validation]').innerText(),/저장값 불러옴/);assert.equal(await page.evaluate(()=>saveWrites.length),1,'fresh previews only read the committed setting');
+});
+
 test('ordinary previews read other operators latest saved values instead of resending cached overrides',async t=>{
  const page=await fixture(t);await preview(page);await open(page);await fill(page);await apply(page);
  await page.evaluate(()=>savedRecords.set('COLLECTION',{basePrice:10000,basicDiscount:3000,revision:++window.savedRevision,updatedAt:'2026-10-22T13:00:00Z'}));

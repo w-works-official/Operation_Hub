@@ -7,7 +7,7 @@
     <title>System V3 · 상품 운영 허브</title>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/static/pretendard.css">
-    <link rel="stylesheet" href="./style.css?v=20261027-formula-view-v1">
+    <link rel="stylesheet" href="./style.css?v=20261103-relation-graph-v1">
     <link rel="stylesheet" href="./ably-combinations.css?v=20260910-rule-destination-v111">
     <link rel="stylesheet" href="./workspaces-v91.css?v=20260910-rule-destination-v111">
     <link rel="stylesheet" href="./price-rule-lab.css?v=20260910-rule-destination-v111">
@@ -287,7 +287,7 @@
           <div id="multi-links" class="page multi-link-page">
             <div class="page-head">
               <div><h2>다중·조합 관리</h2><p>보기 분류별로 상위·하위 관계를 간단히 관리하고, 필요할 때 전체 소속을 추적합니다.</p></div>
-              <div class="multi-link-head-note"><b>계산과 분리된 관리 구조</b><span>이번 단계의 폴더·종속관계는 재고와 가격 계산을 바꾸지 않습니다.</span></div>
+              <div class="multi-link-head-note"><b>폴더 분류와 SKU 관계 구분</b><span>SKU 상·하위 관계는 종속 적용 내보내기에 사용됩니다. 저장만으로 원본 가격·재고를 바꾸지 않습니다.</span></div>
             </div>
             <div class="multi-link-layout">
               <aside class="relation-folder-panel" aria-label="조합 관리 폴더">
@@ -299,6 +299,7 @@
                   <label>폴더 이름<input id="relation-folder-name" maxlength="60" required placeholder="예: 모음전 관리"></label>
                   <label>상위 폴더<select id="relation-folder-parent"><option value="">최상위 폴더</option></select></label>
                   <label>폴더 유형<select id="relation-folder-kind"><option value="collection">모음전</option><option value="one_plus_one">1+1</option><option value="set">세트</option><option value="custom">직접 분류</option></select></label>
+                  <p id="relation-folder-form-status" class="relation-folder-form-status" role="status" aria-live="polite" hidden></p>
                   <div><button id="relation-folder-cancel" class="btn" type="button">취소</button><button class="btn primary" type="submit">저장</button></div>
                 </form>
                 <p class="relation-folder-note">폴더와 하위 폴더는 원하는 단계까지 직접 만들고 이동할 수 있습니다. 상품 상위·하위 관계와는 별도로 관리됩니다.</p>
@@ -310,7 +311,7 @@
                   <button type="button" role="tab" aria-selected="false" data-multi-link-tab="bundle">세트·번들</button>
                 </nav>
                 <div class="relation-purpose-guide" aria-label="관계 기능 구분">
-                  <span><b>상품 관계</b>분류·화면 표시만</span>
+                  <span><b>상품 관계</b>SKU 관계 · 종속 적용 내보내기에 사용</span>
                   <span><b>세트·번들</b>구성수량으로 재고 계산</span>
                   <span><b>판매처 구성</b>판매처 옵션의 구성 SKU</span>
                 </div>
@@ -339,6 +340,7 @@
                       <button id="bundle-target-seller" type="button" role="tab" aria-selected="false">판매처 전용 구성</button>
                     </div>
                     <section id="bundle-canonical-workspace" class="bundle-target-workspace">
+                    <p class="relation-folder-note">폴더는 상품 관계를 분류합니다. 세트·번들과 판매처 전용 구성은 각 검색·저장 기준을 유지합니다.</p>
                     <div class="bundle-management-head">
                       <div><b>세트 SKU 검색</b><span>세트나 구성품 SKU·상품명으로 찾아 현재 구성을 확인하고 수량을 수정할 수 있습니다.</span></div>
                       <form id="bundle-search-form" class="bundle-search-form"><input id="bundle-search" autocomplete="off" placeholder="세트 SKU / 구성품 SKU / 상품명"><button class="btn" type="submit">조회</button><button id="bundle-refresh" class="btn" type="button">새로고침</button></form>
@@ -1064,14 +1066,14 @@
     <script src="./matrix-shadow.js?v=20260919-full-scope-v12"></script>
     <script src="./baseline-canary.js?v=20260917-shadow-preview-v1"></script>
     <script src="./matrix-multilisting.js?v=20261001-matrix-multilisting-v1"></script>
-  <script src="./data-service.js?v=20261026-manual-sellpia-scope-v1"></script>
+  <script src="./data-service.js?v=20261103-relation-graph-v1"></script>
     <script src="./original-upload-history.js?v=20261020-upload-history-v1"></script>
     <script src="./channels-page.js?v=20260910-rule-destination-v111"></script>
     <link rel="stylesheet" href="./sellpia-patch-export.css?v=20260919-partial-export-v3">
     <script src="./sellpia-patch-export.js?v=20260921-sellpia-current-carrier-v1"></script>
     <script src="./matrix-dataset.js?v=20261001-matrix-multilisting-v1"></script>
     <script src="./matrix-price-edit-policy.js?v=20261020-manual-price-save-v1"></script>
-    <script src="./app.js?v=20261027-source-formula-separation-v1"></script>
+    <script src="./app.js?v=20261103-relation-graph-v1"></script>
     <script src="./mapping-import.js?v=20261021-seller-unmatched-v1"></script>
     <script src="./attributes-page.js?v=20260915-tag-matrix-v1"></script>
     <script src="./price-rule-lab.js?v=20260910-rule-destination-v111"></script>
@@ -1099,7 +1101,7 @@
       <script src="./ui-cleanup-v1.js?v=20261007-inventory-tab-v1"></script>
       <script src="./tag-management-v2.js?v=20260929-ably-carrier-policy-v1"></script>
       <script src="./manual-sku-scope.js?v=20261026-manual-sellpia-scope-v1"></script>
-      <script src="./seller-file-workflow-v2.js?v=20261026-manual-sellpia-scope-v1"></script>
+      <script src="./seller-file-workflow-v2.js?v=20261103-relation-graph-v1"></script>
       <script src="./ably-inventory-export.js?v=20261022-sku-dependencies-v3"></script>
       <script src="./ably-mapping-management.js?v=20261022-sku-dependencies-v3"></script>
       <script src="./inventory-file-downloads.js?v=20261008-inventory-partial-v1"></script>

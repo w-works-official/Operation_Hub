@@ -45,8 +45,9 @@ const MATRIX_TRANSIENT_RETRY_DELAYS_MS = [700];
 const MAPPING_SYNC_POLL_INTERVAL_MS = 60000;
 const matrixState = {page:1, pageSize:initialMatrixPageSize, search:'', searchSources:['sellpia','smartstore','makeshop','ably'], status:'all', sort:'sku_asc', excludeCombinationSkus:false, includeRelatedSkuContext:true, advancedFilter:{logic:'and', conditions:[]}, total:0, directCount:0, relatedCount:0, rows:[], loading:false, requestId:0, requestController:null, codeListSkus:[], codeListRows:[], codeListName:''};
 let matrixFormulaViewEnabled = true;
-const multiLinkState = {page:1, pageSize:50, search:'', source:'all', relationType:'all', folderId:null, organizationScope:'all', folders:[], foldersLoaded:false, total:0, allTotal:0, loading:false, requestId:0, rows:[], selected:null, loaded:false};
-const multiLinkWorkspaceState = {tab:'all', contextRow:null, allLoaded:false};
+const multiLinkState = {page:1, pageSize:50, search:'', source:'all', relationType:'all', folderId:null, organizationScope:'all', folders:[], foldersLoaded:false, folderRequestId:0, folderPromise:null, folderCountsKnown:false, organizedCount:0, unorganizedExplicitCount:0, total:0, allTotal:0, loading:false, requestId:0, rows:[], selected:null, loaded:false};
+const multiLinkWorkspaceState = {tab:'all', contextRow:null, allLoaded:false, stale:false, requestId:0};
+const relationFolderFormState = {saving:false, savedPendingReload:false};
 const relationGraphState = {nodes:[], edges:[], selectedProduct:null, loading:false, requestId:0, searchTimer:null, viewMode:'list', search:'', focusNodeId:null};
 const relationCellSelection = {anchor:null, focus:null, dragging:false, selected:new Set(), dragBase:new Set(), dragMode:'replace', editingEdgeId:null};
 const relationEdgeHistoryState = {edgeId:null, requestId:0, loading:false};
@@ -1438,6 +1439,16 @@ const matrixPerformance={initialMs:0,filterMs:0,renderMs:0,patchMs:0,count:0};
 function showMatrixPerformance(){let box=document.getElementById('matrix-client-performance');if(!box){box=document.createElement('details');box.id='matrix-client-performance';document.querySelector('.matrix-footer')?.append(box);}box.innerHTML='<summary>조회 성능 · 전체 dataset</summary><pre>'+escapeHtml(JSON.stringify(matrixPerformance,null,2))+'</pre>';}
 window.HubMatrixClient={get dataset(){return matrixDataset;},metrics:matrixPerformance,affected:matrixDirtySkus};
 window.addEventListener('hub-matrix-affected',event=>markMatrixAffected(event.detail?.skus));
+window.addEventListener('hub-relations-changed', event => {
+  if (event.detail?.complete === false) matrixSourceReloadNeeded = true;
+  relationGraphState.requestId += 1;
+  relationGraphState.loading = false;
+  multiLinkState.folderRequestId += 1;
+  multiLinkState.folderPromise = null;
+  multiLinkState.foldersLoaded = false;
+  multiLinkWorkspaceState.requestId += 1;
+  multiLinkWorkspaceState.stale = true;
+});
 function mountMatrixClientFilters(){
  if(document.getElementById('matrix-client-state')){refreshMatrixTagFilter();return;}
  const host=document.querySelector('.matrix-page-size')?.parentElement;if(!host)return;
@@ -10000,6 +10011,7 @@ function openMultiLinkWorkspaceContextMenu(x, y, row) {
 function setMultiLinkWorkspaceTab(tab, {load = true} = {}) {
   const next = ['all','relation','bundle'].includes(tab) ? tab : 'all';
   if (multiLinkWorkspaceState.tab !== next) {
+    multiLinkWorkspaceState.requestId += 1;
     clearMultiLinkCellSelection();
     closeRelationEdgeEditorDrawer();
   }
@@ -10016,7 +10028,7 @@ function setMultiLinkWorkspaceTab(tab, {load = true} = {}) {
   });
   if (!load) return;
   if (next === 'all') loadManagedConnections();
-  if (next === 'relation') Promise.all([loadRelationFolders(), loadRelationGraph()]);
+  if (next === 'relation') loadRelationGraph();
   if (next === 'bundle' && !bundleGraphState.loading) loadBundleGraph({query:bundleGraphState.query});
 }
 
@@ -10098,23 +10110,22 @@ function renderRelationFolders() {
   const list = document.getElementById('relation-folder-list');
   const activeKey = multiLinkState.organizationScope === 'unorganized' ? 'unorganized' : (multiLinkState.folderId === null ? 'all' : String(multiLinkState.folderId));
   const graphLoaded = relationGraphState.nodes.length > 0;
-  const unorganizedCount = graphLoaded ? relationGraphState.nodes.filter(node => !node.folderId).length : Number(multiLinkState.unorganizedExplicitCount || 0);
+  const unorganizedCount = Number(multiLinkState.unorganizedExplicitCount || 0);
+  const allCount = multiLinkState.folderCountsKnown ? Number(multiLinkState.organizedCount || 0) + unorganizedCount : (graphLoaded ? relationGraphState.nodes.length : multiLinkState.allTotal);
   const fixed = [
-    `<button class="${activeKey === 'all' ? 'active' : ''}" data-relation-folder="all"><span>전체 연결</span><b>${formatNumber(graphLoaded ? relationGraphState.nodes.length : multiLinkState.allTotal)}</b></button>`,
+    `<button class="${activeKey === 'all' ? 'active' : ''}" data-relation-folder="all"><span>전체 연결</span><b>${formatNumber(allCount)}</b></button>`,
     `<button class="${activeKey === 'unorganized' ? 'active' : ''}" data-relation-folder="unorganized"><span>미분류</span><b>${formatNumber(unorganizedCount)}</b></button>`
   ];
   const folderRows = relationFolderRows();
   const folders = folderRows.map(folder => {
-    const descendantIds = relationFolderDescendantIds(folder.folderId);
-    const count = graphLoaded
-      ? relationGraphState.nodes.filter(node => descendantIds.has(String(node.folderId || ''))).length
-      : Number(folder.descendantNodeCount || folder.directNodeCount || 0);
+    const count = Number(folder.descendantNodeCount ?? folder.directNodeCount ?? 0);
     return `<div class="relation-folder-item${activeKey === String(folder.folderId) ? ' active' : ''}" data-folder-id="${Number(folder.folderId)}" style="--folder-depth:${Number(folder.__depth || 0)}">
       <button type="button" data-relation-folder="${Number(folder.folderId)}" title="${escapeHtml(relationFolderPath(folder.folderId))}"><span><i>▾</i>${escapeHtml(folder.name)}</span><b>${formatNumber(count)}</b></button>
       <span class="relation-folder-actions"><button type="button" data-folder-child title="하위 폴더 추가">＋</button><button type="button" data-folder-edit title="폴더 수정·이동">✎</button><button type="button" data-folder-archive title="폴더 보관">×</button></span>
     </div>`;
   });
   list.innerHTML = [...fixed, ...folders].join('');
+  list.querySelectorAll('button').forEach(button => { button.disabled = relationFolderFormState.saving; });
   const select = document.getElementById('multi-link-folder');
   const selected = select.value;
   select.innerHTML = '<option value="">미분류</option>' + folderRows.map(folder => `<option value="${Number(folder.folderId)}">${'— '.repeat(Number(folder.__depth || 0))}${escapeHtml(folder.name)} · ${escapeHtml(RELATION_KIND_LABELS[folder.kind] || '직접 분류')}</option>`).join('');
@@ -10127,12 +10138,34 @@ function renderRelationFolders() {
 }
 
 async function loadRelationFolders({force = false} = {}) {
-  if (!liveData?.loadRelationFolders || (multiLinkState.foldersLoaded && !force)) return;
-  const result = await liveData.loadRelationFolders();
-  multiLinkState.folders = result.folders;
-  multiLinkState.unorganizedExplicitCount = result.unorganizedExplicitCount;
-  multiLinkState.foldersLoaded = true;
-  renderRelationFolders();
+  if (!liveData?.loadRelationFolders) throw new Error('폴더 조회 기능을 불러오지 못했습니다.');
+  if (!force && multiLinkState.folderPromise) return multiLinkState.folderPromise;
+  if (multiLinkState.foldersLoaded && !force) return true;
+  const requestId = ++multiLinkState.folderRequestId;
+  const pending = (async()=>{
+    try {
+      const result = await liveData.loadRelationFolders();
+      if (requestId !== multiLinkState.folderRequestId) return false;
+      multiLinkState.folders = result.folders;
+      multiLinkState.organizedCount = Number(result.organizedCount || 0);
+      multiLinkState.unorganizedExplicitCount = Number(result.unorganizedExplicitCount || 0);
+      multiLinkState.folderCountsKnown = true;
+      multiLinkState.foldersLoaded = true;
+      if (multiLinkState.folderId !== null && !result.folders.some(folder => String(folder.folderId) === String(multiLinkState.folderId))) {
+        multiLinkState.folderId = null;
+        multiLinkState.organizationScope = 'unorganized';
+      }
+      renderRelationFolders();
+      return true;
+    } catch (error) {
+      if (requestId !== multiLinkState.folderRequestId) return false;
+      throw error;
+    } finally {
+      if (requestId === multiLinkState.folderRequestId) multiLinkState.folderPromise = null;
+    }
+  })();
+  multiLinkState.folderPromise = pending;
+  return pending;
 }
 
 function relationNodeLabel(node) {
@@ -10500,19 +10533,23 @@ function renderRelationWorkspace(preferred = {}) {
 }
 
 async function loadRelationGraph(preferred = {}) {
-  if (!liveData?.loadRelationNodes) return;
+  if (!liveData?.loadRelationNodes) return false;
   const requestId = ++relationGraphState.requestId;
   relationGraphState.loading = true;
   try {
-    const result = await liveData.loadRelationNodes({limit:1000});
-    if (requestId !== relationGraphState.requestId) return;
-    relationGraphState.nodes = result.nodes;
-    relationGraphState.edges = result.edges;
-    const skuNodes = relationGraphState.nodes.filter(node => node.nodeType === 'sellpia_sku' && node.sellpiaSkuCode);
+    const result = await liveData.loadRelationNodes();
+    if (requestId !== relationGraphState.requestId) return false;
+    if (!Array.isArray(result?.nodes) || !Array.isArray(result?.edges) || result.complete === false
+        || result.nodeCount !== undefined && Number(result.nodeCount) !== result.nodes.length
+        || result.edgeCount !== undefined && Number(result.edgeCount) !== result.edges.length) throw new Error('관계 전체 목록을 확인하지 못했습니다. 다시 조회해주세요.');
+    const foldersReady = await loadRelationFolders({force:true});
+    if (requestId !== relationGraphState.requestId || !foldersReady) return false;
+    const nodes = result.nodes;
+    const skuNodes = nodes.filter(node => node.nodeType === 'sellpia_sku' && node.sellpiaSkuCode);
     if (skuNodes.length && liveData?.loadSellpiaRelationVisuals) {
       try {
         const visuals = await liveData.loadSellpiaRelationVisuals(skuNodes.map(node => node.sellpiaSkuCode));
-        if (requestId !== relationGraphState.requestId) return;
+        if (requestId !== relationGraphState.requestId) return false;
         const bySku = new Map((visuals || []).map(visual => [String(visual.sellpia_sku_code || ''), visual]));
         skuNodes.forEach(node => {
           const visual = bySku.get(String(node.sellpiaSkuCode));
@@ -10521,7 +10558,7 @@ async function loadRelationGraph(preferred = {}) {
           node.productName = visual.sellpia_product_name || node.displayName || '';
           node.optionName = visual.sellpia_option_name || '';
         });
-        relationGraphState.nodes.filter(node => node.nodeType === 'sellpia_product' && node.sellpiaProductCode).forEach(node => {
+        nodes.filter(node => node.nodeType === 'sellpia_product' && node.sellpiaProductCode).forEach(node => {
           const representative = skuNodes.find(candidate => String(candidate.sellpiaSkuCode).replace(/-[^-]+$/, '') === String(node.sellpiaProductCode));
           if (!representative) return;
           node.imageUrl ||= representative.imageUrl || '';
@@ -10529,10 +10566,21 @@ async function loadRelationGraph(preferred = {}) {
         });
       } catch (visualError) { console.warn('relation workspace visual enrichment failed', visualError); }
     }
+    if (requestId !== relationGraphState.requestId) return false;
+    relationGraphState.nodes = nodes;
+    relationGraphState.edges = result.edges;
     renderRelationWorkspace(preferred);
+    relationGraphState.error = '';
+    multiLinkWorkspaceState.stale = false;
+    if (multiLinkWorkspaceState.allLoaded) { renderMultiLinkRows(); updateManagedConnectionSummary(); }
+    return true;
   } catch (error) {
+    if (requestId !== relationGraphState.requestId) return false;
+    relationGraphState.error = String(error?.message || error);
+    multiLinkWorkspaceState.stale = true;
     document.getElementById('relation-edge-list').innerHTML = `<div class="relation-workspace-empty error">관계 목록 조회 실패: ${escapeHtml(error?.message || error)}</div>`;
     document.getElementById('relation-tree').innerHTML = `<span class="error">관계 구조 조회 실패: ${escapeHtml(error?.message || error)}</span>`;
+    return false;
   } finally {
     if (requestId === relationGraphState.requestId) relationGraphState.loading = false;
   }
@@ -10972,9 +11020,9 @@ async function saveRelationBoard() {
   button.textContent = '관계 저장 중…';
   try {
     const result = await liveData.applyRelationBoard({nodes, edges, removeEdgeIds});
-    await loadRelationGraph();
+    const reloaded = await loadRelationGraph();
     resetRelationBoard();
-    showToast(`관계 변경을 저장했습니다. 추가 ${formatNumber(changes.additions.length)}건 · 해제 ${formatNumber(changes.removals.length)}건`);
+    showToast(relationMutationMessage(result, `관계 변경을 저장했습니다. 추가 ${formatNumber(changes.additions.length)}건 · 해제 ${formatNumber(changes.removals.length)}건`, {reloaded}));
   } catch (error) {
     showToast(`관계 작업판 저장 실패: ${error?.message || error}`);
   } finally {
@@ -11148,11 +11196,11 @@ async function saveRelationImport() {
   relationImportState.saving = true;
   renderRelationImport();
   try {
-    await liveData.applyRelationBoard({nodes:plan.nodes, edges:plan.edges, removeEdgeIds:[]});
-    await loadRelationGraph();
+    const result = await liveData.applyRelationBoard({nodes:plan.nodes, edges:plan.edges, removeEdgeIds:[]});
+    const reloaded = await loadRelationGraph();
     resetRelationImport();
     document.getElementById('relation-import-panel').open = false;
-    showToast(`엑셀 관계 ${formatNumber(plan.edges.length)}건을 저장했습니다.`);
+    showToast(relationMutationMessage(result, `엑셀 관계 ${formatNumber(plan.edges.length)}건을 저장했습니다.`, {reloaded}));
   } catch (error) {
     showToast(`엑셀 관계 저장 실패: ${error?.message || error}`);
   } finally {
@@ -11464,13 +11512,13 @@ async function loadBundleGraph({query = bundleGraphState.query} = {}) {
   try {
     if (!liveData?.listBundleGraph) throw new Error('현재 배포에는 세트 구성 조회 기능이 없습니다. DB 기능 배포 후 다시 시도해주세요.');
     const payload = await liveData.listBundleGraph(bundleGraphState.query);
-    if (requestId !== bundleGraphState.requestId) return;
+    if (requestId !== bundleGraphState.requestId) return false;
     const bundles = normalizeBundleGraph(payload);
     if (liveData?.loadSellpiaRelationVisuals && bundles.length) {
       const skus = [...new Set(bundles.flatMap(bundle => [bundle.bundleSkuCode, ...bundle.components.map(component => component.componentSkuCode)]))];
       try {
         const visuals = await liveData.loadSellpiaRelationVisuals(skus);
-        if (requestId !== bundleGraphState.requestId) return;
+        if (requestId !== bundleGraphState.requestId) return false;
         const visualBySku = new Map((visuals || []).map(visual => [String(visual.sellpia_sku_code || ''), visual]));
         bundles.forEach(bundle => {
           const bundleVisual = visualBySku.get(bundle.bundleSkuCode);
@@ -11491,18 +11539,22 @@ async function loadBundleGraph({query = bundleGraphState.query} = {}) {
         console.warn('bundle visual enrichment failed', visualError);
       }
     }
+    if (requestId !== bundleGraphState.requestId) return false;
     bundleGraphState.bundles = bundles;
     bundleGraphState.loaded = true;
+    bundleGraphState.error = '';
   } catch (error) {
-    if (requestId !== bundleGraphState.requestId) return;
+    if (requestId !== bundleGraphState.requestId) return false;
+    bundleGraphState.error = String(error?.message || error);
     bundleGraphState.bundles = [];
     bundleGraphState.loaded = true;
     document.getElementById('bundle-graph-list').innerHTML = `<div class="bundle-empty">세트 구성을 불러오지 못했습니다. ${escapeHtml(error?.message || error)}</div>`;
-    return;
+    return false;
   } finally {
     if (requestId === bundleGraphState.requestId) bundleGraphState.loading = false;
   }
   renderBundleGraph();
+  return true;
 }
 
 function downloadBundleTemplate() {
@@ -11819,7 +11871,12 @@ function renderRelationFolderParentOptions(folder = null, preferredParentFolderI
 }
 
 function openRelationFolderForm(folder = null, preferredParentFolderId = null) {
+  if (relationFolderFormState.saving) { showToast('폴더 저장·조회를 마친 뒤 다시 선택해주세요.'); return; }
   const form = document.getElementById('relation-folder-form');
+  relationFolderFormState.savedPendingReload = false;
+  form.dataset.sortOrder = String(folder?.sortOrder ?? 100);
+  setRelationFolderFormMessage('');
+  form.querySelector('button[type="submit"]').textContent = '저장';
   document.getElementById('relation-folder-id').value = folder?.folderId || '';
   document.getElementById('relation-folder-name').value = folder?.name || '';
   document.getElementById('relation-folder-kind').value = folder?.kind || 'custom';
@@ -11830,7 +11887,31 @@ function openRelationFolderForm(folder = null, preferredParentFolderId = null) {
 }
 
 function closeRelationFolderForm() {
+  if (relationFolderFormState.saving) return;
   document.getElementById('relation-folder-form').hidden = true;
+}
+
+function setRelationFolderFormMessage(message, kind = '') {
+  const status = document.getElementById('relation-folder-form-status');
+  if (!status) return;
+  status.textContent = message;
+  status.dataset.status = kind;
+  status.hidden = !message;
+}
+
+function setRelationFolderBusy(busy) {
+  relationFolderFormState.saving = Boolean(busy);
+  document.querySelectorAll('#relation-folder-form input,#relation-folder-form select,#relation-folder-form button,#relation-folder-new,#relation-folder-list button').forEach(control => { control.disabled = Boolean(busy); });
+}
+
+async function reloadRelationFolderWorkspace() {
+  if (await loadMultiLinks({resetPage:true}) === false) throw new Error(relationGraphState.error || bundleGraphState.error || '목록을 다시 조회하지 못했습니다.');
+}
+
+function relationMutationMessage(result, message, {reloaded = true} = {}) {
+  return result?.relationRefreshWarning || !reloaded
+    ? `${message} · 화면 갱신이 필요합니다. 다시 조회해주세요.`
+    : message;
 }
 
 function orderedDependencyComponents(components) {
@@ -11979,7 +12060,9 @@ function renderMultiLinkRows() {
   const body = document.getElementById('multi-link-body');
   clearMultiLinkCellSelection();
   const relationById = new Map(relationGraphState.nodes.map(node => [String(node.nodeId), node]));
-  const relationRows = relationGraphState.edges.map(edge => {
+  const folderScoped = multiLinkState.organizationScope !== 'all' || multiLinkState.folderId !== null;
+  const scopedIds = new Set(relationScopeNodes().map(node => String(node.nodeId)));
+  const relationRows = relationGraphState.edges.filter(edge => !folderScoped || scopedIds.has(String(edge.parentNodeId)) || scopedIds.has(String(edge.childNodeId))).map(edge => {
     const parent = relationById.get(String(edge.parentNodeId));
     const child = relationById.get(String(edge.childNodeId));
     if (!parent || !child || !unifiedConnectionSearchMatch(relationNodeLabel(parent), relationNodeLabel(child))) return '';
@@ -11992,7 +12075,7 @@ function renderMultiLinkRows() {
       <td>${unifiedRelationNodeCard(child, {showThumb:false})}</td>
     </tr>`;
   }).filter(Boolean);
-  const bundleRows = bundleGraphState.bundles.flatMap(bundle => bundle.components.map(component => {
+  const bundleRows = (folderScoped ? [] : bundleGraphState.bundles).flatMap(bundle => bundle.components.map(component => {
     if (!unifiedConnectionSearchMatch(bundle.bundleSkuCode, bundle.productName, bundle.optionName, component.componentSkuCode, component.productName, component.optionName)) return '';
     return `<tr class="unified-connection-row bundle-connection-row" data-bundle-component-id="${component.componentId || ''}">
       <td><span class="unified-connection-family bundle">세트·번들</span></td>
@@ -12016,11 +12099,13 @@ function renderMultiLinkRows() {
 
 function updateManagedConnectionSummary() {
   const relationById = new Map(relationGraphState.nodes.map(node => [String(node.nodeId), node]));
-  const relationCount = relationGraphState.edges.filter(edge => unifiedConnectionSearchMatch(
+  const folderScoped = multiLinkState.organizationScope !== 'all' || multiLinkState.folderId !== null;
+  const scopedIds = new Set(relationScopeNodes().map(node => String(node.nodeId)));
+  const relationCount = relationGraphState.edges.filter(edge => (!folderScoped || scopedIds.has(String(edge.parentNodeId)) || scopedIds.has(String(edge.childNodeId))) && unifiedConnectionSearchMatch(
     relationNodeLabel(relationById.get(String(edge.parentNodeId))),
     relationNodeLabel(relationById.get(String(edge.childNodeId)))
   )).length;
-  const bundleCount = bundleGraphState.bundles.reduce((count, bundle) => count + bundle.components.filter(component => unifiedConnectionSearchMatch(
+  const bundleCount = (folderScoped ? [] : bundleGraphState.bundles).reduce((count, bundle) => count + bundle.components.filter(component => unifiedConnectionSearchMatch(
     bundle.bundleSkuCode,
     bundle.productName,
     bundle.optionName,
@@ -12029,15 +12114,20 @@ function updateManagedConnectionSummary() {
     component.optionName
   )).length, 0);
   document.getElementById('multi-link-count').textContent = formatNumber(relationCount + bundleCount);
-  document.getElementById('multi-link-range').textContent = `상품 관계 ${formatNumber(relationCount)}건 · 세트·번들 구성 ${formatNumber(bundleCount)}건`;
+  document.getElementById('multi-link-range').textContent = folderScoped
+    ? `${multiLinkState.organizationScope === 'unorganized' ? '미분류' : relationFolderPath(multiLinkState.folderId)} · 상품 관계 ${formatNumber(relationCount)}건 · 세트 구성은 별도 탭`
+    : `상품 관계 ${formatNumber(relationCount)}건 · 세트·번들 구성 ${formatNumber(bundleCount)}건`;
 }
 
 async function loadManagedConnections() {
   if (!liveData?.loadRelationNodes || !liveData?.listBundleGraph) return false;
+  const requestId = ++multiLinkWorkspaceState.requestId;
   const body = document.getElementById('multi-link-body');
   body.innerHTML = '<tr class="multi-link-empty loading"><td colspan="6">상품 관계와 세트·번들 구성을 불러오는 중입니다.</td></tr>';
   try {
-    await Promise.all([loadRelationFolders(), loadRelationGraph(), loadBundleGraph({query:''})]);
+    const [graphReady, bundleReady] = await Promise.all([loadRelationGraph(), loadBundleGraph({query:''})]);
+    if (requestId !== multiLinkWorkspaceState.requestId) return false;
+    if (graphReady === false || bundleReady === false) throw new Error(relationGraphState.error || bundleGraphState.error || '현재 연결 목록을 확인하지 못했습니다. 다시 조회해주세요.');
     multiLinkWorkspaceState.allLoaded = true;
     multiLinkState.loaded = true;
     multiLinkState.rows = [];
@@ -12047,6 +12137,8 @@ async function loadManagedConnections() {
     updateManagedConnectionSummary();
     return true;
   } catch (error) {
+    if (requestId !== multiLinkWorkspaceState.requestId) return false;
+    multiLinkWorkspaceState.stale = true;
     console.error('managed connection matrix load failed', error);
     body.innerHTML = `<tr class="multi-link-empty error"><td colspan="6">상품 관계·세트 구성을 불러오지 못했습니다. ${escapeHtml(error?.message || '')}</td></tr>`;
     return false;
@@ -12171,11 +12263,15 @@ function renderMultiLinkEditor(row) {
 
 async function loadMultiLinks({resetPage = false, selectKey = '', forceLegacy = false} = {}) {
   if (!liveData?.loadRelationNodes) return false;
-  const includeLegacy = forceLegacy || multiLinkWorkspaceState.tab === 'all';
+  const includeLegacy = forceLegacy || Boolean(selectKey);
   if (!includeLegacy) {
+    if (multiLinkWorkspaceState.tab === 'all') return loadManagedConnections();
     try {
-      await Promise.all([loadRelationFolders(), loadRelationGraph()]);
-      return true;
+      if (multiLinkWorkspaceState.tab === 'bundle') {
+        const [graphReady, bundleReady] = await Promise.all([loadRelationGraph(), loadBundleGraph({query:bundleGraphState.query})]);
+        return graphReady !== false && bundleReady !== false;
+      }
+      return await loadRelationGraph() !== false;
     } catch (error) {
       console.error('relation workspace load failed', error);
       document.getElementById('relation-edge-list').innerHTML = `<div class="relation-workspace-empty error">관계 화면을 불러오지 못했습니다. ${escapeHtml(error?.message || '')}</div>`;
@@ -12186,11 +12282,8 @@ async function loadMultiLinks({resetPage = false, selectKey = '', forceLegacy = 
   if (resetPage) multiLinkState.page = 1;
   const requestId = ++multiLinkState.requestId;
   multiLinkState.loading = true;
-  const body = document.getElementById('multi-link-body');
-  body.innerHTML = '<tr class="multi-link-empty loading"><td colspan="4">Supabase에서 전체 연결 구조를 불러오는 중입니다.</td></tr>';
   try {
     await Promise.all([
-      loadRelationFolders(),
       loadRelationGraph(),
       bundleGraphState.loaded ? Promise.resolve() : loadBundleGraph({query:''})
     ]);
@@ -12229,8 +12322,9 @@ async function loadMultiLinks({resetPage = false, selectKey = '', forceLegacy = 
     renderMultiLinkEditor(multiLinkState.selected);
     return true;
   } catch (error) {
+    if (requestId !== multiLinkState.requestId) return false;
     console.error('multi-link graph load failed', error);
-    body.innerHTML = `<tr class="multi-link-empty error"><td colspan="9">연결 구조를 불러오지 못했습니다. ${escapeHtml(error?.message || '')}</td></tr>`;
+    showToast(`판매처 구성 조회 실패: ${error?.message || error}`);
     return false;
   } finally {
     if (requestId === multiLinkState.requestId) multiLinkState.loading = false;
@@ -12363,22 +12457,48 @@ document.getElementById('multi-link-components').addEventListener('click', async
 
 document.getElementById('relation-folder-new').addEventListener('click', () => openRelationFolderForm(null, null));
 document.getElementById('relation-folder-cancel').addEventListener('click', closeRelationFolderForm);
+document.getElementById('relation-folder-form').addEventListener('input', () => {
+  if (!relationFolderFormState.savedPendingReload || relationFolderFormState.saving) return;
+  relationFolderFormState.savedPendingReload = false;
+  document.getElementById('relation-folder-form').querySelector('button[type="submit"]').textContent = '저장';
+  setRelationFolderFormMessage('저장한 폴더의 변경사항입니다. 저장을 눌러 반영하세요.');
+});
 document.getElementById('relation-folder-form').addEventListener('submit', async event => {
   event.preventDefault();
+  if (relationFolderFormState.saving) return;
   const submit = event.currentTarget.querySelector('button[type="submit"]');
-  submit.disabled = true;
+  let committed = relationFolderFormState.savedPendingReload;
+  setRelationFolderBusy(true);
   try {
-    await liveData.saveRelationFolder({
-      folderId:document.getElementById('relation-folder-id').value || null,
-      name:document.getElementById('relation-folder-name').value,
-      kind:document.getElementById('relation-folder-kind').value,
-      parentFolderId:document.getElementById('relation-folder-parent').value || null
-    });
+    if (!committed) {
+      const saved = await liveData.saveRelationFolder({
+        folderId:document.getElementById('relation-folder-id').value || null,
+        name:document.getElementById('relation-folder-name').value,
+        kind:document.getElementById('relation-folder-kind').value,
+        sortOrder:Number(event.currentTarget.dataset.sortOrder ?? 100),
+        parentFolderId:document.getElementById('relation-folder-parent').value || null
+      });
+      committed = true;
+      relationFolderFormState.savedPendingReload = true;
+      const savedId = saved?.folder_id ?? saved?.folderId;
+      if (savedId !== null && savedId !== undefined) document.getElementById('relation-folder-id').value = savedId;
+    }
+    setRelationFolderFormMessage('폴더 저장 완료 · 목록 확인 중…', 'saved');
+    await reloadRelationFolderWorkspace();
+    relationFolderFormState.savedPendingReload = false;
+    setRelationFolderBusy(false);
     closeRelationFolderForm();
-    await loadRelationFolders({force:true});
     showToast('조합 관리 폴더를 저장했습니다.');
-  } catch (error) { showToast(`폴더 저장 실패: ${error?.message || error}`); }
-  finally { submit.disabled = false; }
+  } catch (error) {
+    if (committed) {
+      submit.textContent = '목록 다시 조회';
+      setRelationFolderFormMessage('폴더는 저장됐습니다. 목록을 다시 조회해주세요.', 'warning');
+      showToast('폴더 저장 완료 · 목록 갱신 실패. 저장한 폴더는 유지됩니다.');
+    } else {
+      setRelationFolderFormMessage(`폴더 저장 실패: ${error?.message || error}`, 'error');
+      showToast(`폴더 저장 실패: ${error?.message || error}`);
+    }
+  } finally { setRelationFolderBusy(false); }
 });
 
 document.getElementById('relation-folder-list').addEventListener('click', async event => {
@@ -12393,19 +12513,21 @@ document.getElementById('relation-folder-list').addEventListener('click', async 
     return;
   }
   if (event.target.closest('[data-folder-archive]') && folder) {
+    if (relationFolderFormState.saving) return;
     if (!window.confirm(`‘${relationFolderPath(folder.folderId)}’ 폴더를 보관할까요?\n폴더 안 상품 관계는 삭제되지 않고 미분류로 이동합니다.`)) return;
-    event.target.disabled = true;
+    setRelationFolderBusy(true);
+    let archived = false;
     try {
       const result = await liveData.archiveRelationFolder(folder.folderId);
+      archived = true;
       if (String(multiLinkState.folderId) === String(folder.folderId)) {
         multiLinkState.folderId = null;
         multiLinkState.organizationScope = 'unorganized';
       }
-      await loadRelationFolders({force:true});
-      await loadMultiLinks({resetPage:true});
+      await reloadRelationFolderWorkspace();
       showToast(`폴더를 보관하고 상품 노드 ${formatNumber(result?.unassignedNodes || 0)}개를 미분류로 옮겼습니다.`);
-    } catch (error) { showToast(`폴더 보관 실패: ${error?.message || error}`); }
-    finally { event.target.disabled = false; }
+    } catch (error) { showToast(archived ? '폴더 보관 완료 · 목록 갱신 실패. 새로고침해주세요.' : `폴더 보관 실패: ${error?.message || error}`); }
+    finally { setRelationFolderBusy(false); }
     return;
   }
   const button = event.target.closest('[data-relation-folder]');
@@ -12511,22 +12633,20 @@ document.getElementById('relation-edge-save').addEventListener('click', async ev
   const editingEdgeId = relationCellSelection.editingEdgeId;
   button.disabled = true;
   try {
-    if (editingEdgeId) {
-      await liveData.updateRelationEdge({edgeId:editingEdgeId, parentNodeId, childNodeId});
-    } else {
-      await liveData.saveRelationEdge({parentNodeId, childNodeId});
-    }
+    const result = editingEdgeId
+      ? await liveData.updateRelationEdge({edgeId:editingEdgeId, parentNodeId, childNodeId})
+      : await liveData.saveRelationEdge({parentNodeId, childNodeId});
     relationGraphState.focusNodeId = null;
     relationGraphState.search = '';
     document.getElementById('relation-workspace-search').value = '';
-    await loadRelationGraph();
+    const reloaded = await loadRelationGraph();
     setRelationViewMode('list');
     resetRelationEdgeEditor();
     document.getElementById('multi-link-organization-form').hidden = true;
     document.getElementById('relation-add-toggle').textContent = '＋ 관계 편집';
-    showToast(editingEdgeId
+    showToast(relationMutationMessage(result, editingEdgeId
       ? '선택한 상위·하위 관계를 수정했습니다.'
-      : '상위 → 하위 관계를 저장했습니다. 가격·재고 계산에는 반영하지 않았습니다.');
+      : '상위 → 하위 관계를 저장했습니다. 종속 적용 내보내기에 사용되며 원본 가격·재고는 유지됩니다.', {reloaded}));
   } catch (error) { showToast(`관계 저장 실패: ${error?.message || error}`); }
   finally { button.disabled = false; }
 });
@@ -12543,8 +12663,7 @@ document.getElementById('relation-edge-history-list').addEventListener('click', 
   button.textContent = '확인 중…';
   try {
     const result = await liveData.undoRelationEdgeEvent(eventId);
-    if (multiLinkWorkspaceState.allLoaded) await loadMultiLinks();
-    else await loadRelationGraph();
+    const reloaded = multiLinkWorkspaceState.allLoaded ? await loadMultiLinks() : await loadRelationGraph();
     const edgeStillActive = relationGraphState.edges.some(edge => Number(edge.edgeId) === edgeId);
     if (edgeStillActive) {
       relationCellSelection.editingEdgeId = edgeId;
@@ -12552,7 +12671,7 @@ document.getElementById('relation-edge-history-list').addEventListener('click', 
     } else {
       closeRelationEdgeEditorDrawer();
     }
-    showToast(result?.alreadyUndone ? '이미 되돌린 관계 변경입니다.' : '관계 변경을 이전 상태로 되돌렸습니다.');
+    showToast(relationMutationMessage(result, result?.alreadyUndone ? '이미 되돌린 관계 변경입니다.' : '관계 변경을 이전 상태로 되돌렸습니다.', {reloaded}));
   } catch (error) {
     showToast(`관계 되돌리기 실패: ${error?.message || error}`);
     await loadRelationEdgeHistory(edgeId, {silent:true});
@@ -12566,17 +12685,17 @@ document.getElementById('relation-edge-editor-save').addEventListener('click', a
   const button = event.currentTarget;
   button.disabled = true;
   try {
-    await liveData.updateRelationEdge({edgeId, parentNodeId, childNodeId});
+    const result = await liveData.updateRelationEdge({edgeId, parentNodeId, childNodeId});
     relationGraphState.focusNodeId = null;
     relationGraphState.search = '';
     document.getElementById('relation-workspace-search').value = '';
-    await loadRelationGraph();
+    const reloaded = await loadRelationGraph();
     if (multiLinkWorkspaceState.allLoaded) {
       renderMultiLinkRows();
       updateManagedConnectionSummary();
     }
     closeRelationEdgeEditorDrawer();
-    showToast('선택한 상위·하위 관계 한 건을 수정했습니다.');
+    showToast(relationMutationMessage(result, '선택한 상위·하위 관계 한 건을 수정했습니다.', {reloaded}));
   } catch (error) {
     showToast(`관계 수정 실패: ${error?.message || error}`);
     updateRelationEdgeEditorSaveState();
@@ -12602,9 +12721,9 @@ async function handleRelationWorkspaceClick(event) {
     if (!node || !window.confirm(`‘${relationNodeLabel(node)}’ 노드를 삭제할까요?\n화면의 관계 노드만 보관 처리되며 셀피아·판매처 원본은 바뀌지 않습니다.`)) return;
     archiveNodeButton.disabled = true;
     try {
-      await liveData.archiveRelationNode(node.nodeId);
-      await Promise.all([loadRelationFolders({force:true}), loadRelationGraph()]);
-      showToast('잘못 만든 관계 노드를 삭제했습니다. 원본 상품 데이터는 유지됩니다.');
+      const result = await liveData.archiveRelationNode(node.nodeId);
+      const reloaded = await loadRelationGraph();
+      showToast(relationMutationMessage(result, '잘못 만든 관계 노드를 삭제했습니다. 원본 상품 데이터는 유지됩니다.', {reloaded}));
     } catch (error) { showToast(`노드 삭제 실패: ${error?.message || error}`); }
     finally { archiveNodeButton.disabled = false; }
     return;
@@ -12613,9 +12732,9 @@ async function handleRelationWorkspaceClick(event) {
   if (!button || !window.confirm('이 상위·하위 관계 한 건만 해제할까요? 상품 노드와 실제 SKU 연결은 유지됩니다.')) return;
   button.disabled = true;
   try {
-    await liveData.removeRelationEdge(button.dataset.removeRelationEdge);
-    await loadRelationGraph();
-    showToast('상위·하위 관계 한 건을 해제했습니다.');
+    const result = await liveData.removeRelationEdge(button.dataset.removeRelationEdge);
+    const reloaded = await loadRelationGraph();
+    showToast(relationMutationMessage(result, '상위·하위 관계 한 건을 해제했습니다.', {reloaded}));
   } catch (error) { showToast(`관계 해제 실패: ${error?.message || error}`); }
 }
 
@@ -13460,7 +13579,7 @@ function showPage(pageId) {
   if (pageId === 'ably-combinations') window.AblyWorkspace?.refresh();
   if (pageId === 'attributes') window.TagPriceWorkspace?.refresh();
   if (pageId === 'attributes') window.SystemV3AttributesPage?.show();
-  if (pageId === 'multi-links' && multiLinkWorkspaceState.tab === 'all' && !multiLinkWorkspaceState.allLoaded) loadManagedConnections();
+  if (pageId === 'multi-links' && multiLinkWorkspaceState.tab === 'all' && (!multiLinkWorkspaceState.allLoaded || multiLinkWorkspaceState.stale)) loadManagedConnections();
   if (pageId === 'price-rules') {
     window.TagPriceWorkspace?.refresh();
     window.SystemV3PriceRuleLab?.refresh();
