@@ -201,4 +201,3 @@ for each row when (old.is_active and not new.is_active)
 execute function operations_private.guard_relation_node_archive_v1();
 
 notify pgrst, 'reload schema';
-
