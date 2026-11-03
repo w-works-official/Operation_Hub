@@ -264,7 +264,7 @@
   return withMetadata?{rows,metadata:tagWorkbookMetadata(book)}:rows;
  }
  function tagNameFromFilename(fileName){
-  const name=String(fileName||'').split(/[\\/]/).pop()||'',match=name.match(/^(.+)_일괄적용\.(xlsx|xls|csv)$/i);
+  const name=String(fileName||'').split(/[\\/]/).pop()||'',match=name.match(/^(.+)_일괄적용(?:[\s_-]+[1-9]\d*|\s*\([1-9]\d*\))?\.(xlsx|xls|csv)$/i);
   return match?match[1].trim():'';
  }
  const normalizeTagName=value=>String(value||'').normalize('NFKC').trim().toLowerCase().replace(/[\s_\-/\\]+/g,'');

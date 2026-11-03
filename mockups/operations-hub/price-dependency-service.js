@@ -3,12 +3,21 @@
  const data=()=>g.SystemV3Data;
  const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
  const proof=value=>JSON.stringify(canonical(value));
+ async function decisionEvidenceDigest(decisions,resolver){
+  if(typeof g.crypto?.subtle?.digest!=='function'||typeof g.TextEncoder!=='function')throw Error('가격 종속관계의 안전한 검증 기능을 사용할 수 없습니다. HTTPS 화면에서 다시 실행해주세요.');
+  // Keep every canonical evidence field, but do not copy the full batch JSON
+  // into every root and descendant. Hash once for this fresh read only.
+  const bytes=new g.TextEncoder().encode(resolver.proof(decisions));
+  const digest=new Uint8Array(await g.crypto.subtle.digest('SHA-256',bytes));
+  return 'sha256:v1:'+Array.from(digest,byte=>byte.toString(16).padStart(2,'0')).join('');
+ }
  async function parentPrices(source,skus,priceMode,onQuery){
   if(!skus.length)return new Map();
   const D=data(),R=g.HubCurrentPriceDecisionResolver;
   const response=await D.loadExportCurrentPriceDecisions({source,skus,allowLargeGroups:true,onQuery});
   const decisions=R.normalize(response,{source,skus});
   R.validateGroups(decisions);
+  const decisionProof=await decisionEvidenceDigest(decisions,R);
   const prices=new Map(),remaining=[];
   for(const sku of skus){
    const rows=decisions.rowsBySku.get(sku)||[],values=new Set(rows.map(row=>row.price.final));
@@ -20,18 +29,18 @@
     }
    }
    if(values.size>1){prices.set(sku,{error:`${sku}: 상위 SKU의 판매처별 연결 가격이 서로 다릅니다.`});continue;}
-   if(rows.length){prices.set(sku,{final:rows[0].price.final,proof:{origin:'current_decision',decisions:rows.map(row=>({event_id:row.event_id,revision:row.revision,product:row.seller_product_code,option:row.seller_option_code,price:row.price}))}});continue;}
+   if(rows.length){prices.set(sku,{final:rows[0].price.final,proof:{origin:'current_decision',decisionProof,decisions:rows.map(row=>({event_id:row.event_id,revision:row.revision,product:row.seller_product_code,option:row.seller_option_code,price:row.price}))}});continue;}
    remaining.push(sku);
   }
   if(priceMode==='sellpia_source'){
    const raw=remaining.length?await D.loadSellpiaSourcePricesForExport({skus:remaining,onQuery}):new Map();
-   for(const sku of remaining)prices.set(sku,{final:raw.get(sku),proof:{origin:'sellpia_source',decisionProof:R.proof(decisions)}});
+   for(const sku of remaining)prices.set(sku,{final:raw.get(sku),proof:{origin:'sellpia_source',decisionProof}});
   }else if(remaining.length){
    const targets=await D.loadCarrierMatrixTargets({source,skus:remaining,onQuery}),internal=[];
    for(const row of targets.rows||[]){
     const target=g.HubCurrentPriceExport.matrixPriceTarget(row);
     if(target?.invalid)prices.set(row.sku,{error:target.reason});
-    else if(target)prices.set(row.sku,{final:target.final,proof:{origin:target.origin,tuple:target,decisionProof:R.proof(decisions)}});
+    else if(target)prices.set(row.sku,{final:target.final,proof:{origin:target.origin,tuple:target,decisionProof}});
     else internal.push(row.sku);
    }
    if(internal.length){
@@ -39,7 +48,7 @@
     const products=await D.loadInternalFormulaProducts(expanded),evaluator=g.HubRuleRegistry.createEvaluator({...registry,products:Object.fromEntries(products.map(row=>[row.sellpia_sku_code,row]))});
     for(const sku of internal)try{
      const value=evaluator.evaluate(sku,'calculated_base_price');
-     prices.set(sku,{final:value.value,proof:{origin:'matrix_base_price',value,decisionProof:R.proof(decisions)}});
+     prices.set(sku,{final:value.value,proof:{origin:'matrix_base_price',value,decisionProof}});
     }catch(error){prices.set(sku,{error:error.message});}
    }
   }

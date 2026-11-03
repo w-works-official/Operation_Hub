@@ -43,7 +43,7 @@ test('Sellpia UI requires the stored original carrier and separates counters and
 
 test('fingerprint timeout retry keeps all exact stamps; permission failures remain failures',async()=>{
  const code=fs.readFileSync('mockups/operations-hub/data-service.js','utf8'),calls=[];
- const context={fullMatrixReadContext:null,requireOperationsHubSessionToken:()=> 'operator',throwOperationsHubRpcError:error=>{if(error)throw Error(error.message);},db:{rpc:async(_name,args)=>{calls.push(args.p_skus);return args.p_skus.length>4?{error:{message:'canceling statement due to statement timeout'}}:{data:Object.fromEntries(args.p_skus.map(sku=>[sku,'exact-'+sku]))};}}};
+ const context={fullMatrixReadContext:null,requireOperationsHubSessionToken:()=> 'operator',throwOperationsHubRpcError:error=>{if(error)throw Error(error.message);},db:{rpc:async(name,args)=>{assert.equal(name,'hub_matrix_input_fingerprints_batch_v1');assert.equal(args.p_session_token,'operator');calls.push(args.p_skus);return args.p_skus.length>4?{error:{message:'canceling statement due to statement timeout'}}:{data:Object.fromEntries(args.p_skus.map(sku=>[sku,'exact-'+sku]))};}}};
  vm.createContext(context);vm.runInContext(code.slice(code.indexOf('  async function loadInputFingerprints('),code.indexOf('  async function loadSourceSnapshotPair(')),context);
  const skus=Array.from({length:57},(_,index)=>''+index),stamps=await context.loadInputFingerprints(skus,'');assert.equal(Object.keys(stamps).length,57);assert.ok(skus.every(sku=>stamps[sku]==='exact-'+sku));
  context.db.rpc=async()=>({error:{message:'permission denied'}});await assert.rejects(context.loadInputFingerprints(skus,''),/permission denied/);

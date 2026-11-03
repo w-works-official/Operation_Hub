@@ -93,5 +93,6 @@
   "operationsHubNestedRelationFoldersSql.test.mjs",
   "operationsHubRelationGraphPagingSql.test.mjs",
   "operationsHubRelationGraphDataService.test.mjs",
-  "operationsHubEmptyProductPriceSyncSql.test.mjs"
+  "operationsHubEmptyProductPriceSyncSql.test.mjs",
+  "operationsHubLargeDependencyExport.test.mjs"
 ]

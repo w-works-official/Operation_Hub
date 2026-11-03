@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import {createHash,webcrypto} from 'node:crypto';
 
 const modules = ['discount-price-math.js','rule-registry.js','current-price-export.js','price-dependency-export.js','price-dependency-service.js']
   .map(name => [name,fs.readFileSync(`mockups/operations-hub/${name}`,'utf8')]);
 const plain = value => JSON.parse(JSON.stringify(value));
 const exportSnapshots={seller_snapshot_id:'00000000-0000-4000-8000-000000000001',sellpia_snapshot_id:'00000000-0000-4000-8000-000000000002',sellpia_observed_at:'2026-10-22T00:00:00Z'};
 const exportEnvelope=response=>response.proof_version?response:{...response,proof_version:'sellpia-export-v2',absence_proofs:[],carrier_proofs:[],snapshots:{...exportSnapshots}};
+const digest=text=>'sha256:v1:'+createHash('sha256').update(text,'utf8').digest('hex');
 const graph = (parents = ['A'], {version = 'graph-1', requested = parents, references = []} = {}) => ({
   contract_version:1,version,snapshot_id:'sellpia-1',requested_skus:requested,
   selected_skus:[...new Set([...requested,...parents.map(sku=>`${sku}-child`)])].sort(),reference_skus:references,
@@ -19,7 +21,7 @@ const decision = (sku,final,{source = 'smartstore', product = 'product-1', optio
   decision_source:'matrix_manual',effective_at:'2026-10-22T00:00:00Z',mapping_valid:true
 });
 
-function harness({context = graph(),decisions = {rows:[],groups:[]},handlers = {}} = {}) {
+function harness({context = graph(),decisions = {rows:[],groups:[]},handlers = {},crypto = webcrypto} = {}) {
   const calls = [];
   const implementations = {
     loadExportSkuDependencies:async()=>context,
@@ -38,7 +40,7 @@ function harness({context = graph(),decisions = {rows:[],groups:[]},handlers = {
       return implementations[name](...args);
     };
   }});
-  const sandbox = vm.createContext({console,structuredClone,SystemV3Data,
+  const sandbox = vm.createContext({console,structuredClone,SystemV3Data,crypto,TextEncoder,TextDecoder,Uint8Array,
     fetch(){throw Error('Network is forbidden in dependency export tests');}});
   for(const [name,source] of modules)vm.runInContext(source,sandbox,{filename:name});
   return {api:sandbox.HubPriceDependencyService,calls,sandbox};
@@ -97,14 +99,17 @@ test('a parent with a current decision on only one identity cannot silently supp
 
 test('source mode reads only unresolved parent SKUs and preserves raw final and explicit absence evidence',async()=>{
   const onQuery=()=>{};
-  const {api,calls}=harness({context:graph(['A','B']),decisions:{rows:[decision('A',9000)],groups:[]},handlers:{
+  const {api,calls,sandbox}=harness({context:graph(['A','B']),decisions:{rows:[decision('A',9000)],groups:[]},handlers:{
     loadSellpiaSourcePricesForExport:async()=>new Map([['B',12345]])
   }});
   const result=await api.prepare({source:'smartstore',skus:['A','B'],priceMode:'sellpia_source',onQuery});
   assert.equal(result.resolution.bySku.get('A-child').final,9000);
   assert.equal(result.resolution.bySku.get('B-child').final,12345);
   const evidence=result.resolution.bySku.get('B-child').price_proof;
-  assert.equal(evidence.origin,'sellpia_source');assert.equal(JSON.parse(evidence.decisionProof).rows.find(row=>row.sku==='B').event_id,null);
+  assert.equal(evidence.origin,'sellpia_source');
+  const canonical=sandbox.HubCurrentPriceDecisionResolver.proof(sandbox.HubCurrentPriceDecisionResolver.normalize(exportEnvelope({rows:[decision('A',9000)],groups:[]}),{source:'smartstore',skus:['A','B']}));
+  assert.equal(JSON.parse(canonical).rows.find(row=>row.sku==='B').event_id,null);
+  assert.equal(evidence.decisionProof,digest(canonical),'the complete batch, including the explicit absence, is hashed without dropping evidence');
   assert.deepEqual(plain(calls.at(-1).args[0].skus),['B']);assert.equal(calls.at(-1).args[0].onQuery,onQuery);
   assert.ok(!calls.some(call=>/save|materialize|calculate|apply|write|insert|update/i.test(String(call.name))));
 });
@@ -211,7 +216,7 @@ test('all supported cache-only reference parents retain carrier and source snaps
   const original={rows:[],groups:[],proof_version:'sellpia-export-v2',absence_proofs:[],carrier_proofs:[carrier],snapshots:{...exportSnapshots}};
   let response=structuredClone(original),rawPrice=21000;
   const onQuery=()=>{};
-  const {api,calls}=harness({context,handlers:{
+  const {api,calls,sandbox}=harness({context,handlers:{
     loadCurrentPriceDecisions:async()=>{throw Error('editor fallback is forbidden for a dependency parent');},
     loadExportCurrentPriceDecisions:async options=>{
       assert.equal(options.source,source);assert.equal(options.allowLargeGroups,true);
@@ -222,7 +227,9 @@ test('all supported cache-only reference parents retain carrier and source snaps
   const prepared=await api.prepare({source,skus:['A-child'],priceMode:'sellpia_source',onQuery});
   assert.deepEqual(plain(prepared.outputSkus),['A-child']);assert.equal(prepared.resolution.bySku.has('A'),false);
   assert.equal(prepared.resolution.bySku.get('A-child').final,21000);
-  const proof=JSON.parse(prepared.resolution.bySku.get('A-child').price_proof.decisionProof);
+  const canonical=sandbox.HubCurrentPriceDecisionResolver.proof(sandbox.HubCurrentPriceDecisionResolver.normalize(response,{source,skus:['A']}));
+  assert.equal(prepared.resolution.bySku.get('A-child').price_proof.decisionProof,digest(canonical));
+  const proof=JSON.parse(canonical);
   assert.deepEqual(proof.groups,[]);assert.equal(proof.carrier_proofs[0].mapping_fingerprint,'cache-map-1');assert.deepEqual(proof.snapshots,exportSnapshots);
   assert.equal(proof.carrier_proofs[0].source_channel,source);
   assert.equal(calls.find(call=>call.name==='loadExportCurrentPriceDecisions').args[0].onQuery,onQuery);
@@ -246,4 +253,76 @@ test('no inherited outputs means no price reads and invalid modes fail before an
   await assert.rejects(api.prepare({source:'other',skus:['A']}),/가격 계산 방식을 확인/);
   await assert.rejects(api.prepare({source:'smartstore',skus:['A'],priceMode:'unknown'}),/가격 계산 방식을 확인/);
   assert.equal(calls.length,1);
+});
+
+function largeEvidence(rootCount,descendantCount=rootCount){
+ const roots=Array.from({length:rootCount},(_,index)=>`ROOT-${index}`),children=Array.from({length:descendantCount},(_,index)=>`CHILD-${index}`);
+ const context={contract_version:1,version:'large-graph',snapshot_id:'sellpia-1',requested_skus:roots,selected_skus:[...roots,...children],reference_skus:[],
+  edges:children.map((child,index)=>({edge_id:`edge-${index}`,parent_node_id:`root-node-${index%rootCount}`,child_node_id:`child-node-${index}`,parent_sku:roots[index%rootCount],child_sku:child}))};
+ const response={rows:[],groups:[],proof_version:'sellpia-export-v2',absence_proofs:[],snapshots:{...exportSnapshots},carrier_proofs:roots.map((sku,index)=>({
+  source_channel:'smartstore',seller_product_code:`PRODUCT-${index}`,mapping_fingerprint:`mapping-${index}`,
+  snapshot_id:exportSnapshots.seller_snapshot_id,sellpia_snapshot_id:exportSnapshots.sellpia_snapshot_id,source_observed_at:exportSnapshots.sellpia_observed_at,
+  sellpia_prices:{[sku]:1000+index},targets:[{sku,member_skus:[sku],seller_product_code:`PRODUCT-${index}`,seller_option_code:`OPTION-${index}`,sourceprice:1000+index,source_row_no:index+2,source_valid:true,
+   component_members:[{sku,mapping_source:'carrier_cache',listing_id:null,component_id:null,component_qty:1,component_role:'primary'}]}]}))};
+ return {roots,children,context,response,raw:new Map(roots.map((sku,index)=>[sku,1000+index]))};
+}
+
+test('a fresh parent read hashes the complete canonical evidence exactly once and keeps scalar provenance',async()=>{
+ const fixture=largeEvidence(40),hashCalls=[];
+ const h=harness({context:fixture.context,decisions:fixture.response,crypto:{subtle:{digest:async(algorithm,bytes)=>{hashCalls.push({algorithm,bytes:bytes.length});return webcrypto.subtle.digest(algorithm,bytes);}}},handlers:{loadSellpiaSourcePricesForExport:async()=>fixture.raw}});
+ const resolver=h.sandbox.HubCurrentPriceDecisionResolver;let proofCalls=0;
+ h.sandbox.HubCurrentPriceDecisionResolver={...resolver,proof:value=>{proofCalls++;return resolver.proof(value);}};
+ const expected=digest(resolver.proof(resolver.normalize(fixture.response,{source:'smartstore',skus:fixture.roots})));
+ const prepared=await h.api.prepare({source:'smartstore',skus:fixture.roots,priceMode:'sellpia_source'});
+ assert.equal(proofCalls,1);assert.equal(hashCalls.length,1);assert.equal(hashCalls[0].algorithm,'SHA-256');
+ assert.ok(hashCalls[0].bytes>10000,'the full carrier and snapshot proof, rather than an identity-only subset, must enter SHA-256');
+ for(const child of fixture.children){const row=prepared.resolution.bySku.get(child);assert.equal(row.price_proof.decisionProof,expected);assert.match(row.price_proof.decisionProof,/^sha256:v1:[0-9a-f]{64}$/);assert.equal(row.price_proof.origin,'sellpia_source');assert.equal(row.final,fixture.raw.get(row.root_sku));}
+ assert.equal(await h.api.verify(prepared),true);assert.equal(proofCalls,2);assert.equal(hashCalls.length,2,'verification performs a new read and a new digest');
+ await assert.rejects(h.api.verify({...prepared,proof:prepared.proof.replaceAll('sha256:v1:','sha256:v0:')}),/상위 가격 또는 종속관계가 변경/);
+});
+
+test('doubling independent roots grows dependency proof linearly instead of repeating each full batch proof',async()=>{
+ const sizes=[];
+ for(const count of [40,80]){
+  const fixture=largeEvidence(count),h=harness({context:fixture.context,decisions:fixture.response,handlers:{loadSellpiaSourcePricesForExport:async()=>fixture.raw}});
+  const result=await h.api.prepare({source:'smartstore',skus:fixture.roots,priceMode:'sellpia_source'});
+  sizes.push(result.proof.length);assert.ok(result.proof.length<1000*count);
+  assert.ok(result.resolution.proof.length<1000*count);
+ }
+ assert.ok(sizes[1]<sizes[0]*2.2,`40/80 roots must remain linear: ${sizes.join(' / ')}`);
+});
+
+test('600 roots and 16000 descendants retain exact finals with bounded read-only proofs',async()=>{
+ const fixture=largeEvidence(600,16000),before=JSON.stringify({context:fixture.context,response:fixture.response}),h=harness({context:fixture.context,decisions:fixture.response,handlers:{loadSellpiaSourcePricesForExport:async()=>fixture.raw}});
+ const result=await h.api.prepare({source:'smartstore',skus:fixture.roots,priceMode:'sellpia_source'});
+ assert.equal(result.outputSkus.length,16600);assert.equal(result.summary.inheritedCount,16000);assert.equal(result.summary.autoIncludedCount,16000);
+ for(const child of fixture.children){const row=result.resolution.bySku.get(child);assert.equal(row.final,fixture.raw.get(row.root_sku));assert.equal(row.price_proof.decisionProof.length,74);}
+ assert.ok(result.proof.length<12_000_000,`service proof must stay bounded: ${result.proof.length}`);
+ assert.ok(result.resolution.proof.length<12_000_000);
+ assert.equal(JSON.stringify({context:fixture.context,response:fixture.response}),before);
+ assert.deepEqual(h.calls.map(call=>call.name),['loadExportSkuDependencies','loadExportCurrentPriceDecisions','loadSellpiaSourcePricesForExport']);
+});
+
+test('digest verification detects carrier, source, absence and current-decision evidence changes while ignoring object key order',async()=>{
+ const fixture=largeEvidence(1),original=fixture.response;let response=structuredClone(original);
+ const absence={...structuredClone(original.carrier_proofs[0]),mapping_valid:true,revision:0};response.absence_proofs=[absence];
+ const initial=structuredClone(response),h=harness({context:fixture.context,handlers:{loadExportCurrentPriceDecisions:async()=>response,loadSellpiaSourcePricesForExport:async()=>fixture.raw}});
+ const prepared=await h.api.prepare({source:'smartstore',skus:fixture.roots,priceMode:'sellpia_source'});
+ const reordered=value=>Array.isArray(value)?value.map(reordered):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).reverse().map(([key,item])=>[key,reordered(item)])):value;
+ response=reordered(initial);assert.equal(await h.api.verify(prepared),true);
+ for(const mutate of [r=>{r.carrier_proofs[0].mapping_fingerprint='changed';},r=>{r.carrier_proofs[0].targets[0].component_members[0].component_qty=2;},r=>{r.carrier_proofs[0].sellpia_prices['ROOT-0']=2000;},r=>{r.absence_proofs[0].mapping_fingerprint='changed';},r=>{r.snapshots.seller_snapshot_id='new-seller';r.carrier_proofs[0].snapshot_id='new-seller';r.absence_proofs[0].snapshot_id='new-seller';}]){
+  response=structuredClone(initial);mutate(response);await assert.rejects(h.api.verify(prepared),/상위 가격 또는 종속관계가 변경/);
+ }
+ response=structuredClone(initial);response.rows=[decision('ROOT-0',1000,{product:'PRODUCT-0',option:'OPTION-0'})];
+ await assert.rejects(h.api.verify(prepared),/상위 가격 또는 종속관계가 변경/);
+});
+
+test('unavailable or failed WebCrypto rejects without an insecure fallback or price read',async()=>{
+ for(const crypto of [undefined,{}, {subtle:{digest:async()=>{throw Error('digest unavailable');}}}]){
+  const h=harness({crypto:crypto??null});
+  await assert.rejects(h.api.prepare({source:'smartstore',skus:['A'],priceMode:'sellpia_source'}),/안전한 검증 기능|digest unavailable/);
+  assert.deepEqual(h.calls.map(call=>call.name),['loadExportSkuDependencies','loadExportCurrentPriceDecisions']);
+ }
+ const h=harness({context:graph([],{requested:['A']}),crypto:null});
+ assert.equal((await h.api.prepare({source:'smartstore',skus:['A']})).summary.inheritedCount,0,'an unrelated output does not require hashing or a price read');
 });

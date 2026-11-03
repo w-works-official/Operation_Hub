@@ -5233,7 +5233,7 @@
   async function loadInputFingerprints(skus, source = '') {
     const selected=[...new Set(skus)],result={};
     async function read(codes){
-      const {data,error}=await db.rpc(fullMatrixReadContext?'hub_matrix_input_fingerprints_batch_v1':'hub_input_fingerprints_v1',{p_session_token:requireOperationsHubSessionToken(),p_skus:codes,p_source:source});
+      const {data,error}=await db.rpc('hub_matrix_input_fingerprints_batch_v1',{p_session_token:requireOperationsHubSessionToken(),p_skus:codes,p_source:source});
       if(error&&/statement timeout|canceling statement/i.test(error.message)&&codes.length>1){const middle=Math.ceil(codes.length/2);await read(codes.slice(0,middle));await read(codes.slice(middle));return;}
       throwOperationsHubRpcError(error);Object.assign(result,data);
     }

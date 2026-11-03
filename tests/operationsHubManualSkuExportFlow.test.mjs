@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
+import {webcrypto} from 'node:crypto';
 
 const require=createRequire(import.meta.url),XLSX=require('./vendor/xlsx-0.18.5.full.min.js'),JSZip=require('./vendor/jszip-3.10.1.min.js');
 const read=name=>fs.readFileSync(new URL(`../mockups/operations-hub/${name}.js`,import.meta.url),'utf8');
@@ -52,7 +53,7 @@ async function fixture({unlinked=[]}={}){
   }
   assert.ok(['hub_price_decision_export_read_v2','hub_price_decision_export_read_v3'].includes(name),`write or unexpected RPC forbidden: ${name}`);calls.push({name,args:plain(args)});return {data:evidence(args.p_skus),error:null};
  },from(table){assert.equal(table,'operations_hub_matrix_system_live');return {select(){return this;},in(field,skus){assert.equal(field,'sellpia_sku_code');sourceReads.push([...skus]);return Promise.resolve({data:skus.map(sku=>({sellpia_sku_code:sku,sellpia_source_sale_price:rawPrices.get(sku),sellpia_source_updated_at:snapshots.sellpia_observed_at})),error:null});}};},storage:new Proxy({},{get(){throw Error('storage access forbidden');}})};
- const value={console,Blob,File:TestFile,XLSX,JSZip,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,Date,Math,Intl,setTimeout,clearTimeout,URL,TextEncoder,TextDecoder,AbortController,AbortSignal,performance,structuredClone,
+ const value={console,Blob,File:TestFile,XLSX,JSZip,Map,Set,Number,String,JSON,RegExp,Error,Promise,Uint8Array,ArrayBuffer,Date,Math,Intl,setTimeout,clearTimeout,URL,TextEncoder,TextDecoder,AbortController,AbortSignal,performance,structuredClone,crypto:webcrypto,
   formatNumber:String,CHANNEL_LABELS:{smartstore:'스마트스토어'},assertMatrixChangesSaved(){},supabase:{createClient:()=>db},fetch:async()=>{throw Error('network forbidden');}};
  value.window=value;value.globalThis=value;vm.createContext(value);
  for(const name of ['manual-sku-scope','discount-price-math','sellpia-inventory-count','seller-source-parsers','seller-export-adapter','rule-registry','current-price-export','product-price-adjustment','data-service','price-dependency-export','price-dependency-service'])vm.runInContext(read(name),value,{filename:name+'.js'});

@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 const source=fs.readFileSync('mockups/operations-hub/rule-workspace.js','utf8');
+const filenameFunction=source.slice(source.indexOf(' function tagNameFromFilename('),source.indexOf(' const normalizeTagName='));
+const tagNameFromFilename=vm.runInNewContext(filenameFunction+';tagNameFromFilename');
+for(const filename of ['써지컬 대량 변경_일괄적용.xlsx','써지컬 대량 변경_일괄적용 2.xlsx','써지컬 대량 변경_일괄적용 (2).xlsx','써지컬 대량 변경_일괄적용(12).XLSX','써지컬 대량 변경_일괄적용_2.csv','써지컬 대량 변경_일괄적용-2.xls']){
+ assert.equal(tagNameFromFilename(filename),'써지컬 대량 변경',filename);
+}
+assert.equal(tagNameFromFilename('상품 2_일괄적용 3.xlsx'),'상품 2','a copy suffix must not remove digits belonging to the tag');
+assert.equal(tagNameFromFilename('C:\\Downloads\\상품 2_일괄적용 (3).xlsx'),'상품 2');
+for(const filename of ['써지컬 대량 변경_일괄적용 최종.xlsx','써지컬 대량 변경_일괄적용 0.xlsx','써지컬 대량 변경_일괄적용2.xlsx','임의파일 2.xlsx'])assert.equal(tagNameFromFilename(filename),'',filename);
 
 assert.match(source,/function tagNameFromFilename\(fileName\)/);
 assert.match(source,/\^\(\.\+\)_일괄적용/);
